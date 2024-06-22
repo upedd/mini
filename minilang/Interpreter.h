@@ -33,6 +33,9 @@ public:
     std::any visitExpressionStmt(Stmt::Expression *stmt) override;
     std::any visitPrintStmt(Stmt::Print *stmt) override;
     std::any visitVarStmt(Stmt::Var *stmt) override;
+
+    std::any look_up_variable(const Token& token, Expr* expr);
+
     std::any visitVariableExpr(Expr::Variable *expr) override;
     std::any visitAssignExpr(Expr::Assign *expr) override;
     std::any visitBlockStmt(Stmt::Block *stmt) override;
@@ -45,7 +48,11 @@ public:
 
     void execute_block(const std::vector<std::unique_ptr<Stmt>> &stmts, Enviroment env);
 
+    void resolve(Expr *expr, int depth);
+
     std::shared_ptr<Enviroment> globals = std::make_shared<Enviroment>();
+
+
 private:
     std::any evaluate(Expr* expr);
     void execute(Stmt* get);
@@ -55,6 +62,7 @@ private:
     static bool isEqual(const std::any & any, const std::any & right);
     std::string stringify(const std::any & object);
     std::shared_ptr<Enviroment> enviroment;
+    std::unordered_map<Expr*, int> locals;
 };
 
 

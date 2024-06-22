@@ -12,6 +12,7 @@
 
 #include "AstPrinter.h"
 #include "Parser.h"
+#include "Resolver.h"
 #include "Scanner.h"
 
 void Mini::run(const std::string_view input) {
@@ -20,6 +21,11 @@ void Mini::run(const std::string_view input) {
     Parser parser(tokens);
     auto expr = parser.parse();
     if (had_error) return;
+
+    Resolver resolver(&interpreter);
+    resolver.resolve(expr);
+    if (had_error) return;
+
     interpreter.interpret(expr);
 }
 

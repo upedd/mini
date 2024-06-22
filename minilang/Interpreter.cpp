@@ -114,13 +114,27 @@ std::any Interpreter::visitVarStmt(Stmt::Var *stmt) {
     return nullptr;
 }
 
+std::any Interpreter::look_up_variable(const Token &token, Expr *expr) {
+    if (locals.contains(expr)) {
+        return enviroment->get_at(locals[expr], token.lexeme);
+    }
+    return globals->get(token);
+}
+
 std::any Interpreter::visitVariableExpr(Expr::Variable *expr) {
-    return enviroment->get(expr->name);
+    return look_up_variable(expr->name, expr);
 }
 
 std::any Interpreter::visitAssignExpr(Expr::Assign *expr) {
     auto value = evaluate(expr->value.get());
-    enviroment->assign(expr->name, value);
+
+    if (locals.contains(expr)) {
+        enviroment->assign_at(locals[expr], expr->name, value);
+    } else {
+        globals->assign(expr->name, value);
+    }
+
+
     return value;
 }
 
@@ -208,6 +222,10 @@ void Interpreter::execute_block(const std::vector<std::unique_ptr<Stmt>> &stmts,
 
     //}
 
+}
+
+void Interpreter::resolve(Expr *expr, int depth) {
+    locals[expr] = depth;
 }
 
 std::any Interpreter::evaluate(Expr *expr) {
