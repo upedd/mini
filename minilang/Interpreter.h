@@ -29,7 +29,7 @@ public:
     std::any visitWhileStmt(Stmt::While *stmt) override;
     std::any visitCallExpr(Expr::Call *expr) override;
 private:
-    void execute_block(const std::vector<std::unique_ptr<Stmt>> & stmts, const Enviroment & enviroment);
+    void execute_block(const std::vector<std::unique_ptr<Stmt>> &stmts);
     std::any evaluate(Expr* expr);
     void execute(Stmt* get);
     void check_number_operand(Token op, const std::any& operand);

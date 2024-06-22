@@ -120,7 +120,7 @@ std::any Interpreter::visitAssignExpr(Expr::Assign *expr) {
 }
 
 std::any Interpreter::visitBlockStmt(Stmt::Block *stmt) {
-    execute_block(stmt->statements, Enviroment(enviroment));
+    execute_block(stmt->statements);
     return nullptr;
 }
 
@@ -172,11 +172,11 @@ std::any Interpreter::visitCallExpr(Expr::Call *expr) {
     // TODO
 }
 
-void Interpreter::execute_block(const std::vector<std::unique_ptr<Stmt>> &stmts, const Enviroment &enviroment) {
+void Interpreter::execute_block(const std::vector<std::unique_ptr<Stmt>> &stmts) {
     Enviroment previous = this->enviroment;
     // TODO: catch exceptions
     //try {
-        this->enviroment = enviroment;
+        this->enviroment = Enviroment(&previous);
         for (auto& stmt : stmts) {
             execute(stmt.get());
         }
