@@ -2,6 +2,9 @@
 
 #include <chrono>
 #include <iostream>
+#include <memory>
+#include <memory>
+
 #include "Mini.h"
 #include "MiniCallable.h"
 #include "MiniFunction.h"
@@ -122,7 +125,7 @@ std::any Interpreter::visitAssignExpr(Expr::Assign *expr) {
 }
 
 std::any Interpreter::visitBlockStmt(Stmt::Block *stmt) {
-    execute_block(stmt->statements, Enviroment(enviroment.get()));
+    execute_block(stmt->statements, Enviroment(enviroment));
     return nullptr;
 }
 
@@ -193,12 +196,16 @@ void Interpreter::execute_block(const std::vector<std::unique_ptr<Stmt>> &stmts,
     auto previous = std::move(this->enviroment);
     // TODO: catch exceptions
     //try {
-        this->enviroment = std::make_shared<Enviroment>(env);
-
+        this->enviroment = std::make_shared<Enviroment>(std::move(env));
+        FIXME<void()> f([&]() {
+           this->enviroment = std::move(previous);
+       });
         for (auto& stmt : stmts) {
             execute(stmt.get());
         }
-    this->enviroment = std::move(previous);
+
+
+
     //}
 
 }

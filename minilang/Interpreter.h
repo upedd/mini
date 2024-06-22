@@ -3,10 +3,22 @@
 #define INTERPRETER_H
 
 #include <chrono>
+#include <functional>
 
 #include "Enviroment.h"
 #include "generated/Expr.h"
 #include "generated/Stmt.h"
+
+
+template<typename T>
+class FIXME {
+public:
+    explicit FIXME(std::function<T> func) : func(std::move(func)) {};
+    std::function<T> func;
+    ~FIXME() {
+        func();
+    }
+};
 
 class Interpreter : public Expr::Visitor, public Stmt::Visitor {
 public:

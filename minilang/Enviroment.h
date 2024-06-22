@@ -12,7 +12,7 @@
 class Enviroment {
 public:
     Enviroment() = default;
-    explicit Enviroment(Enviroment* enclosing) : enclosing(enclosing) {}
+    explicit Enviroment(std::shared_ptr<Enviroment> enclosing) : enclosing(std::move(enclosing)) {}
 
     void define(const std::string& name, const std::any& value);
 
@@ -22,7 +22,7 @@ public:
 
 private:
     std::unordered_map<std::string, std::any> values;
-    Enviroment* enclosing = nullptr;
+    std::shared_ptr<Enviroment> enclosing = nullptr;
 };
 
 
