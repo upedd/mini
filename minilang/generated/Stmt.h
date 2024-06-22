@@ -12,6 +12,7 @@ public:
     class Function;
     class If;
     class Print;
+    class Return;
     class Var;
     class While;
     class Visitor {
@@ -22,6 +23,7 @@ public:
         virtual std::any visitFunctionStmt(Function* stmt) = 0;
         virtual std::any visitIfStmt(If* stmt) = 0;
         virtual std::any visitPrintStmt(Print* stmt) = 0;
+        virtual std::any visitReturnStmt(Return* stmt) = 0;
         virtual std::any visitVarStmt(Var* stmt) = 0;
         virtual std::any visitWhileStmt(While* stmt) = 0;
     };
@@ -75,6 +77,16 @@ public:
 
     std::any accept(Visitor* visitor) override {
         return visitor->visitPrintStmt(this);
+    }
+};
+class Stmt::Return : public Stmt {
+public:
+    Return(Token keyword, std::unique_ptr<Expr> value) : keyword(std::move(keyword)), value(std::move(value)) {}
+    Token keyword; 
+    std::unique_ptr<Expr> value; 
+
+    std::any accept(Visitor* visitor) override {
+        return visitor->visitReturnStmt(this);
     }
 };
 class Stmt::Var : public Stmt {

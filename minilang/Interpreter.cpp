@@ -5,13 +5,14 @@
 #include "Mini.h"
 #include "MiniCallable.h"
 #include "MiniFunction.h"
+#include "Return.h"
 #include "TimeCall.h"
 
 Interpreter::Interpreter() {
     // TODO memory leak?
     MiniCallable* ptr = new TimeCall();
-    globals.define("time", ptr);
-    enviroment = std::make_unique<Enviroment>(globals);
+    globals->define("time", ptr);
+    enviroment = globals;
 }
 
 void Interpreter::interpret(const std::vector<std::unique_ptr<Stmt>>& statements) {
@@ -180,11 +181,19 @@ std::any Interpreter::visitFunctionStmt(Stmt::Function *stmt) {
     return nullptr;
 }
 
+std::any Interpreter::visitReturnStmt(Stmt::Return *stmt) {
+    std::any value = nullptr;
+    if (stmt->value != nullptr) {
+        value = evaluate(stmt->value.get());
+    }
+    throw Return(value);
+}
+
 void Interpreter::execute_block(const std::vector<std::unique_ptr<Stmt>> &stmts, Enviroment env) {
-    std::unique_ptr<Enviroment> previous = std::move(this->enviroment);
+    auto previous = std::move(this->enviroment);
     // TODO: catch exceptions
     //try {
-        this->enviroment = std::make_unique<Enviroment>(env);
+        this->enviroment = std::make_shared<Enviroment>(env);
 
         for (auto& stmt : stmts) {
             execute(stmt.get());

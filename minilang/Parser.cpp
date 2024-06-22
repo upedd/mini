@@ -139,12 +139,23 @@ std::unique_ptr<Stmt> Parser::for_statement() {
     return body;
 }
 
+std::unique_ptr<Stmt> Parser::return_statement() {
+    Token keyword = previous();
+    std::unique_ptr<Expr> value;
+    if (!check(TokenType::SEMICOLON)) {
+        value = expression();
+    }
+    consume(TokenType::SEMICOLON, "Expect ';' after return value.");
+    return std::make_unique<Stmt::Return>(keyword, std::move(value));
+}
+
 std::unique_ptr<Stmt> Parser::statement() {
     if (match({TokenType::PRINT})) return printStatement();
     if (match({TokenType::LEFT_BRACE})) return std::make_unique<Stmt::Block>(block());
     if (match({TokenType::IF})) return if_statement();
     if (match({TokenType::WHILE})) return while_statement();
     if (match({TokenType::FOR})) return for_statement();
+    if (match({TokenType::RETURN})) return return_statement();
     return expressionStatement();
 }
 
@@ -274,7 +285,7 @@ std::unique_ptr<Expr> Parser::term() {
 std::unique_ptr<Expr> Parser::comparison() {
     auto expr = term();
 
-    while (match({TokenType::GREATER, TokenType::GREATER_EQUAL, TokenType::LESS, TokenType::LESS})) {
+    while (match({TokenType::GREATER, TokenType::GREATER_EQUAL, TokenType::LESS_EQUAL, TokenType::LESS})) {
         Token op = previous();
         auto right = term();
         expr = std::make_unique<Expr::Binary>(std::move(expr), op, std::move(right));

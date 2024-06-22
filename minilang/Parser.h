@@ -42,6 +42,8 @@ private:
 
     std::unique_ptr<Stmt> for_statement();
 
+    std::unique_ptr<Stmt> return_statement();
+
     std::unique_ptr<Stmt> statement();
 
     std::unique_ptr<Stmt> var_declaration();

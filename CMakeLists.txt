@@ -27,6 +27,7 @@ add_executable(mini minilang/main.cpp
         minilang/TimeCall.h
         minilang/MiniFunction.cpp
         minilang/MiniFunction.h
+        minilang/Return.h
 )
 
 add_executable(generate_mini_ast tools/GenerateMiniAst.cpp)

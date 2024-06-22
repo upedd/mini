@@ -29,10 +29,11 @@ public:
     std::any visitWhileStmt(Stmt::While *stmt) override;
     std::any visitCallExpr(Expr::Call *expr) override;
     std::any visitFunctionStmt(Stmt::Function *stmt) override;
+    std::any visitReturnStmt(Stmt::Return *stmt) override;
 
     void execute_block(const std::vector<std::unique_ptr<Stmt>> &stmts, Enviroment env);
 
-    Enviroment globals;
+    std::shared_ptr<Enviroment> globals = std::make_shared<Enviroment>();
 private:
     std::any evaluate(Expr* expr);
     void execute(Stmt* get);
@@ -41,7 +42,7 @@ private:
     static bool isTruthy(const std::any& object);
     static bool isEqual(const std::any & any, const std::any & right);
     std::string stringify(const std::any & object);
-    std::unique_ptr<Enviroment> enviroment;
+    std::shared_ptr<Enviroment> enviroment;
 };
 
 
