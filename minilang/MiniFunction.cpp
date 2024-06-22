@@ -7,7 +7,7 @@
 #include "Return.h"
 
 std::any MiniFunction::call(Interpreter *interpreter, std::vector<std::any> arguments) {
-    Enviroment env(interpreter->globals);
+    Enviroment env(closure);
 
     for (int i = 0; i < declaration->params.size(); ++i) {
         env.define(declaration->params[i].lexeme, arguments[i]);

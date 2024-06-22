@@ -179,7 +179,7 @@ std::any Interpreter::visitCallExpr(Expr::Call *expr) {
 
 std::any Interpreter::visitFunctionStmt(Stmt::Function *stmt) {
     // TODO: memory leak!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    MiniCallable* function = new MiniFunction(stmt);
+    MiniCallable* function = new MiniFunction(stmt, enviroment);
     enviroment->define(stmt->name.lexeme, function);
     return nullptr;
 }

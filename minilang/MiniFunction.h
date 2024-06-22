@@ -8,12 +8,14 @@
 
 class MiniFunction : public MiniCallable {
 public:
-    explicit MiniFunction(Stmt::Function* declaration) : declaration(declaration) {}
+    explicit MiniFunction(Stmt::Function* declaration, std::shared_ptr<Enviroment> closure) : declaration(declaration), closure(std::move(closure)) {}
 
     Stmt::Function* declaration = nullptr;
+    std::shared_ptr<Enviroment> closure;
 
     std::any call(Interpreter *interpreter, std::vector<std::any> arguments) override;
     int arity() override;
+
 };
 
 
