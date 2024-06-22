@@ -192,6 +192,32 @@ std::unique_ptr<Expr> Parser::primary() {
     throw error(peek(), "Expect expression.");
 }
 
+std::unique_ptr<Expr> Parser::finish_call(std::unique_ptr<Expr> &&callee) {
+    std::vector<std::shared_ptr<Expr>> arguments;
+    if (!check(TokenType::RIGHT_PAREN)) {
+        do {
+            if (arguments.size() >= 255) {
+                error(peek(), "Can't have more than 255 arguments.");
+            }
+            arguments.push_back(expression());
+        } while (match({TokenType::COMMA}));
+    }
+
+    Token paren = consume(TokenType::RIGHT_PAREN, "EXpect ')' after arguments.");
+
+    return std::make_unique<Expr::Call>(std::move(callee), paren, arguments);
+}
+
+std::unique_ptr<Expr> Parser::call() {
+    auto expr = primary();
+    while (true) {
+        if (match({TokenType::LEFT_PAREN})) {
+            expr = finish_call(std::move(expr));
+        } else break;
+    }
+    return expr;
+}
+
 std::unique_ptr<Expr> Parser::unary() {
     if (match({TokenType::BANG, TokenType::MINUS})) {
         Token op = previous();
@@ -199,7 +225,7 @@ std::unique_ptr<Expr> Parser::unary() {
         return std::make_unique<Expr::Unary>(op, std::move(right));
     }
 
-    return primary();
+    return call();
 }
 
 std::unique_ptr<Expr> Parser::factor() {

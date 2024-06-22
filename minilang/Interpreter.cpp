@@ -1,7 +1,17 @@
 #include "Interpreter.h"
 
+#include <chrono>
 #include <iostream>
 #include "Mini.h"
+#include "MiniCallable.h"
+#include "TimeCall.h"
+
+Interpreter::Interpreter() {
+    // TODO memory leak?
+    MiniCallable* ptr = new TimeCall();
+    globals.define("time", ptr);
+    enviroment = globals;
+}
 
 void Interpreter::interpret(const std::vector<std::unique_ptr<Stmt>>& statements) {
     try {
@@ -142,6 +152,26 @@ std::any Interpreter::visitWhileStmt(Stmt::While *stmt) {
     return nullptr;
 }
 
+std::any Interpreter::visitCallExpr(Expr::Call *expr) {
+    auto callee = evaluate(expr->callee.get());
+    std::vector<std::any> arguments;
+    for (auto& argument : expr->arguments) {
+        arguments.push_back(evaluate(argument.get()));
+    }
+    try {
+        auto function = std::any_cast<MiniCallable*>(callee);
+
+        if (arguments.size() != function->arity()) {
+            throw RuntimeError(expr->paren, "Expected " + std::to_string(function->arity()) + " arguments but got " + std::to_string(arguments.size()) + ".");
+        }
+
+        return function->call(this, arguments);
+    } catch (const std::bad_any_cast& _) {
+        throw RuntimeError(expr->paren, "Can only call functions and classes");
+    }
+    // TODO
+}
+
 void Interpreter::execute_block(const std::vector<std::unique_ptr<Stmt>> &stmts, const Enviroment &enviroment) {
     Enviroment previous = this->enviroment;
     // TODO: catch exceptions
@@ -207,3 +237,4 @@ std::string Interpreter::stringify(const std::any &object) {
         return std::any_cast<bool>(object) ? "true" : "false";
     }
 }
+

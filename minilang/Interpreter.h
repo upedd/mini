@@ -2,14 +2,15 @@
 #ifndef INTERPRETER_H
 #define INTERPRETER_H
 
+#include <chrono>
+
 #include "Enviroment.h"
 #include "generated/Expr.h"
 #include "generated/Stmt.h"
 
-
 class Interpreter : public Expr::Visitor, public Stmt::Visitor {
 public:
-
+    Interpreter();
 
     void interpret(const std::vector<std::unique_ptr<Stmt>>& statements);
 
@@ -26,6 +27,7 @@ public:
     std::any visitIfStmt(Stmt::If *stmt) override;
     std::any visitLogicalExpr(Expr::Logical *expr) override;
     std::any visitWhileStmt(Stmt::While *stmt) override;
+    std::any visitCallExpr(Expr::Call *expr) override;
 private:
     void execute_block(const std::vector<std::unique_ptr<Stmt>> & stmts, const Enviroment & enviroment);
     std::any evaluate(Expr* expr);
@@ -35,10 +37,9 @@ private:
     static bool isTruthy(const std::any& object);
     static bool isEqual(const std::any & any, const std::any & right);
     std::string stringify(const std::any & object);
-
+    Enviroment globals;
     Enviroment enviroment;
 };
-
 
 
 #endif //INTERPRETER_H

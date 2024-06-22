@@ -8,6 +8,7 @@ class Expr {
 public:
     class Assign;
     class Binary;
+    class Call;
     class Grouping;
     class Literal;
     class Logical;
@@ -18,6 +19,7 @@ public:
         virtual ~Visitor() = default;
         virtual std::any visitAssignExpr(Assign* expr) = 0;
         virtual std::any visitBinaryExpr(Binary* expr) = 0;
+        virtual std::any visitCallExpr(Call* expr) = 0;
         virtual std::any visitGroupingExpr(Grouping* expr) = 0;
         virtual std::any visitLiteralExpr(Literal* expr) = 0;
         virtual std::any visitLogicalExpr(Logical* expr) = 0;
@@ -46,6 +48,17 @@ public:
 
     std::any accept(Visitor* visitor) override {
         return visitor->visitBinaryExpr(this);
+    }
+};
+class Expr::Call : public Expr {
+public:
+    Call(std::shared_ptr<Expr> callee, Token paren, std::vector<std::shared_ptr<Expr>> arguments) : callee(std::move(callee)), paren(std::move(paren)), arguments(std::move(arguments)) {}
+    std::shared_ptr<Expr> callee; 
+    Token paren; 
+    std::vector<std::shared_ptr<Expr>> arguments; 
+
+    std::any accept(Visitor* visitor) override {
+        return visitor->visitCallExpr(this);
     }
 };
 class Expr::Grouping : public Expr {

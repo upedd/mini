@@ -103,6 +103,7 @@ int main(int argc, char** argv) {
     define_ast(output_directory, "Expr", {
         "Assign : Token name, std::shared_ptr<Expr> value",
         "Binary : std::shared_ptr<Expr> left, Token op, std::shared_ptr<Expr> right",
+        "Call : std::shared_ptr<Expr> callee, Token paren, std::vector<std::shared_ptr<Expr>> arguments",
         "Grouping : std::shared_ptr<Expr> expression",
         "Literal : std::any value",
         "Logical : std::shared_ptr<Expr> left, Token op, std::shared_ptr<Expr> right",

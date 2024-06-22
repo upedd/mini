@@ -22,6 +22,9 @@ add_executable(mini minilang/main.cpp
         minilang/generated/Stmt.h
         minilang/Enviroment.cpp
         minilang/Enviroment.h
+        minilang/MiniCallable.h
+        minilang/TimeCall.cpp
+        minilang/TimeCall.h
 )
 
 add_executable(generate_mini_ast tools/GenerateMiniAst.cpp)
