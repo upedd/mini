@@ -9,6 +9,7 @@ class Stmt {
 public:
     class Block;
     class Expression;
+    class Function;
     class If;
     class Print;
     class Var;
@@ -18,6 +19,7 @@ public:
         virtual ~Visitor() = default;
         virtual std::any visitBlockStmt(Block* stmt) = 0;
         virtual std::any visitExpressionStmt(Expression* stmt) = 0;
+        virtual std::any visitFunctionStmt(Function* stmt) = 0;
         virtual std::any visitIfStmt(If* stmt) = 0;
         virtual std::any visitPrintStmt(Print* stmt) = 0;
         virtual std::any visitVarStmt(Var* stmt) = 0;
@@ -42,6 +44,17 @@ public:
 
     std::any accept(Visitor* visitor) override {
         return visitor->visitExpressionStmt(this);
+    }
+};
+class Stmt::Function : public Stmt {
+public:
+    Function(Token name, std::vector<Token> params, std::vector<std::unique_ptr<Stmt>> body) : name(std::move(name)), params(std::move(params)), body(std::move(body)) {}
+    Token name; 
+    std::vector<Token> params; 
+    std::vector<std::unique_ptr<Stmt>> body; 
+
+    std::any accept(Visitor* visitor) override {
+        return visitor->visitFunctionStmt(this);
     }
 };
 class Stmt::If : public Stmt {

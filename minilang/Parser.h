@@ -46,6 +46,8 @@ private:
 
     std::unique_ptr<Stmt> var_declaration();
 
+    std::unique_ptr<Stmt> function(const std::string& kind);
+
     std::unique_ptr<Stmt> declaration();
 
     std::unique_ptr<Expr> primary();

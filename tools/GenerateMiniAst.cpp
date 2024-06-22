@@ -114,6 +114,7 @@ int main(int argc, char** argv) {
     define_ast(output_directory, "Stmt", {
         "Block : std::vector<std::unique_ptr<Stmt>> statements",
         "Expression : std::unique_ptr<Expr> expression",
+        "Function : Token name, std::vector<Token> params, std::vector<std::unique_ptr<Stmt>> body",
         "If : std::unique_ptr<Expr> condition, std::unique_ptr<Stmt> then_branch, std::unique_ptr<Stmt> else_branch",
         "Print : std::unique_ptr<Expr> expression",
         "Var : Token name, std::unique_ptr<Expr> initializer",

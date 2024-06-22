@@ -28,8 +28,12 @@ public:
     std::any visitLogicalExpr(Expr::Logical *expr) override;
     std::any visitWhileStmt(Stmt::While *stmt) override;
     std::any visitCallExpr(Expr::Call *expr) override;
+    std::any visitFunctionStmt(Stmt::Function *stmt) override;
+
+    void execute_block(const std::vector<std::unique_ptr<Stmt>> &stmts, Enviroment env);
+
+    Enviroment globals;
 private:
-    void execute_block(const std::vector<std::unique_ptr<Stmt>> &stmts);
     std::any evaluate(Expr* expr);
     void execute(Stmt* get);
     void check_number_operand(Token op, const std::any& operand);
@@ -37,8 +41,7 @@ private:
     static bool isTruthy(const std::any& object);
     static bool isEqual(const std::any & any, const std::any & right);
     std::string stringify(const std::any & object);
-    Enviroment globals;
-    Enviroment enviroment;
+    std::unique_ptr<Enviroment> enviroment;
 };
 
 

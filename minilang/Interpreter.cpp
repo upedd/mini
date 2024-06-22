@@ -4,13 +4,14 @@
 #include <iostream>
 #include "Mini.h"
 #include "MiniCallable.h"
+#include "MiniFunction.h"
 #include "TimeCall.h"
 
 Interpreter::Interpreter() {
     // TODO memory leak?
     MiniCallable* ptr = new TimeCall();
     globals.define("time", ptr);
-    enviroment = globals;
+    enviroment = std::make_unique<Enviroment>(globals);
 }
 
 void Interpreter::interpret(const std::vector<std::unique_ptr<Stmt>>& statements) {
@@ -105,22 +106,22 @@ std::any Interpreter::visitVarStmt(Stmt::Var *stmt) {
     if (stmt->initializer != nullptr) {
         value = evaluate(stmt->initializer.get());
     }
-    enviroment.define(stmt->name.lexeme, value);
+    enviroment->define(stmt->name.lexeme, value);
     return nullptr;
 }
 
 std::any Interpreter::visitVariableExpr(Expr::Variable *expr) {
-    return enviroment.get(expr->name);
+    return enviroment->get(expr->name);
 }
 
 std::any Interpreter::visitAssignExpr(Expr::Assign *expr) {
     auto value = evaluate(expr->value.get());
-    enviroment.assign(expr->name, value);
+    enviroment->assign(expr->name, value);
     return value;
 }
 
 std::any Interpreter::visitBlockStmt(Stmt::Block *stmt) {
-    execute_block(stmt->statements);
+    execute_block(stmt->statements, Enviroment(enviroment.get()));
     return nullptr;
 }
 
@@ -172,15 +173,23 @@ std::any Interpreter::visitCallExpr(Expr::Call *expr) {
     // TODO
 }
 
-void Interpreter::execute_block(const std::vector<std::unique_ptr<Stmt>> &stmts) {
-    Enviroment previous = this->enviroment;
+std::any Interpreter::visitFunctionStmt(Stmt::Function *stmt) {
+    // TODO: memory leak!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    MiniCallable* function = new MiniFunction(stmt);
+    enviroment->define(stmt->name.lexeme, function);
+    return nullptr;
+}
+
+void Interpreter::execute_block(const std::vector<std::unique_ptr<Stmt>> &stmts, Enviroment env) {
+    std::unique_ptr<Enviroment> previous = std::move(this->enviroment);
     // TODO: catch exceptions
     //try {
-        this->enviroment = Enviroment(&previous);
+        this->enviroment = std::make_unique<Enviroment>(env);
+
         for (auto& stmt : stmts) {
             execute(stmt.get());
         }
-    this->enviroment = previous;
+    this->enviroment = std::move(previous);
     //}
 
 }
