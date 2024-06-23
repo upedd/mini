@@ -36,7 +36,7 @@ namespace vm::debug {
 
         void constant_instruction() {
             const uint8_t constant = chunk.get_code()[offset + 1];
-            std::cout << "OP_CONSTANT " << constant << ' ';
+            std::cout << "OP_CONSTANT " << static_cast<int>(constant) << ' ';
             std::cout << chunk.get_constants()[constant] << '\n';
             offset += 2;
         };
@@ -55,6 +55,21 @@ namespace vm::debug {
             switch (op_code) {
                 case Instruction::OpCode::RETURN:
                     simple_instruction("OP_RETURN");
+                    break;
+                case Instruction::OpCode::NEGATE:
+                    simple_instruction("OP_NEGATE");
+                    break;
+                case Instruction::OpCode::ADD:
+                    simple_instruction("OP_ADD");
+                    break;
+                case Instruction::OpCode::SUBTRACT:
+                    simple_instruction("OP_SUBTRACT");
+                    break;
+                case Instruction::OpCode::MULTIPLY:
+                    simple_instruction("OP_MULTIPLY");
+                    break;
+                case Instruction::OpCode::DIVIDE:
+                    simple_instruction("OP_DIVIE");
                     break;
                 case Instruction::OpCode::CONSTANT:
                     constant_instruction();

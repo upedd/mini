@@ -10,7 +10,12 @@ namespace vm {
     public:
         enum class OpCode : uint8_t {
             RETURN,
-            CONSTANT
+            CONSTANT,
+            NEGATE,
+            ADD,
+            SUBTRACT,
+            MULTIPLY,
+            DIVIDE
         };
 
         Instruction(const OpCode op_code, int line) : op_code(op_code), line(line) {}

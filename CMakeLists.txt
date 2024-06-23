@@ -38,6 +38,8 @@ add_executable(mini main.cpp
         vm/Instruction.h
         vm/debug.h
         vm/value.h
+        vm/VM.h
+        vm/VM.cpp
 )
 
 add_executable(generate_mini_ast tools/GenerateMiniAst.cpp)
