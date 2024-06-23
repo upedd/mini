@@ -3,7 +3,7 @@ project(mini)
 
 set(CMAKE_CXX_STANDARD 23)
 
-add_executable(mini minilang/main.cpp
+add_executable(mini main.cpp
         minilang/Mini.cpp
         minilang/Mini.h
         minilang/TokenType.h
@@ -34,6 +34,10 @@ add_executable(mini minilang/main.cpp
         minilang/MiniClass.h
         minilang/MiniInstance.cpp
         minilang/MiniInstance.h
+        vm/Chunk.h
+        vm/Instruction.h
+        vm/debug.h
+        vm/value.h
 )
 
 add_executable(generate_mini_ast tools/GenerateMiniAst.cpp)
