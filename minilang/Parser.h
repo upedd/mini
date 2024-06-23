@@ -48,7 +48,9 @@ private:
 
     std::unique_ptr<Stmt> var_declaration();
 
-    std::unique_ptr<Stmt> function(const std::string& kind);
+    std::unique_ptr<Stmt::Function> function(const std::string &kind);
+
+    std::unique_ptr<Stmt> class_declaration();
 
     std::unique_ptr<Stmt> declaration();
 

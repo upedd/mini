@@ -23,6 +23,7 @@ public:
     std::any visitReturnStmt(Stmt::Return *stmt) override;
     std::any visitWhileStmt(Stmt::While *stmt) override;
     std::any visitFunctionStmt(Stmt::Function *stmt) override;
+    std::any visitClassStmt(Stmt::Class *stmt) override;
 
     std::any visitVariableExpr(Expr::Variable *expr) override;
     std::any visitAssignExpr(Expr::Assign *expr) override;
@@ -32,7 +33,8 @@ public:
     std::any visitLiteralExpr(Expr::Literal *expr) override;
     std::any visitLogicalExpr(Expr::Logical *expr) override;
     std::any visitUnaryExpr(Expr::Unary *expr) override;
-
+    std::any visitGetExpr(Expr::Get *expr) override;
+    std::any visitSetExpr(Expr::Set *expr) override;
     void resolve(const std::vector<std::unique_ptr<Stmt>> & stmts);
 
 private:

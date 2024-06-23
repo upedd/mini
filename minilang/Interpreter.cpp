@@ -7,7 +7,9 @@
 
 #include "Mini.h"
 #include "MiniCallable.h"
+#include "MiniClass.h"
 #include "MiniFunction.h"
+#include "MiniInstance.h"
 #include "Return.h"
 #include "TimeCall.h"
 
@@ -114,6 +116,14 @@ std::any Interpreter::visitVarStmt(Stmt::Var *stmt) {
     return nullptr;
 }
 
+std::any Interpreter::visitClassStmt(Stmt::Class *stmt) {
+    enviroment->define(stmt->name.lexeme, {});
+    // TODO memory leak
+    MiniCallable* klass = new MiniClass(stmt->name.lexeme);
+    enviroment->assign(stmt->name, klass);
+    return {};
+}
+
 std::any Interpreter::look_up_variable(const Token &token, Expr *expr) {
     if (locals.contains(expr)) {
         return enviroment->get_at(locals[expr], token.lexeme);
@@ -204,6 +214,25 @@ std::any Interpreter::visitReturnStmt(Stmt::Return *stmt) {
         value = evaluate(stmt->value.get());
     }
     throw Return(value);
+}
+
+std::any Interpreter::visitGetExpr(Expr::Get *expr) {
+    auto object = evaluate(expr->object.get());
+    if (object.type() == typeid(MiniInstance*)) {
+        return std::any_cast<MiniInstance*>(object)->get(expr->name);
+    }
+    throw RuntimeError(expr->name ,"Only instances have properties.");
+}
+
+std::any Interpreter::visitSetExpr(Expr::Set *expr) {
+    auto object = evaluate(expr->object.get());
+    if (object.type() != typeid(MiniInstance*)) {
+        throw RuntimeError(expr->name, "Only instances have fields.");
+    }
+
+    auto value = evaluate(expr->value.get());
+    std::any_cast<MiniInstance*>(object)->set(expr->name, value);
+    return value;
 }
 
 void Interpreter::execute_block(const std::vector<std::unique_ptr<Stmt>> &stmts, Enviroment env) {

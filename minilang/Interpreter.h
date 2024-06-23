@@ -33,6 +33,7 @@ public:
     std::any visitExpressionStmt(Stmt::Expression *stmt) override;
     std::any visitPrintStmt(Stmt::Print *stmt) override;
     std::any visitVarStmt(Stmt::Var *stmt) override;
+    std::any visitClassStmt(Stmt::Class *stmt) override;
 
     std::any look_up_variable(const Token& token, Expr* expr);
 
@@ -45,6 +46,8 @@ public:
     std::any visitCallExpr(Expr::Call *expr) override;
     std::any visitFunctionStmt(Stmt::Function *stmt) override;
     std::any visitReturnStmt(Stmt::Return *stmt) override;
+    std::any visitGetExpr(Expr::Get *expr) override;
+    std::any visitSetExpr(Expr::Set *expr) override;
 
     void execute_block(const std::vector<std::unique_ptr<Stmt>> &stmts, Enviroment env);
 

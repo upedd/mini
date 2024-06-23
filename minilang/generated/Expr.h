@@ -9,9 +9,11 @@ public:
     class Assign;
     class Binary;
     class Call;
+    class Get;
     class Grouping;
     class Literal;
     class Logical;
+    class Set;
     class Unary;
     class Variable;
     class Visitor {
@@ -20,9 +22,11 @@ public:
         virtual std::any visitAssignExpr(Assign* expr) = 0;
         virtual std::any visitBinaryExpr(Binary* expr) = 0;
         virtual std::any visitCallExpr(Call* expr) = 0;
+        virtual std::any visitGetExpr(Get* expr) = 0;
         virtual std::any visitGroupingExpr(Grouping* expr) = 0;
         virtual std::any visitLiteralExpr(Literal* expr) = 0;
         virtual std::any visitLogicalExpr(Logical* expr) = 0;
+        virtual std::any visitSetExpr(Set* expr) = 0;
         virtual std::any visitUnaryExpr(Unary* expr) = 0;
         virtual std::any visitVariableExpr(Variable* expr) = 0;
     };
@@ -61,6 +65,16 @@ public:
         return visitor->visitCallExpr(this);
     }
 };
+class Expr::Get : public Expr {
+public:
+    Get(std::shared_ptr<Expr> object, Token name) : object(std::move(object)), name(std::move(name)) {}
+    std::shared_ptr<Expr> object; 
+    Token name; 
+
+    std::any accept(Visitor* visitor) override {
+        return visitor->visitGetExpr(this);
+    }
+};
 class Expr::Grouping : public Expr {
 public:
     Grouping(std::shared_ptr<Expr> expression) : expression(std::move(expression)) {}
@@ -88,6 +102,17 @@ public:
 
     std::any accept(Visitor* visitor) override {
         return visitor->visitLogicalExpr(this);
+    }
+};
+class Expr::Set : public Expr {
+public:
+    Set(std::shared_ptr<Expr> object, Token name, std::shared_ptr<Expr> value) : object(std::move(object)), name(std::move(name)), value(std::move(value)) {}
+    std::shared_ptr<Expr> object; 
+    Token name; 
+    std::shared_ptr<Expr> value; 
+
+    std::any accept(Visitor* visitor) override {
+        return visitor->visitSetExpr(this);
     }
 };
 class Expr::Unary : public Expr {

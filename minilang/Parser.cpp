@@ -4,6 +4,8 @@
 
 #include "Parser.h"
 
+#include <iostream>
+
 #include "Mini.h"
 
 std::vector<std::unique_ptr<Stmt>> Parser::parse() {
@@ -170,7 +172,7 @@ std::unique_ptr<Stmt> Parser::var_declaration() {
     return std::make_unique<Stmt::Var>(name, std::move(initializer));
 }
 
-std::unique_ptr<Stmt> Parser::function(const std::string &kind) {
+std::unique_ptr<Stmt::Function> Parser::function(const std::string &kind) {
     Token name = consume(TokenType::IDENTIFIER, "Expect " + kind + " name.");
     consume(TokenType::LEFT_PAREN, "Expect '(' after " + kind  + " name.");
     std::vector<Token> parameters;
@@ -189,8 +191,24 @@ std::unique_ptr<Stmt> Parser::function(const std::string &kind) {
     return std::make_unique<Stmt::Function>(name, std::move(parameters), std::move(body));
 }
 
+std::unique_ptr<Stmt> Parser::class_declaration() {
+    Token name = consume(TokenType::IDENTIFIER, "Expect class name.");
+    consume(TokenType::LEFT_BRACE, "Expect '{' before class body.");
+
+    std::vector<std::unique_ptr<Stmt::Function>> methods;
+    while (!check(TokenType::RIGHT_BRACE) && !is_at_end()) {
+        methods.push_back(function("method"));
+    }
+    consume(TokenType::RIGHT_BRACE, "Expect '}' after class body");
+
+    return std::make_unique<Stmt::Class>(name, std::move(methods));
+}
+
+
+
 std::unique_ptr<Stmt> Parser::declaration() {
     try {
+        if (match({TokenType::CLASS})) return class_declaration();
         if (match({TokenType::FUN})) return function("function");
         if (match({TokenType::VAR})) return var_declaration();
         return statement();
@@ -243,6 +261,9 @@ std::unique_ptr<Expr> Parser::call() {
     while (true) {
         if (match({TokenType::LEFT_PAREN})) {
             expr = finish_call(std::move(expr));
+        } else if (match({TokenType::DOT})) {
+            Token name = consume(TokenType::IDENTIFIER, "Expect property name after '.'.");
+            expr = std::make_unique<Expr::Get>(std::move(expr), name);
         } else break;
     }
     return expr;
@@ -334,8 +355,11 @@ std::unique_ptr<Expr> Parser::assigment() {
         Token equals = previous();
         auto value = assigment();
         if (auto* var = dynamic_cast<Expr::Variable*>(expr.get())) {
+            std::cout << "ASJNDAJKF";
             Token name = var->name;
             return std::make_unique<Expr::Assign>(name, std::move(value));
+        } else if (auto* get = dynamic_cast<Expr::Get*>(expr.get())) {
+            return std::make_unique<Expr::Set>(std::move(get->object), get->name, std::move(value));
         }
 
         error(equals, "Invalid assigment target.");

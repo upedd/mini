@@ -152,6 +152,17 @@ std::any Resolver::visitUnaryExpr(Expr::Unary *expr) {
     return {};
 }
 
+std::any Resolver::visitGetExpr(Expr::Get *expr) {
+        resolve(expr->object.get());
+        return {};
+}
+
+std::any Resolver::visitSetExpr(Expr::Set *expr) {
+    resolve(expr->value.get());
+    resolve(expr->object.get());
+    return {};
+}
+
 void Resolver::resolve_function(Stmt::Function *function, FunctionType type) {
     auto enclosing_function = current_function;
     current_function = type;
@@ -171,5 +182,11 @@ std::any Resolver::visitFunctionStmt(Stmt::Function *stmt) {
     define(stmt->name);
 
     resolve_function(stmt, FunctionType::FUNCTION);
+    return {};
+}
+
+std::any Resolver::visitClassStmt(Stmt::Class *stmt) {
+    declare(stmt->name);
+    define(stmt->name);
     return {};
 }
