@@ -48,6 +48,7 @@ public:
     std::any visitReturnStmt(Stmt::Return *stmt) override;
     std::any visitGetExpr(Expr::Get *expr) override;
     std::any visitSetExpr(Expr::Set *expr) override;
+    std::any visitThisExpr(Expr::This *expr) override;
 
     void execute_block(const std::vector<std::unique_ptr<Stmt>> &stmts, Enviroment env);
 

@@ -92,6 +92,10 @@ std::any Resolver::visitReturnStmt(Stmt::Return *stmt) {
     }
 
     if (stmt->value != nullptr) {
+        if (current_function == FunctionType::INITIALIZER) {
+            Mini::error(stmt->keyword, "Can't return a value from an initializer.");
+        }
+
         resolve(stmt->value.get());
     }
     return nullptr;
@@ -163,6 +167,15 @@ std::any Resolver::visitSetExpr(Expr::Set *expr) {
     return {};
 }
 
+std::any Resolver::visitThisExpr(Expr::This *expr) {
+    if (current_class == ClassType::NONE) {
+        Mini::error(expr->keyword, "Can't use 'this' outside of a class.");
+        return {};
+    }
+    resolve_local(expr, expr->keyword);
+    return {};
+}
+
 void Resolver::resolve_function(Stmt::Function *function, FunctionType type) {
     auto enclosing_function = current_function;
     current_function = type;
@@ -186,7 +199,22 @@ std::any Resolver::visitFunctionStmt(Stmt::Function *stmt) {
 }
 
 std::any Resolver::visitClassStmt(Stmt::Class *stmt) {
+    auto enclosing_class = current_class;
+    current_class = ClassType::CLASS;
     declare(stmt->name);
     define(stmt->name);
+    begin_scope();
+    scopes.back()["this"] = true;
+
+    for (auto& method : stmt->methods) {
+        FunctionType declaration = FunctionType::METHOD;
+        if (method->name.lexeme == "init") {
+            declaration = FunctionType::INITIALIZER;
+        }
+        resolve_function(method.get(), declaration);
+    }
+
+    end_scope();
+    current_class = enclosing_class;
     return {};
 }

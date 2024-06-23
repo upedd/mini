@@ -30,6 +30,10 @@ add_executable(mini minilang/main.cpp
         minilang/Return.h
         minilang/Resolver.cpp
         minilang/Resolver.h
+        minilang/MiniClass.cpp
+        minilang/MiniClass.h
+        minilang/MiniInstance.cpp
+        minilang/MiniInstance.h
 )
 
 add_executable(generate_mini_ast tools/GenerateMiniAst.cpp)

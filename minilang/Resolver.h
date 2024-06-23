@@ -35,17 +35,25 @@ public:
     std::any visitUnaryExpr(Expr::Unary *expr) override;
     std::any visitGetExpr(Expr::Get *expr) override;
     std::any visitSetExpr(Expr::Set *expr) override;
+    std::any visitThisExpr(Expr::This *expr) override;
     void resolve(const std::vector<std::unique_ptr<Stmt>> & stmts);
 
 private:
     enum class FunctionType {
         NONE,
-        FUNCTION
+        FUNCTION, METHOD,
+        INITIALIZER
+    };
+
+    enum class ClassType {
+        NONE,
+        CLASS
     };
 
     Interpreter* interpreter;
     std::vector<std::unordered_map<std::string, bool>> scopes;
     FunctionType current_function = FunctionType::NONE;
+    ClassType current_class;
 
     void resolve(Stmt *stmt);
     void resolve(Expr *expr);

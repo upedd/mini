@@ -119,7 +119,15 @@ std::any Interpreter::visitVarStmt(Stmt::Var *stmt) {
 std::any Interpreter::visitClassStmt(Stmt::Class *stmt) {
     enviroment->define(stmt->name.lexeme, {});
     // TODO memory leak
-    MiniCallable* klass = new MiniClass(stmt->name.lexeme);
+
+    std::unordered_map<std::string, MiniFunction*> methods;
+    for (auto& method : stmt->methods) {
+        // TODO: memory leak
+        auto* function = new MiniFunction(method.get(), enviroment, method->name.lexeme == "init");
+        methods[method->name.lexeme] = function;
+    }
+
+    MiniCallable* klass = new MiniClass(stmt->name.lexeme, methods);
     enviroment->assign(stmt->name, klass);
     return {};
 }
@@ -188,7 +196,12 @@ std::any Interpreter::visitCallExpr(Expr::Call *expr) {
         arguments.push_back(evaluate(argument.get()));
     }
     try {
-        auto function = std::any_cast<MiniCallable*>(callee);
+        MiniCallable* function;
+        if (callee.type() == typeid(MiniFunction*)) {
+            function = std::any_cast<MiniFunction*>(callee);
+        } else {
+            function = std::any_cast<MiniCallable*>(callee);
+        }
 
         if (arguments.size() != function->arity()) {
             throw RuntimeError(expr->paren, "Expected " + std::to_string(function->arity()) + " arguments but got " + std::to_string(arguments.size()) + ".");
@@ -203,7 +216,7 @@ std::any Interpreter::visitCallExpr(Expr::Call *expr) {
 
 std::any Interpreter::visitFunctionStmt(Stmt::Function *stmt) {
     // TODO: memory leak!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    MiniCallable* function = new MiniFunction(stmt, enviroment);
+    MiniCallable* function = new MiniFunction(stmt, enviroment, false);
     enviroment->define(stmt->name.lexeme, function);
     return nullptr;
 }
@@ -233,6 +246,10 @@ std::any Interpreter::visitSetExpr(Expr::Set *expr) {
     auto value = evaluate(expr->value.get());
     std::any_cast<MiniInstance*>(object)->set(expr->name, value);
     return value;
+}
+
+std::any Interpreter::visitThisExpr(Expr::This *expr) {
+    return look_up_variable(expr->keyword, expr);
 }
 
 void Interpreter::execute_block(const std::vector<std::unique_ptr<Stmt>> &stmts, Enviroment env) {

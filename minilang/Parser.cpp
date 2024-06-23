@@ -227,6 +227,8 @@ std::unique_ptr<Expr> Parser::primary() {
         return std::make_unique<Expr::Literal>(previous().literal);
     }
 
+    if (match ({TokenType::THIS})) return std::make_unique<Expr::This>(previous());
+
     if (match({TokenType::IDENTIFIER})) {
         return std::make_unique<Expr::Variable>(previous());
     }
