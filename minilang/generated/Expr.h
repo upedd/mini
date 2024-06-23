@@ -14,6 +14,7 @@ public:
     class Literal;
     class Logical;
     class Set;
+    class Super;
     class This;
     class Unary;
     class Variable;
@@ -28,6 +29,7 @@ public:
         virtual std::any visitLiteralExpr(Literal* expr) = 0;
         virtual std::any visitLogicalExpr(Logical* expr) = 0;
         virtual std::any visitSetExpr(Set* expr) = 0;
+        virtual std::any visitSuperExpr(Super* expr) = 0;
         virtual std::any visitThisExpr(This* expr) = 0;
         virtual std::any visitUnaryExpr(Unary* expr) = 0;
         virtual std::any visitVariableExpr(Variable* expr) = 0;
@@ -115,6 +117,16 @@ public:
 
     std::any accept(Visitor* visitor) override {
         return visitor->visitSetExpr(this);
+    }
+};
+class Expr::Super : public Expr {
+public:
+    Super(Token keyword, Token method) : keyword(std::move(keyword)), method(std::move(method)) {}
+    Token keyword; 
+    Token method; 
+
+    std::any accept(Visitor* visitor) override {
+        return visitor->visitSuperExpr(this);
     }
 };
 class Expr::This : public Expr {

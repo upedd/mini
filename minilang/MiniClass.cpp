@@ -28,5 +28,9 @@ MiniFunction* MiniClass::find_method(const std::string &name) {
     if (methods.contains(name)) {
         return methods[name];
     }
+
+    if (superclass != nullptr) {
+        return superclass->find_method(name);
+    }
     return nullptr;
 }

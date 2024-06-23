@@ -176,6 +176,17 @@ std::any Resolver::visitThisExpr(Expr::This *expr) {
     return {};
 }
 
+std::any Resolver::visitSuperExpr(Expr::Super *expr) {
+    if (current_class == ClassType::NONE) {
+        Mini::error(expr->keyword, "Can't use 'super' outside of class.");
+    } else if (current_class != ClassType::SUBCLASS) {
+        Mini::error(expr->keyword, "Can't use 'super' in class with no superclass.");
+    }
+
+    resolve_local(expr, expr->keyword);
+    return {};
+}
+
 void Resolver::resolve_function(Stmt::Function *function, FunctionType type) {
     auto enclosing_function = current_function;
     current_function = type;
@@ -203,6 +214,21 @@ std::any Resolver::visitClassStmt(Stmt::Class *stmt) {
     current_class = ClassType::CLASS;
     declare(stmt->name);
     define(stmt->name);
+
+    if (stmt->superclass && stmt->name.lexeme == stmt->superclass->name.lexeme) {
+        Mini::error(stmt->superclass->name, "A class can't inherit from itself.");
+    }
+
+    if (stmt->superclass) {
+        current_class = ClassType::SUBCLASS;
+        resolve(stmt->superclass.get());
+    }
+
+    if (stmt->superclass) {
+        begin_scope();
+        scopes.back()["super"] = true;
+    }
+
     begin_scope();
     scopes.back()["this"] = true;
 
@@ -215,6 +241,9 @@ std::any Resolver::visitClassStmt(Stmt::Class *stmt) {
     }
 
     end_scope();
+    if (stmt->superclass) {
+        end_scope();
+    }
     current_class = enclosing_class;
     return {};
 }

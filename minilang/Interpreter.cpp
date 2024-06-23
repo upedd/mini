@@ -4,6 +4,7 @@
 #include <iostream>
 #include <memory>
 #include <memory>
+#include <memory>
 
 #include "Mini.h"
 #include "MiniCallable.h"
@@ -117,7 +118,20 @@ std::any Interpreter::visitVarStmt(Stmt::Var *stmt) {
 }
 
 std::any Interpreter::visitClassStmt(Stmt::Class *stmt) {
+    MiniCallable* superclass = nullptr;
+    if (stmt->superclass) {
+        try {
+            superclass = std::any_cast<MiniCallable*>(evaluate(stmt->superclass.get()));
+        } catch (const std::bad_any_cast& e) {
+            throw RuntimeError(stmt->superclass->name, "Superclass must be a class.");
+        }
+    }
+
     enviroment->define(stmt->name.lexeme, {});
+    if (stmt->superclass) {
+        enviroment = std::make_shared<Enviroment>(std::move(enviroment));
+        enviroment->define("super", superclass);
+    }
     // TODO memory leak
 
     std::unordered_map<std::string, MiniFunction*> methods;
@@ -127,7 +141,12 @@ std::any Interpreter::visitClassStmt(Stmt::Class *stmt) {
         methods[method->name.lexeme] = function;
     }
 
-    MiniCallable* klass = new MiniClass(stmt->name.lexeme, methods);
+    MiniCallable* klass = new MiniClass(stmt->name.lexeme, dynamic_cast<MiniClass *>(superclass), methods);
+
+    if (superclass) {
+        enviroment = std::move(enviroment->enclosing);
+    }
+
     enviroment->assign(stmt->name, klass);
     return {};
 }
@@ -251,6 +270,23 @@ std::any Interpreter::visitSetExpr(Expr::Set *expr) {
 std::any Interpreter::visitThisExpr(Expr::This *expr) {
     return look_up_variable(expr->keyword, expr);
 }
+
+std::any Interpreter::visitSuperExpr(Expr::Super *expr) {
+    int distance = locals[expr];
+    auto* superclass = dynamic_cast<MiniClass*>(std::any_cast<MiniCallable*>(enviroment->get_at(distance, "super")));
+
+    auto* instance = std::any_cast<MiniInstance*>(enviroment->get_at(distance - 1, "this"));
+
+    auto* method = superclass->find_method(expr->method.lexeme);
+
+    if (method == nullptr) {
+        throw RuntimeError(expr->method, "Undefined property '" + expr->method.lexeme + "'.");
+    }
+
+    return method->bind(instance);
+}
+
+
 
 void Interpreter::execute_block(const std::vector<std::unique_ptr<Stmt>> &stmts, Enviroment env) {
     auto previous = std::move(this->enviroment);

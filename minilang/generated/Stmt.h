@@ -43,8 +43,9 @@ public:
 };
 class Stmt::Class : public Stmt {
 public:
-    Class(Token name, std::vector<std::unique_ptr<Stmt::Function>> methods) : name(std::move(name)), methods(std::move(methods)) {}
+    Class(Token name, std::unique_ptr<Expr::Variable> superclass, std::vector<std::unique_ptr<Stmt::Function>> methods) : name(std::move(name)), superclass(std::move(superclass)), methods(std::move(methods)) {}
     Token name; 
+    std::unique_ptr<Expr::Variable> superclass; 
     std::vector<std::unique_ptr<Stmt::Function>> methods; 
 
     std::any accept(Visitor* visitor) override {

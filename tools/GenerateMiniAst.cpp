@@ -109,6 +109,7 @@ int main(int argc, char** argv) {
         "Literal : std::any value",
         "Logical : std::shared_ptr<Expr> left, Token op, std::shared_ptr<Expr> right",
         "Set : std::shared_ptr<Expr> object, Token name, std::shared_ptr<Expr> value",
+        "Super : Token keyword, Token method",
         "This : Token keyword",
         "Unary : Token op, std::shared_ptr<Expr> right",
         "Variable : Token name",
@@ -116,7 +117,7 @@ int main(int argc, char** argv) {
 
     define_ast(output_directory, "Stmt", {
         "Block : std::vector<std::unique_ptr<Stmt>> statements",
-        "Class : Token name, std::vector<std::unique_ptr<Stmt::Function>> methods",
+        "Class : Token name, std::unique_ptr<Expr::Variable> superclass, std::vector<std::unique_ptr<Stmt::Function>> methods",
         "Expression : std::unique_ptr<Expr> expression",
         "Function : Token name, std::vector<Token> params, std::vector<std::unique_ptr<Stmt>> body",
         "If : std::unique_ptr<Expr> condition, std::unique_ptr<Stmt> then_branch, std::unique_ptr<Stmt> else_branch",

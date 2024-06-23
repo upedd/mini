@@ -36,6 +36,7 @@ public:
     std::any visitGetExpr(Expr::Get *expr) override;
     std::any visitSetExpr(Expr::Set *expr) override;
     std::any visitThisExpr(Expr::This *expr) override;
+    std::any visitSuperExpr(Expr::Super *expr) override;
     void resolve(const std::vector<std::unique_ptr<Stmt>> & stmts);
 
 private:
@@ -47,7 +48,8 @@ private:
 
     enum class ClassType {
         NONE,
-        CLASS
+        CLASS,
+        SUBCLASS
     };
 
     Interpreter* interpreter;
