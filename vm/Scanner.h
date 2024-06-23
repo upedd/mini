@@ -12,36 +12,26 @@
 class Scanner {
 public:
     explicit Scanner(const std::string_view source) : source(source) {}
-
+    Token scan_token();
+private:
     bool is_at_end() const;
+    char peek_next();
+    char advance();
+    bool match(char expected);
+    char peek() const;
+    void skip_whitespace();
+
     Token make_token(Token::Type type) const;
     Token error_token(std::string_view message) const;
 
-    char peek_next();
-
     Token string();
-
-    static bool is_digit(char c);
-
     Token number();
-
-    bool is_alpha(char c);
-
+    Token identifier();
     Token::Type check_keyword(std::string_view keyword, Token::Type type);
-
     Token::Type identifier_type();
 
-    Token identifier();
-
-    Token scan_token();
-private:
-    char advance();
-
-    bool match(char expected);
-
-    char peek() const;
-
-    void skip_whitespace();
+    static bool is_digit(char c);
+    static bool is_alpha(char c);
 
     std::string_view source;
     int current = 0;
