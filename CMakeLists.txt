@@ -34,12 +34,21 @@ add_executable(mini main.cpp
         minilang/MiniClass.h
         minilang/MiniInstance.cpp
         minilang/MiniInstance.h
+
+)
+
+add_executable(generate_mini_ast tools/GenerateMiniAst.cpp)
+add_executable(vm_mini
+        vm/main.cpp
         vm/Chunk.h
         vm/Instruction.h
         vm/debug.h
         vm/value.h
         vm/VM.h
         vm/VM.cpp
-)
-
-add_executable(generate_mini_ast tools/GenerateMiniAst.cpp)
+        vm/Compiler.cpp
+        vm/Compiler.h
+        vm/Scanner.cpp
+        vm/Scanner.h
+        vm/Token.cpp
+        vm/Token.h)
