@@ -32,11 +32,11 @@ VM::InterpretResult VM::interpret(Chunk* chunk) {
     this->instruction_ptr = 0;
 
     while (true) {
-
+#define VM_TRACE
         #ifdef VM_TRACE
         std::cout << "          ";
         for (const auto& e : stack) {
-            std::cout << '[' << e << ']';
+            std::cout << '[' << e.to_string() << ']';
         }
         std::cout << '\n';
         #endif
@@ -112,6 +112,7 @@ VM::InterpretResult VM::interpret(Chunk* chunk) {
             case Instruction::OpCode::NOT: {
                 auto top = stack.back(); stack.pop_back();
                 stack.push_back(Value::make_bool(is_falsey(top)));
+                break;
             }
             case Instruction::OpCode::EQUAL: {
                 auto a = stack.back(); stack.pop_back();
@@ -126,7 +127,7 @@ VM::InterpretResult VM::interpret(Chunk* chunk) {
                 }
                 double b = stack.back().as_number(); stack.pop_back();
                 double a = stack.back().as_number(); stack.pop_back();
-                stack.push_back(Value::make_number(a > b));
+                stack.push_back(Value::make_bool(a > b));
                 break;
             }
             case Instruction::OpCode::LESS: {
@@ -136,7 +137,7 @@ VM::InterpretResult VM::interpret(Chunk* chunk) {
                 }
                 double b = stack.back().as_number(); stack.pop_back();
                 double a = stack.back().as_number(); stack.pop_back();
-                stack.push_back(Value::make_number(a < b));
+                stack.push_back(Value::make_bool(a < b));
                 break;
             }
             case Instruction::OpCode::RETURN: {
