@@ -6,8 +6,20 @@
 #include "VM.h"
 
 vm::VM::InterpretResult interpret(std::string_view source) {
-    compile(source);
-    return vm::VM::InterpretResult::OK;
+
+    vm::Compiler compiler(source);
+
+    if (!compiler.compile()) {
+        return vm::VM::InterpretResult::COMPILE_ERROR;
+    }
+
+    vm::Chunk chunk = compiler.chunk;
+
+    vm::VM machine;
+
+    vm::VM::InterpretResult result = machine.interpret(&chunk);
+
+    return result;
 }
 
 void repl() {

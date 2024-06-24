@@ -13,9 +13,9 @@ namespace vm {
             lines.push_back(instruction.get_line());
         }
 
-        void write(uint8_t data) {
+        void write(uint8_t data, int line) {
             code.push_back(data);
-            lines.push_back(lines.back());
+            lines.push_back(line);
         }
 
         int add_constant(const Value value) {

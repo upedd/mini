@@ -21,7 +21,9 @@ public:
         ERROR, END
     };
 
+
     Token(Type type, std::string_view lexeme, int line) : type(type), lexeme(lexeme), line(line) {}
+    Token() : type(Type::END), line(0) {}
 
     Type type;
     std::string_view lexeme;
