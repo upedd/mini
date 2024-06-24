@@ -13,7 +13,7 @@ vm::VM::InterpretResult interpret(std::string_view source) {
         return vm::VM::InterpretResult::COMPILE_ERROR;
     }
 
-    vm::Chunk chunk = compiler.chunk;
+    vm::Chunk& chunk = compiler.get_chunk();
 
     vm::VM machine;
 

@@ -13,6 +13,41 @@
 namespace vm {
     class Compiler {
     public:
+        explicit Compiler(const std::string_view source) : scanner(source) {}
+
+        bool compile();
+
+        Chunk& get_chunk() { return chunk; }
+    private:
+        void error(std::string_view message);
+        void error_at(const Token &token, std::string_view message);
+        void error_at_current(std::string_view message);
+
+        void advance();
+        void consume(Token::Type type, std::string_view message);
+
+        void expression();
+        void grouping();
+        void unary();
+        void binary();
+
+        void number();
+
+        uint8_t make_constant(Value value);
+        void emit_constant(Value value);
+
+
+        void emit_byte(uint8_t byte);
+        void emit_bytes(const std::vector<uint8_t> &bytes);
+
+        Chunk chunk;
+        Token current;
+        Token previous;
+        Scanner scanner;
+
+        bool had_error = false;
+        bool panic_mode = false;
+
         enum class Precedence {
             NONE,
             ASSIGMENT,
@@ -36,51 +71,7 @@ namespace vm {
             Precedence precedence;
         };
 
-
         ParseRule *get_rule(Token::Type type);
-
-        explicit Compiler(const std::string_view source) : scanner(source) {
-        }
-
-        void error(std::string_view message);
-
-        void error_at(const Token &token, std::string_view message);
-
-        void error_at_current(std::string_view message);
-
-        void advance();
-
-        void consume(Token::Type type, std::string_view message);
-
-        void expression();
-
-        void grouping();
-
-        void unary();
-
-        void binary();
-
-        void parse_precendence(Precedence precendence);
-
-        uint8_t make_constant(Value value);
-
-        void emit_constant(Value value);
-
-        void number();
-
-        bool compile();
-
-        void emit_byte(uint8_t byte);
-
-        void emit_bytes(const std::vector<uint8_t> &bytes);
-        Chunk chunk;
-    private:
-
-        Token current;
-        Token previous;
-        Scanner scanner;
-        bool had_error = false;
-        bool panic_mode = false;
 
         ParseRule rules[40] = { // same order as in Token::Type!
             {grouping, nullptr, Precedence::NONE},
@@ -124,6 +115,8 @@ namespace vm {
             {nullptr, nullptr, Precedence::NONE},
             {nullptr, nullptr, Precedence::NONE},
         };
+
+        void parse_precendence(Precedence precendence);
     };
 }
 
