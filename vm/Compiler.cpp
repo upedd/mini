@@ -56,12 +56,12 @@ void Compiler::expression() {
     parse_precendence(Precedence::ASSIGMENT);
 }
 
-void Compiler::grouping() {
+void Compiler::grouping(bool can_assign) {
     expression();
     consume(Token::Type::RIGHT_PAREN, "Expect ')' after expression.");
 }
 
-void Compiler::unary() {
+void Compiler::unary(bool can_assign) {
     Token::Type operator_type = previous.type;
     parse_precendence(Precedence::UNARY);
     switch (operator_type) {
@@ -71,7 +71,7 @@ void Compiler::unary() {
     }
 }
 
-void Compiler::binary() {
+void Compiler::binary(bool can_assign) {
     Token::Type operator_type = previous.type;
     ParseRule* rule = get_rule(operator_type);
     parse_precendence(static_cast<Precedence>(static_cast<int>(rule->precedence) + 1));
@@ -99,12 +99,18 @@ void Compiler::parse_precendence(Precedence precendence) {
         return;
     }
 
-    (this->*prefix_rule)();
+    bool can_assign = precendence <= Precedence::ASSIGMENT;
+
+    (this->*prefix_rule)(can_assign);
 
     while (precendence <= get_rule(current.type)->precedence) {
         advance();
         ParseFn infix_rule = get_rule(previous.type)->infix;
-        (this->*infix_rule)();
+        (this->*infix_rule)(can_assign);
+    }
+
+    if (can_assign && match(Token::Type::EQUAL)) {
+        error("Invalid assigment target.");
     }
 }
 
@@ -121,12 +127,12 @@ void Compiler::emit_constant(Value value) {
     emit_bytes({static_cast<uint8_t>(Instruction::OpCode::CONSTANT), make_constant(value)});
 }
 
-void Compiler::number() {
+void Compiler::number(bool can_assign) {
     double value = std::stod(previous.lexeme.data());
     emit_constant(Value::make_number(value));
 }
 
-void Compiler::string() {
+void Compiler::string(bool can_assign) {
     // TODO should we dealoc literals?
     emit_constant(
         Value::make_object(
@@ -137,13 +143,29 @@ void Compiler::string() {
         );
 }
 
-void Compiler::literal() {
+void Compiler::literal(bool can_assign) {
     switch (previous.type) {
         case Token::Type::FALSE: emit_byte(static_cast<uint8_t>(Instruction::OpCode::FALSE)); break;
         case Token::Type::NIL: emit_byte(static_cast<uint8_t>(Instruction::OpCode::NIL)); break;
         case Token::Type::TRUE: emit_byte(static_cast<uint8_t>(Instruction::OpCode::TRUE)); break;
         default: return;
     }
+}
+
+void Compiler::named_variable(const Token &name, bool can_assign) {
+    uint8_t arg = identifier_constant(name);
+    if (can_assign && match(Token::Type::EQUAL)) {
+        expression();
+        emit_bytes({static_cast<uint8_t>(Instruction::OpCode::SET_GLOBAL), arg});
+    } else {
+        emit_bytes({static_cast<uint8_t>(Instruction::OpCode::GET_GLOBAL), arg});
+    }
+
+
+}
+
+void Compiler::variable(bool can_assign) {
+    return named_variable(previous, can_assign);
 }
 
 bool Compiler::check(Token::Type type) {
@@ -162,14 +184,76 @@ void Compiler::print_statement() {
     emit_byte(static_cast<uint8_t>(Instruction::OpCode::PRINT));
 }
 
+void Compiler::expression_statement() {
+    expression();
+    consume(Token::Type::SEMICOLON, "Expect ';' after expression.");
+    emit_byte(static_cast<uint8_t>(Instruction::OpCode::POP));
+}
+
 void Compiler::statement() {
     if (match(Token::Type::PRINT)) {
         print_statement();
+    } else {
+        expression_statement();
     }
 }
 
+void Compiler::synchronize() {
+    panic_mode = false;
+    while (current.type != Token::Type::END) {
+        if (previous.type == Token::Type::SEMICOLON) return;
+        switch (current.type) {
+            case Token::Type::CLASS:
+            case Token::Type::FUN:
+            case Token::Type::VAR:
+            case Token::Type::FOR:
+            case Token::Type::IF:
+            case Token::Type::WHILE:
+            case Token::Type::PRINT:
+            case Token::Type::RETURN:
+                return;
+            default:
+                break;
+        }
+        advance();
+    }
+}
+
+uint8_t Compiler::identifier_constant(const Token &token) {
+    return make_constant(Value::make_object(vm.allocate_string(std::string(token.lexeme))));
+}
+
+uint8_t Compiler::parse_variable(std::string_view error_message) {
+    consume(Token::Type::IDENTIFIER, error_message);
+    return identifier_constant(previous);
+}
+
+void Compiler::define_variable(uint8_t global) {
+    emit_bytes({static_cast<uint8_t>(Instruction::OpCode::DEFINE_GLOBAL), global});
+}
+
+void Compiler::var_declaration() {
+    uint8_t global = parse_variable("Expect variable name.");
+
+    if (match(Token::Type::EQUAL)) {
+        expression();
+    } else {
+        emit_byte(static_cast<uint8_t>(Instruction::OpCode::NIL));
+    }
+
+    consume(Token::Type::SEMICOLON, "Expect ';' after variable declaration.");
+
+    define_variable(global);
+}
+
 void Compiler::declaration() {
-    statement();
+    if (match(Token::Type::VAR)) {
+        var_declaration();
+    } else {
+        statement();
+    }
+
+    if (panic_mode) synchronize();
 }
 
 bool Compiler::compile() {

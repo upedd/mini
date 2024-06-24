@@ -39,6 +39,7 @@ namespace vm {
         void free_objects();
 
         std::unordered_map<std::string, ObjectString*> strings;
+        std::unordered_map<ObjectString*, Value> globals;
         Chunk* chunk = nullptr;
         int instruction_ptr = 0;
         std::vector<Value> stack;

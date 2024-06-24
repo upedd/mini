@@ -34,9 +34,9 @@ namespace vm::debug {
             offset += 1;
         }
 
-        void constant_instruction() {
+        void constant_instruction(std::string_view name) {
             const uint8_t constant = chunk.get_code()[offset + 1];
-            std::cout << "OP_CONSTANT " << static_cast<int>(constant) << ' ';
+            std::cout << name << ' ' << static_cast<int>(constant) << ' ';
             std::cout << chunk.get_constants()[constant].to_string() << '\n';
             offset += 2;
         };
@@ -72,7 +72,7 @@ namespace vm::debug {
                     simple_instruction("OP_DIVIE");
                     break;
                 case Instruction::OpCode::CONSTANT:
-                    constant_instruction();
+                    constant_instruction("OP_CONSTANT");
                     break;
                 case Instruction::OpCode::NIL:
                     simple_instruction("OP_NIL");
@@ -97,6 +97,18 @@ namespace vm::debug {
                     break;
                 case Instruction::OpCode::PRINT:
                     simple_instruction("OP_PRINT");
+                    break;
+                case Instruction::OpCode::POP:
+                    simple_instruction("OP_POP");
+                    break;
+                case Instruction::OpCode::DEFINE_GLOBAL:
+                    constant_instruction("OP_DEFINE_GLOBAL");
+                    break;
+                case Instruction::OpCode::GET_GLOBAL:
+                    constant_instruction("OP_GET_GLOBAL");
+                    break;
+                case Instruction::OpCode::SET_GLOBAL:
+                    constant_instruction("OP_SET_GLOBAL");
                     break;
                 default:
                     std::cout << "Unknown opcode " << static_cast<uint8_t>(op_code) << '\n';

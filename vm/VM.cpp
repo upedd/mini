@@ -165,6 +165,34 @@ VM::InterpretResult VM::interpret(Chunk* chunk) {
                 std::cout << top.to_string() << '\n';
                 break;
             }
+            case Instruction::OpCode::POP: {
+                stack.pop_back();
+                break;
+            }
+            case Instruction::OpCode::DEFINE_GLOBAL: {
+                ObjectString* name = chunk->get_constants()[chunk->get_code()[instruction_ptr++]].as_string();
+                globals[name] = stack.back();
+                stack.pop_back();
+                break;
+            }
+            case Instruction::OpCode::GET_GLOBAL: {
+                ObjectString* name = chunk->get_constants()[chunk->get_code()[instruction_ptr++]].as_string();
+                if (!globals.contains(name)) {
+                    runtime_error("Undefined variable '" + name->string + "'.");
+                    return InterpretResult::RUNTIME_ERROR;
+                }
+                stack.push_back(globals[name]);
+                break;
+            }
+            case Instruction::OpCode::SET_GLOBAL: {
+                ObjectString* name = chunk->get_constants()[chunk->get_code()[instruction_ptr++]].as_string();
+                if (!globals.contains(name)) {
+                    runtime_error("Undefined variable '" + name->string + "'.");
+                    return InterpretResult::RUNTIME_ERROR;
+                }
+                globals[name] = stack.back();
+                break;
+            }
         }
     }
 }

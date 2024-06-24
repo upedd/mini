@@ -22,7 +22,19 @@ namespace vm {
 
         void print_statement();
 
+        void expression_statement();
+
         void statement();
+
+        void synchronize();
+
+        uint8_t identifier_constant(const Token & token);
+
+        uint8_t parse_variable(std::string_view error_message);
+
+        void define_variable(uint8_t global);
+
+        void var_declaration();
 
         void declaration();
 
@@ -38,13 +50,17 @@ namespace vm {
         void consume(Token::Type type, std::string_view message);
 
         void expression();
-        void grouping();
-        void unary();
-        void binary();
+        void grouping(bool can_assign);
+        void unary(bool can_assign);
+        void binary(bool can_assign);
 
-        void number();
-        void string();
-        void literal();
+        void number(bool can_assign);
+        void string(bool can_assign);
+        void literal(bool can_assign);
+
+        void named_variable(const Token &name, bool can_assign);
+
+        void variable(bool can_assign);
 
         uint8_t make_constant(Value value);
         void emit_constant(Value value);
@@ -76,7 +92,7 @@ namespace vm {
             PRIMARY
         };
 
-        using ParseFn = void(Compiler::*)();
+        using ParseFn = void(Compiler::*)(bool);
 
         class ParseRule {
         public:
@@ -107,7 +123,7 @@ namespace vm {
             {nullptr, binary, Precedence::COMPARISON},
             {nullptr, binary, Precedence::COMPARISON},
             {nullptr, binary, Precedence::COMPARISON},
-            {nullptr, nullptr, Precedence::NONE},
+            {variable, nullptr, Precedence::NONE},
             {string, nullptr, Precedence::NONE},
             {number, nullptr, Precedence::NONE},
             {nullptr, nullptr, Precedence::NONE},
