@@ -32,6 +32,7 @@ namespace vm {
         void binary();
 
         void number();
+        void string();
         void literal();
 
         uint8_t make_constant(Value value);
@@ -95,7 +96,7 @@ namespace vm {
             {nullptr, binary, Precedence::COMPARISON},
             {nullptr, binary, Precedence::COMPARISON},
             {nullptr, nullptr, Precedence::NONE},
-            {nullptr, nullptr, Precedence::NONE},
+            {string, nullptr, Precedence::NONE},
             {number, nullptr, Precedence::NONE},
             {nullptr, nullptr, Precedence::NONE},
             {nullptr, nullptr, Precedence::NONE},

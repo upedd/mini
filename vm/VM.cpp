@@ -23,6 +23,7 @@ bool VM::values_equal(Value a, Value b) {
         case Value::Type::BOOL: return a.as_bool() == b.as_bool();
         case Value::Type::NIL: return true;
         case Value::Type::NUMBER: return a.as_number() == b.as_number();
+        case Value::Type::OBJECT: return a.as_string()->string == b.as_string()->string;
         return false;
     }
 }
@@ -32,7 +33,7 @@ VM::InterpretResult VM::interpret(Chunk* chunk) {
     this->instruction_ptr = 0;
 
     while (true) {
-#define VM_TRACE
+//#define VM_TRACE
         #ifdef VM_TRACE
         std::cout << "          ";
         for (const auto& e : stack) {

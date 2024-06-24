@@ -126,6 +126,16 @@ void Compiler::number() {
     emit_constant(Value::make_number(value));
 }
 
+void Compiler::string() {
+    emit_constant(
+        Value::make_object(
+            ObjectString::allocate(
+                std::string(previous.lexeme.substr(1, previous.lexeme.size() - 2))
+                )
+            )
+        );
+}
+
 void Compiler::literal() {
     switch (previous.type) {
         case Token::Type::FALSE: emit_byte(static_cast<uint8_t>(Instruction::OpCode::FALSE)); break;
