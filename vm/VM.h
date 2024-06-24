@@ -5,6 +5,8 @@
 #ifndef VM_H
 #define VM_H
 #include <array>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 #include "Chunk.h"
@@ -36,6 +38,7 @@ namespace vm {
     private:
         void free_objects();
 
+        std::unordered_map<std::string, ObjectString*> strings;
         Chunk* chunk = nullptr;
         int instruction_ptr = 0;
         std::vector<Value> stack;

@@ -23,13 +23,17 @@ bool VM::values_equal(Value a, Value b) {
         case Value::Type::BOOL: return a.as_bool() == b.as_bool();
         case Value::Type::NIL: return true;
         case Value::Type::NUMBER: return a.as_number() == b.as_number();
-        case Value::Type::OBJECT: return a.as_string()->string == b.as_string()->string;
+        case Value::Type::OBJECT: return a.as_object() == b.as_object();
         return false;
     }
 }
 
 ObjectString * VM::allocate_string(const std::string &string) {
+    if (strings.contains(string)) {
+        return strings[string];
+    }
     auto* ptr = ObjectString::allocate(string);
+    strings[string] = ptr;
     objects.push_back(ptr);
     return ptr;
 }

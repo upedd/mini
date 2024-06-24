@@ -6,8 +6,8 @@
 #include "VM.h"
 
 vm::VM::InterpretResult interpret(std::string_view source) {
-
-    vm::Compiler compiler(source);
+    vm::VM machine;
+    vm::Compiler compiler(machine, source);
 
     if (!compiler.compile()) {
         return vm::VM::InterpretResult::COMPILE_ERROR;
@@ -15,7 +15,7 @@ vm::VM::InterpretResult interpret(std::string_view source) {
 
     vm::Chunk& chunk = compiler.get_chunk();
 
-    vm::VM machine;
+
 
     vm::VM::InterpretResult result = machine.interpret(&chunk);
 

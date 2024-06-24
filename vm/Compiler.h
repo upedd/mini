@@ -9,11 +9,12 @@
 #include "Chunk.h"
 #include "Token.h"
 #include "Scanner.h"
+#include "VM.h"
 
 namespace vm {
     class Compiler {
     public:
-        explicit Compiler(const std::string_view source) : scanner(source) {}
+        explicit Compiler(VM& vm, const std::string_view source) : vm(vm), scanner(source) {}
 
         bool compile();
 
@@ -46,6 +47,7 @@ namespace vm {
         Token current;
         Token previous;
         Scanner scanner;
+        VM& vm;
 
         bool had_error = false;
         bool panic_mode = false;

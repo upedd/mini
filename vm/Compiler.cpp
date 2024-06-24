@@ -130,7 +130,7 @@ void Compiler::string() {
     // TODO should we dealoc literals?
     emit_constant(
         Value::make_object(
-            ObjectString::allocate(
+            vm.allocate_string(
                 std::string(previous.lexeme.substr(1, previous.lexeme.size() - 2))
                 )
             )
