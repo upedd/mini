@@ -16,6 +16,16 @@ namespace vm {
     public:
         explicit Compiler(VM& vm, const std::string_view source) : vm(vm), scanner(source) {}
 
+        bool check(Token::Type type);
+
+        bool match(Token::Type type);
+
+        void print_statement();
+
+        void statement();
+
+        void declaration();
+
         bool compile();
 
         Chunk& get_chunk() { return chunk; }

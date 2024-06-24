@@ -158,9 +158,12 @@ VM::InterpretResult VM::interpret(Chunk* chunk) {
                 break;
             }
             case Instruction::OpCode::RETURN: {
-                std::cout << stack.back().to_string() << '\n';
-                stack.pop_back();
                 return InterpretResult::OK;
+            }
+            case Instruction::OpCode::PRINT: {
+                auto top = stack.back(); stack.pop_back();
+                std::cout << top.to_string() << '\n';
+                break;
             }
         }
     }

@@ -146,13 +146,41 @@ void Compiler::literal() {
     }
 }
 
+bool Compiler::check(Token::Type type) {
+    return current.type == type;
+}
+
+bool Compiler::match(Token::Type type) {
+    if (!check(type)) return false;
+    advance();
+    return true;
+}
+
+void Compiler::print_statement() {
+    expression();
+    consume(Token::Type::SEMICOLON, "Expect ';' after value.");
+    emit_byte(static_cast<uint8_t>(Instruction::OpCode::PRINT));
+}
+
+void Compiler::statement() {
+    if (match(Token::Type::PRINT)) {
+        print_statement();
+    }
+}
+
+void Compiler::declaration() {
+    statement();
+}
+
 bool Compiler::compile() {
     had_error = false;
     panic_mode = false;
 
     advance();
-    expression();
-    consume(Token::Type::END, "Expect end of expression.");
+
+    while (!match(Token::Type::END)) {
+        declaration();
+    }
 
     emit_byte(static_cast<uint8_t>(Instruction::OpCode::RETURN));
 

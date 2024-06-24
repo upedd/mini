@@ -22,7 +22,7 @@ namespace vm {
             SUBTRACT,
             MULTIPLY,
             DIVIDE,
-            NOT
+            NOT, PRINT
         };
 
         Instruction(const OpCode op_code, int line) : op_code(op_code), line(line) {}

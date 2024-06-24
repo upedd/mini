@@ -95,6 +95,9 @@ namespace vm::debug {
                 case Instruction::OpCode::LESS:
                     simple_instruction("OP_LESS");
                     break;
+                case Instruction::OpCode::PRINT:
+                    simple_instruction("OP_PRINT");
+                    break;
                 default:
                     std::cout << "Unknown opcode " << static_cast<uint8_t>(op_code) << '\n';
                     offset += 1;
