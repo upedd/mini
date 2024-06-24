@@ -28,11 +28,18 @@ namespace vm {
 
         bool values_equal(Value a, Value b);
 
+        ObjectString* allocate_string(const std::string& string);
+
         InterpretResult interpret(Chunk* chunk);
+
+        ~VM();
     private:
+        void free_objects();
+
         Chunk* chunk = nullptr;
         int instruction_ptr = 0;
         std::vector<Value> stack;
+        std::vector<Object*> objects;
     };
 
 

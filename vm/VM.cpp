@@ -28,6 +28,12 @@ bool VM::values_equal(Value a, Value b) {
     }
 }
 
+ObjectString * VM::allocate_string(const std::string &string) {
+    auto* ptr = ObjectString::allocate(string);
+    objects.push_back(ptr);
+    return ptr;
+}
+
 VM::InterpretResult VM::interpret(Chunk* chunk) {
     this->chunk = chunk;
     this->instruction_ptr = 0;
@@ -71,13 +77,19 @@ VM::InterpretResult VM::interpret(Chunk* chunk) {
                 break;
             }
             case Instruction::OpCode::ADD: {
-                if (!stack[stack.size() - 1].is_number() || !stack[stack.size() - 2].is_number()) {
-                    runtime_error("Operands must be numbers.");
+                if (stack[stack.size() - 1].is_string() && stack[stack.size() - 2].is_string()) {
+                    ObjectString* b = stack.back().as_string(); stack.pop_back();
+                    ObjectString* a = stack.back().as_string(); stack.pop_back();
+                    stack.push_back(Value::make_object(allocate_string(a->string + b->string)));
+                } else if (stack[stack.size() - 1].is_number() && stack[stack.size() - 2].is_number()) {
+                    double b = stack.back().as_number(); stack.pop_back();
+                    double a = stack.back().as_number(); stack.pop_back();
+                    stack.push_back(Value::make_number(a + b));
+                } else {
+                    runtime_error("Operands must be two numbers or two strings.");
                     return InterpretResult::RUNTIME_ERROR;
                 }
-                double b = stack.back().as_number(); stack.pop_back();
-                double a = stack.back().as_number(); stack.pop_back();
-                stack.push_back(Value::make_number(a + b));
+
                 break;
             }
             case Instruction::OpCode::SUBTRACT: {
@@ -146,6 +158,18 @@ VM::InterpretResult VM::interpret(Chunk* chunk) {
                 stack.pop_back();
                 return InterpretResult::OK;
             }
+        }
+    }
+}
+
+VM::~VM() {
+    free_objects();
+}
+
+void VM::free_objects() {
+    for (Object* object : objects) {
+        switch(object->type) {
+            case Object::Type::STRING: delete static_cast<ObjectString*>(object); // NOLINT(*-pro-type-static-cast-downcast)
         }
     }
 }

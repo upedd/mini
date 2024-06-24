@@ -127,6 +127,7 @@ void Compiler::number() {
 }
 
 void Compiler::string() {
+    // TODO should we dealoc literals?
     emit_constant(
         Value::make_object(
             ObjectString::allocate(
