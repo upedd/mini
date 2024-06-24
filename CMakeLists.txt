@@ -51,4 +51,5 @@ add_executable(vm_mini
         vm/Scanner.cpp
         vm/Scanner.h
         vm/Token.cpp
-        vm/Token.h)
+        vm/Token.h
+        vm/Value.cpp)

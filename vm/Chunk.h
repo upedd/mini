@@ -3,7 +3,7 @@
 #include <vector>
 
 #include "Instruction.h"
-#include "value.h"
+#include "Value.h"
 
 namespace vm {
     class Chunk {

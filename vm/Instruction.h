@@ -11,11 +11,18 @@ namespace vm {
         enum class OpCode : uint8_t {
             RETURN,
             CONSTANT,
+            NIL,
+            TRUE,
+            FALSE,
             NEGATE,
+            EQUAL,
+            GREATER,
+            LESS,
             ADD,
             SUBTRACT,
             MULTIPLY,
-            DIVIDE
+            DIVIDE,
+            NOT
         };
 
         Instruction(const OpCode op_code, int line) : op_code(op_code), line(line) {}

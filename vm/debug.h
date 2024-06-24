@@ -37,7 +37,7 @@ namespace vm::debug {
         void constant_instruction() {
             const uint8_t constant = chunk.get_code()[offset + 1];
             std::cout << "OP_CONSTANT " << static_cast<int>(constant) << ' ';
-            std::cout << chunk.get_constants()[constant] << '\n';
+            std::cout << chunk.get_constants()[constant].to_string() << '\n';
             offset += 2;
         };
 
@@ -73,6 +73,27 @@ namespace vm::debug {
                     break;
                 case Instruction::OpCode::CONSTANT:
                     constant_instruction();
+                    break;
+                case Instruction::OpCode::NIL:
+                    simple_instruction("OP_NIL");
+                    break;
+                case Instruction::OpCode::TRUE:
+                    simple_instruction("OP_TRUE");
+                    break;
+                case Instruction::OpCode::FALSE:
+                    simple_instruction("OP_FALSE");
+                    break;
+                case Instruction::OpCode::NOT:
+                    simple_instruction("OP_NOT");
+                    break;
+                case Instruction::OpCode::EQUAL:
+                    simple_instruction("OP_EQUAL");
+                    break;
+                case Instruction::OpCode::GREATER:
+                    simple_instruction("OP_GREATER");
+                    break;
+                case Instruction::OpCode::LESS:
+                    simple_instruction("OP_LESS");
                     break;
                 default:
                     std::cout << "Unknown opcode " << static_cast<uint8_t>(op_code) << '\n';

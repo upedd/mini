@@ -66,6 +66,7 @@ void Compiler::unary() {
     parse_precendence(Precedence::UNARY);
     switch (operator_type) {
         case Token::Type::MINUS: emit_byte(static_cast<uint8_t>(Instruction::OpCode::NEGATE)); break;
+        case Token::Type::BANG: emit_byte(static_cast<uint8_t>(Instruction::OpCode::NOT)); break;
         default: return; // unreachable
     }
 }
@@ -80,6 +81,12 @@ void Compiler::binary() {
         case Token::Type::MINUS: emit_byte(static_cast<int>(Instruction::OpCode::SUBTRACT)); break;
         case Token::Type::STAR: emit_byte(static_cast<int>(Instruction::OpCode::MULTIPLY)); break;
         case Token::Type::SLASH: emit_byte(static_cast<int>(Instruction::OpCode::DIVIDE)); break;
+        case Token::Type::BANG_EQUAL: emit_bytes({static_cast<uint8_t>(Instruction::OpCode::EQUAL), static_cast<uint8_t>(Instruction::OpCode::NOT)});
+        case Token::Type::EQUAL_EQUAL: emit_byte(static_cast<int>(Instruction::OpCode::EQUAL)); break;
+        case Token::Type::GREATER: emit_byte(static_cast<int>(Instruction::OpCode::GREATER)); break;
+        case Token::Type::GREATER_EQUAL: emit_bytes({static_cast<uint8_t>(Instruction::OpCode::LESS), static_cast<uint8_t>(Instruction::OpCode::NOT)});
+        case Token::Type::LESS: emit_byte(static_cast<int>(Instruction::OpCode::GREATER)); break;
+        case Token::Type::LESS_EQUAL: emit_bytes({static_cast<uint8_t>(Instruction::OpCode::GREATER), static_cast<uint8_t>(Instruction::OpCode::NOT)});
         default: return;
     }
 }
@@ -116,7 +123,16 @@ void Compiler::emit_constant(Value value) {
 
 void Compiler::number() {
     double value = std::stod(previous.lexeme.data());
-    emit_constant(value);
+    emit_constant(Value::make_number(value));
+}
+
+void Compiler::literal() {
+    switch (previous.type) {
+        case Token::Type::FALSE: emit_byte(static_cast<uint8_t>(Instruction::OpCode::FALSE)); break;
+        case Token::Type::NIL: emit_byte(static_cast<uint8_t>(Instruction::OpCode::NIL)); break;
+        case Token::Type::TRUE: emit_byte(static_cast<uint8_t>(Instruction::OpCode::TRUE)); break;
+        default: return;
+    }
 }
 
 bool Compiler::compile() {

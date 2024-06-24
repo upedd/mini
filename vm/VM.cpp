@@ -7,6 +7,26 @@
 using namespace vm;
 
 
+void VM::runtime_error(std::string_view message) {
+    int line = chunk->get_lines()[instruction_ptr];
+    std::cerr << message << '\n';
+    std::cerr << "[line " << line << "] in script\n";
+}
+
+bool VM::is_falsey(Value top) {
+    return top.is_nil() || (top.is_bool() && !top.as_bool());
+}
+
+bool VM::values_equal(Value a, Value b) {
+    if (a.type != b.type) return false;
+    switch (a.type) {
+        case Value::Type::BOOL: return a.as_bool() == b.as_bool();
+        case Value::Type::NIL: return true;
+        case Value::Type::NUMBER: return a.as_number() == b.as_number();
+        return false;
+    }
+}
+
 VM::InterpretResult VM::interpret(Chunk* chunk) {
     this->chunk = chunk;
     this->instruction_ptr = 0;
@@ -27,38 +47,100 @@ VM::InterpretResult VM::interpret(Chunk* chunk) {
                 stack.push_back(constant);
                 break;
             }
+            case Instruction::OpCode::NIL: {
+                stack.push_back(Value::make_nil());
+                break;
+            }
+            case Instruction::OpCode::TRUE: {
+                stack.push_back(Value::make_bool(true));
+                break;
+            }
+            case Instruction::OpCode::FALSE: {
+                stack.push_back(Value::make_bool(false));
+                break;
+            }
             case Instruction::OpCode::NEGATE: {
                 auto top = stack.back();
+                if (!top.is_number()) {
+                    runtime_error("Operand must be a number.");
+                    return InterpretResult::RUNTIME_ERROR;
+                }
                 stack.pop_back();
-                stack.push_back(-top);
+                stack.push_back(Value::make_number(-top.as_number()));
                 break;
             }
             case Instruction::OpCode::ADD: {
-                double b = stack.back(); stack.pop_back();
-                double a = stack.back(); stack.pop_back();
-                stack.push_back(a + b);
+                if (!stack[stack.size() - 1].is_number() || !stack[stack.size() - 2].is_number()) {
+                    runtime_error("Operands must be numbers.");
+                    return InterpretResult::RUNTIME_ERROR;
+                }
+                double b = stack.back().as_number(); stack.pop_back();
+                double a = stack.back().as_number(); stack.pop_back();
+                stack.push_back(Value::make_number(a + b));
                 break;
             }
             case Instruction::OpCode::SUBTRACT: {
-                double b = stack.back(); stack.pop_back();
-                double a = stack.back(); stack.pop_back();
-                stack.push_back(a - b);
+                if (!stack[stack.size() - 1].is_number() || !stack[stack.size() - 2].is_number()) {
+                    runtime_error("Operands must be numbers.");
+                    return InterpretResult::RUNTIME_ERROR;
+                }
+                double b = stack.back().as_number(); stack.pop_back();
+                double a = stack.back().as_number(); stack.pop_back();
+                stack.push_back(Value::make_number(a - b));
                 break;
             }
             case Instruction::OpCode::MULTIPLY: {
-                double b = stack.back(); stack.pop_back();
-                double a = stack.back(); stack.pop_back();
-                stack.push_back(a * b);
+                if (!stack[stack.size() - 1].is_number() || !stack[stack.size() - 2].is_number()) {
+                    runtime_error("Operands must be numbers.");
+                    return InterpretResult::RUNTIME_ERROR;
+                }
+                double b = stack.back().as_number(); stack.pop_back();
+                double a = stack.back().as_number(); stack.pop_back();
+                stack.push_back(Value::make_number(a * b));
                 break;
             }
             case Instruction::OpCode::DIVIDE: {
-                double b = stack.back(); stack.pop_back();
-                double a = stack.back(); stack.pop_back();
-                stack.push_back(a / b);
+                if (!stack[stack.size() - 1].is_number() || !stack[stack.size() - 2].is_number()) {
+                    runtime_error("Operands must be numbers.");
+                    return InterpretResult::RUNTIME_ERROR;
+                }
+                double b = stack.back().as_number(); stack.pop_back();
+                double a = stack.back().as_number(); stack.pop_back();
+                stack.push_back(Value::make_number(a / b));
+                break;
+            }
+            case Instruction::OpCode::NOT: {
+                auto top = stack.back(); stack.pop_back();
+                stack.push_back(Value::make_bool(is_falsey(top)));
+            }
+            case Instruction::OpCode::EQUAL: {
+                auto a = stack.back(); stack.pop_back();
+                auto b = stack.back(); stack.pop_back();
+                stack.push_back(Value::make_bool(values_equal(a, b)));
+                break;
+            }
+            case Instruction::OpCode::GREATER: {
+                if (!stack[stack.size() - 1].is_number() || !stack[stack.size() - 2].is_number()) {
+                    runtime_error("Operands must be numbers.");
+                    return InterpretResult::RUNTIME_ERROR;
+                }
+                double b = stack.back().as_number(); stack.pop_back();
+                double a = stack.back().as_number(); stack.pop_back();
+                stack.push_back(Value::make_number(a > b));
+                break;
+            }
+            case Instruction::OpCode::LESS: {
+                if (!stack[stack.size() - 1].is_number() || !stack[stack.size() - 2].is_number()) {
+                    runtime_error("Operands must be numbers.");
+                    return InterpretResult::RUNTIME_ERROR;
+                }
+                double b = stack.back().as_number(); stack.pop_back();
+                double a = stack.back().as_number(); stack.pop_back();
+                stack.push_back(Value::make_number(a < b));
                 break;
             }
             case Instruction::OpCode::RETURN: {
-                std::cout << stack.back() << '\n';
+                std::cout << stack.back().to_string() << '\n';
                 stack.pop_back();
                 return InterpretResult::OK;
             }

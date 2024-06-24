@@ -22,6 +22,12 @@ namespace vm {
             RUNTIME_ERROR
         };
 
+        void runtime_error(std::string_view message);
+
+        static bool is_falsey(Value top);
+
+        bool values_equal(Value a, Value b);
+
         InterpretResult interpret(Chunk* chunk);
     private:
         Chunk* chunk = nullptr;
