@@ -23,7 +23,7 @@ namespace vm {
             MULTIPLY,
             DIVIDE,
             NOT, PRINT, POP,
-            DEFINE_GLOBAL, GET_GLOBAL, SET_GLOBAL, GET_LOCAL, SET_LOCAL
+            DEFINE_GLOBAL, GET_GLOBAL, SET_GLOBAL, GET_LOCAL, SET_LOCAL, JUMP_IF_FALSE, JUMP
         };
 
         Instruction(const OpCode op_code, int line) : op_code(op_code), line(line) {}

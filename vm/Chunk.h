@@ -23,7 +23,7 @@ namespace vm {
             return constants.size() - 1;
         }
 
-        [[nodiscard]] const std::vector<uint8_t>& get_code() const {
+        [[nodiscard]] std::vector<uint8_t>& get_code() {
             return code;
         }
         [[nodiscard]] const std::vector<Value>& get_constants() const {

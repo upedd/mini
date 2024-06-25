@@ -47,6 +47,12 @@ namespace vm::debug {
             offset += 2;
         };
 
+        void jump_instruction(std::string_view name, int sign) {
+            uint16_t jump = static_cast<uint16_t>(chunk.get_code()[offset + 1]) << 8 | chunk.get_code()[offset + 2];
+            std::cout << name << ' ' << offset << " -> " << offset + 3 + sign * jump << '\n';
+            offset += 3;
+        };
+
         void disassemble_instruction() {
             std::cout << std::format("{:04} ", offset);
 
@@ -123,6 +129,15 @@ namespace vm::debug {
                     byte_instruction("OP_SET_LOCAL");
                     break;
                 }
+                case Instruction::OpCode::JUMP_IF_FALSE: {
+                    jump_instruction("OP_JUMP_IF_FALSE", 1);
+                    break;
+                }
+                case Instruction::OpCode::JUMP: {
+                    jump_instruction("OP_JUMP", 1);
+                    break;
+                }
+
                 default:
                     std::cout << "Unknown opcode " << static_cast<uint8_t>(op_code) << '\n';
                     offset += 1;

@@ -30,6 +30,12 @@ namespace vm {
 
         void end_scope();
 
+        int emit_jump(Instruction::OpCode op_code);
+
+        void patch_jump(int offset);
+
+        void if_statement();
+
         void statement();
 
         void synchronize();

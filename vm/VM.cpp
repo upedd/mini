@@ -203,6 +203,17 @@ VM::InterpretResult VM::interpret(Chunk* chunk) {
                 stack[slot] = stack.back();
                 break;
             }
+            case Instruction::OpCode::JUMP_IF_FALSE: {
+                // TODO move to utility
+                uint16_t offset = (static_cast<uint16_t>(chunk->get_code()[instruction_ptr++] << 8)) | chunk->get_code()[instruction_ptr++];
+                if (is_falsey(stack.back())) instruction_ptr += offset;
+                break;
+            }
+            case Instruction::OpCode::JUMP: {
+                uint16_t offset = (static_cast<uint16_t>(chunk->get_code()[instruction_ptr++] << 8)) | chunk->get_code()[instruction_ptr++];
+                instruction_ptr += offset;
+                break;
+            }
         }
     }
 }

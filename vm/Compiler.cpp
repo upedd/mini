@@ -231,6 +231,39 @@ void Compiler::end_scope() {
     }
 }
 
+int Compiler::emit_jump(Instruction::OpCode op_code) {
+    emit_byte(static_cast<uint8_t>(op_code));
+    emit_byte(0xFF);
+    emit_byte(0xFF);
+    return chunk.get_code().size() - 2;
+}
+
+void Compiler::patch_jump(int offset) {
+    int jump = chunk.get_code().size() - offset - 2;
+    if (jump > UINT16_MAX) {
+        error("Too much code to jump over.");
+    }
+
+    chunk.get_code()[offset] = (jump >> 8) & 0xFF;
+    chunk.get_code()[offset + 1] = jump & 0xFF;
+}
+
+void Compiler::if_statement() {
+    consume(Token::Type::LEFT_PAREN, "Expect '(' after 'if'.");
+    expression();
+    consume(Token::Type::RIGHT_PAREN, "Expect ')' after condition.");
+    int then_jump = emit_jump(Instruction::OpCode::JUMP_IF_FALSE);
+    emit_byte(static_cast<uint8_t>(Instruction::OpCode::POP));
+    statement();
+
+    int else_jump = emit_jump(Instruction::OpCode::JUMP);
+
+    patch_jump(then_jump);
+    emit_byte(static_cast<uint8_t>(Instruction::OpCode::POP));
+    if (match(Token::Type::ELSE)) statement();
+    patch_jump(else_jump);
+}
+
 void Compiler::statement() {
     if (match(Token::Type::PRINT)) {
         print_statement();
@@ -238,6 +271,8 @@ void Compiler::statement() {
         begin_scope();
         block();
         end_scope();
+    } else if (match(Token::Type::IF)) {
+        if_statement();
     } else {
         expression_statement();
     }
