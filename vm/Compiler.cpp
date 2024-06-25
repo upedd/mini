@@ -152,6 +152,22 @@ void Compiler::literal(bool can_assign) {
     }
 }
 
+void Compiler::_and(bool can_assign) {
+    int end_jump = emit_jump(Instruction::OpCode::JUMP_IF_FALSE);
+    emit_byte(static_cast<uint8_t>(Instruction::OpCode::POP));
+    parse_precendence(Precedence::AND);
+    patch_jump(end_jump);
+}
+
+void Compiler::_or(bool can_assign) {
+    int else_jump = emit_jump(Instruction::OpCode::JUMP_IF_FALSE);
+    int end_jump = emit_jump(Instruction::OpCode::JUMP);
+    patch_jump(else_jump);
+    emit_byte(static_cast<uint8_t>(Instruction::OpCode::POP));
+    parse_precendence(Precedence::OR);
+    patch_jump(end_jump);
+}
+
 int Compiler::resolve_local(const Token &name) {
     for (int i = local_count - 1; i >= 0; --i) {
         if (locals[i].name.lexeme == name.lexeme) {

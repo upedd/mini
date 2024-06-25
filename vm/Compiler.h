@@ -76,6 +76,10 @@ namespace vm {
         void string(bool can_assign);
         void literal(bool can_assign);
 
+
+        void _and(bool can_assign);
+        void _or(bool can_assign);
+
         int resolve_local(const Token &name);
 
         void named_variable(const Token &name, bool can_assign);
@@ -156,15 +160,15 @@ namespace vm {
             {variable, nullptr, Precedence::NONE},
             {string, nullptr, Precedence::NONE},
             {number, nullptr, Precedence::NONE},
-            {nullptr, nullptr, Precedence::NONE},
-            {nullptr, nullptr, Precedence::NONE},
-            {nullptr, nullptr, Precedence::NONE},
-            {literal, nullptr, Precedence::NONE},
-            {nullptr, nullptr, Precedence::NONE},
+            {nullptr, _and, Precedence::AND},
             {nullptr, nullptr, Precedence::NONE},
             {nullptr, nullptr, Precedence::NONE},
             {literal, nullptr, Precedence::NONE},
             {nullptr, nullptr, Precedence::NONE},
+            {nullptr, nullptr, Precedence::NONE},
+            {nullptr, nullptr, Precedence::NONE},
+            {literal, nullptr, Precedence::NONE},
+            {nullptr, _or, Precedence::OR},
             {nullptr, nullptr, Precedence::NONE},
             {nullptr, nullptr, Precedence::NONE},
             {nullptr, nullptr, Precedence::NONE},
