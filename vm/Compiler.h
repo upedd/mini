@@ -36,6 +36,10 @@ namespace vm {
 
         void if_statement();
 
+        void emit_loop(int loop_start);
+
+        void while_statement();
+
         void statement();
 
         void synchronize();

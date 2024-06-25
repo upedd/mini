@@ -85,7 +85,7 @@ void Compiler::binary(bool can_assign) {
         case Token::Type::EQUAL_EQUAL: emit_byte(static_cast<int>(Instruction::OpCode::EQUAL)); break;
         case Token::Type::GREATER: emit_byte(static_cast<int>(Instruction::OpCode::GREATER)); break;
         case Token::Type::GREATER_EQUAL: emit_bytes({static_cast<uint8_t>(Instruction::OpCode::LESS), static_cast<uint8_t>(Instruction::OpCode::NOT)});
-        case Token::Type::LESS: emit_byte(static_cast<int>(Instruction::OpCode::GREATER)); break;
+        case Token::Type::LESS: emit_byte(static_cast<int>(Instruction::OpCode::LESS)); break;
         case Token::Type::LESS_EQUAL: emit_bytes({static_cast<uint8_t>(Instruction::OpCode::GREATER), static_cast<uint8_t>(Instruction::OpCode::NOT)});
         default: return;
     }
@@ -280,6 +280,30 @@ void Compiler::if_statement() {
     patch_jump(else_jump);
 }
 
+void Compiler::emit_loop(int loop_start) {
+    emit_byte(static_cast<uint8_t>(Instruction::OpCode::LOOP));
+    int offset = chunk.get_code().size() - loop_start + 2;
+    if (offset > UINT16_MAX) {
+        error("Loop body too large");
+    }
+
+    emit_byte((offset >> 8) & 0xFF);
+    emit_byte(offset & 0xFF);
+}
+
+void Compiler::while_statement() {
+    int loop_start = chunk.get_code().size();
+    consume(Token::Type::LEFT_PAREN, "Expect '(' after 'while'.");
+    expression();
+    consume(Token::Type::RIGHT_PAREN, "Expect ')' after condition.");
+    int exit_jump = emit_jump(Instruction::OpCode::JUMP_IF_FALSE);
+    emit_byte(static_cast<uint8_t>(Instruction::OpCode::POP));
+    statement();
+    emit_loop(loop_start);
+    patch_jump(exit_jump);
+    emit_byte(static_cast<uint8_t>(Instruction::OpCode::POP));
+}
+
 void Compiler::statement() {
     if (match(Token::Type::PRINT)) {
         print_statement();
@@ -289,6 +313,8 @@ void Compiler::statement() {
         end_scope();
     } else if (match(Token::Type::IF)) {
         if_statement();
+    } else if (match(Token::Type::WHILE)) {
+        while_statement();
     } else {
         expression_statement();
     }

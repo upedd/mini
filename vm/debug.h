@@ -137,7 +137,10 @@ namespace vm::debug {
                     jump_instruction("OP_JUMP", 1);
                     break;
                 }
-
+                case Instruction::OpCode::LOOP: {
+                    jump_instruction("OP_LOOP", -1);
+                    break;
+                }
                 default:
                     std::cout << "Unknown opcode " << static_cast<uint8_t>(op_code) << '\n';
                     offset += 1;

@@ -214,6 +214,12 @@ VM::InterpretResult VM::interpret(Chunk* chunk) {
                 instruction_ptr += offset;
                 break;
             }
+            case Instruction::OpCode::LOOP: {
+                uint16_t offset = (static_cast<uint16_t>(chunk->get_code()[instruction_ptr++] << 8)) | chunk->get_code()[instruction_ptr++];
+                instruction_ptr -= offset;
+                break;
+            }
+
         }
     }
 }
