@@ -41,6 +41,12 @@ namespace vm::debug {
             offset += 2;
         };
 
+        void byte_instruction(std::string_view name) {
+            uint8_t slot = chunk.get_code()[offset + 1];
+            std::cout << name << ' ' << slot << '\n';
+            offset += 2;
+        };
+
         void disassemble_instruction() {
             std::cout << std::format("{:04} ", offset);
 
@@ -110,6 +116,13 @@ namespace vm::debug {
                 case Instruction::OpCode::SET_GLOBAL:
                     constant_instruction("OP_SET_GLOBAL");
                     break;
+                case Instruction::OpCode::GET_LOCAL:
+                    byte_instruction("OP_GET_LOCAL");
+                    break;
+                case Instruction::OpCode::SET_LOCAL: {
+                    byte_instruction("OP_SET_LOCAL");
+                    break;
+                }
                 default:
                     std::cout << "Unknown opcode " << static_cast<uint8_t>(op_code) << '\n';
                     offset += 1;

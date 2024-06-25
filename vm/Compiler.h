@@ -24,13 +24,25 @@ namespace vm {
 
         void expression_statement();
 
+        void block();
+
+        void begin_scope();
+
+        void end_scope();
+
         void statement();
 
         void synchronize();
 
         uint8_t identifier_constant(const Token & token);
 
+        void add_local(const Token & name);
+
+        void declare_variable();
+
         uint8_t parse_variable(std::string_view error_message);
+
+        void mark_initialized();
 
         void define_variable(uint8_t global);
 
@@ -58,6 +70,8 @@ namespace vm {
         void string(bool can_assign);
         void literal(bool can_assign);
 
+        int resolve_local(const Token &name);
+
         void named_variable(const Token &name, bool can_assign);
 
         void variable(bool can_assign);
@@ -74,6 +88,16 @@ namespace vm {
         Token previous;
         Scanner scanner;
         VM& vm;
+
+        class Local {
+        public:
+            Token name;
+            int depth;
+        };
+
+        std::array<Local, UINT8_MAX + 1> locals;
+        int local_count = 0;
+        int scope_depth = 0;
 
         bool had_error = false;
         bool panic_mode = false;

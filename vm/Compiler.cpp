@@ -152,13 +152,34 @@ void Compiler::literal(bool can_assign) {
     }
 }
 
+int Compiler::resolve_local(const Token &name) {
+    for (int i = local_count - 1; i >= 0; --i) {
+        if (locals[i].name.lexeme == name.lexeme) {
+            if (locals[i].depth == -1) {
+                error("Can't read local variable in its own initializer.");
+            }
+            return i;
+        }
+    }
+    return -1;
+}
+
 void Compiler::named_variable(const Token &name, bool can_assign) {
-    uint8_t arg = identifier_constant(name);
+    uint8_t get_op, set_op;
+    int arg = resolve_local(name);
+    if (arg != -1) {
+        get_op = static_cast<uint8_t>(Instruction::OpCode::GET_LOCAL);
+        set_op = static_cast<uint8_t>(Instruction::OpCode::SET_LOCAL);
+    } else {
+        arg = identifier_constant(name);
+        get_op = static_cast<uint8_t>(Instruction::OpCode::GET_GLOBAL);
+        set_op = static_cast<uint8_t>(Instruction::OpCode::SET_GLOBAL);
+    }
     if (can_assign && match(Token::Type::EQUAL)) {
         expression();
-        emit_bytes({static_cast<uint8_t>(Instruction::OpCode::SET_GLOBAL), arg});
+        emit_bytes({set_op, static_cast<uint8_t>(arg)});
     } else {
-        emit_bytes({static_cast<uint8_t>(Instruction::OpCode::GET_GLOBAL), arg});
+        emit_bytes({get_op, static_cast<uint8_t>(arg)});
     }
 
 
@@ -190,9 +211,33 @@ void Compiler::expression_statement() {
     emit_byte(static_cast<uint8_t>(Instruction::OpCode::POP));
 }
 
+void Compiler::block() {
+    while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
+        declaration();
+    }
+    consume(Token::Type::RIGHT_BRACE, "Expect '}' after block.");
+}
+
+void Compiler::begin_scope() {
+    scope_depth++;
+}
+
+void Compiler::end_scope() {
+    scope_depth--;
+
+    while (local_count > 0 && locals[local_count - 1].depth > scope_depth) {
+        emit_byte(static_cast<uint8_t>(Instruction::OpCode::POP));
+        local_count--;
+    }
+}
+
 void Compiler::statement() {
     if (match(Token::Type::PRINT)) {
         print_statement();
+    } else if (match(Token::Type::LEFT_BRACE)) {
+        begin_scope();
+        block();
+        end_scope();
     } else {
         expression_statement();
     }
@@ -223,12 +268,51 @@ uint8_t Compiler::identifier_constant(const Token &token) {
     return make_constant(Value::make_object(vm.allocate_string(std::string(token.lexeme))));
 }
 
+void Compiler::add_local(const Token &name) {
+    if (local_count == INT8_MAX + 1) {
+        error("Too many local variables in function.");
+        return;
+    }
+
+    Local& local = locals[local_count++];
+    local.name = name;
+    local.depth = -1;
+}
+
+void Compiler::declare_variable() {
+    if (scope_depth == 0) return;
+    for (int i = local_count - 1; i >= 0; i--) {
+        Local local = locals[i];
+        if (local.depth != -1 && local.depth < scope_depth) {
+            break;
+        }
+        if (previous.lexeme == local.name.lexeme) {
+            error("Already a variable with this name in this scope.");
+        }
+    }
+
+    add_local(previous);
+}
+
 uint8_t Compiler::parse_variable(std::string_view error_message) {
     consume(Token::Type::IDENTIFIER, error_message);
+
+    declare_variable();
+    if (scope_depth > 0) return 0;
+
     return identifier_constant(previous);
 }
 
+void Compiler::mark_initialized() {
+    locals[local_count - 1].depth = scope_depth;
+}
+
 void Compiler::define_variable(uint8_t global) {
+    if (scope_depth > 0) {
+        mark_initialized();
+        return;
+    }
+
     emit_bytes({static_cast<uint8_t>(Instruction::OpCode::DEFINE_GLOBAL), global});
 }
 

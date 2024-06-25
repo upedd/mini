@@ -193,6 +193,16 @@ VM::InterpretResult VM::interpret(Chunk* chunk) {
                 globals[name] = stack.back();
                 break;
             }
+            case Instruction::OpCode::GET_LOCAL: {
+                uint8_t slot = chunk->get_code()[instruction_ptr++];
+                stack.push_back(stack[slot]);
+                break;
+            }
+            case Instruction::OpCode::SET_LOCAL: {
+                uint8_t slot = chunk->get_code()[instruction_ptr++];
+                stack[slot] = stack.back();
+                break;
+            }
         }
     }
 }
