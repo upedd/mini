@@ -40,6 +40,8 @@ namespace vm {
 
         void while_statement();
 
+        void for_statement();
+
         void statement();
 
         void synchronize();

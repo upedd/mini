@@ -304,6 +304,51 @@ void Compiler::while_statement() {
     emit_byte(static_cast<uint8_t>(Instruction::OpCode::POP));
 }
 
+void Compiler::for_statement() {
+    begin_scope();
+    consume(Token::Type::LEFT_PAREN, "Expect '(' after for.");
+    if (match(Token::Type::VAR)) {
+        var_declaration();
+    } else if (!match(Token::Type::SEMICOLON)) {
+        expression_statement();
+    }
+
+    int loop_start = chunk.get_code().size();
+    int exit_jump = -1;
+    if (!match(Token::Type::SEMICOLON)) {
+        expression();
+        consume(Token::Type::SEMICOLON, "Expect ';' after loop condition.");
+        exit_jump = emit_jump(Instruction::OpCode::JUMP_IF_FALSE);
+        emit_byte(static_cast<uint8_t>(Instruction::OpCode::POP));
+    }
+
+    if (!match(Token::Type::RIGHT_PAREN)) {
+        int body_jump = emit_jump(Instruction::OpCode::JUMP);
+        int inc_start = chunk.get_code().size();
+        expression();
+        emit_byte(static_cast<uint8_t>(Instruction::OpCode::POP));
+        consume(Token::Type::RIGHT_PAREN, "Expect ')' after for clauses.");
+
+        emit_loop(loop_start);
+        loop_start = inc_start;
+        patch_jump(body_jump);
+    }
+
+
+
+
+
+    statement();
+
+    emit_loop(loop_start);
+
+    if (exit_jump != -1) {
+        patch_jump(exit_jump);
+        emit_byte(static_cast<uint8_t>(Instruction::OpCode::POP));
+    }
+    end_scope();
+}
+
 void Compiler::statement() {
     if (match(Token::Type::PRINT)) {
         print_statement();
@@ -315,6 +360,8 @@ void Compiler::statement() {
         if_statement();
     } else if (match(Token::Type::WHILE)) {
         while_statement();
+    } else if (match(Token::Type::FOR)) {
+        for_statement();
     } else {
         expression_statement();
     }
