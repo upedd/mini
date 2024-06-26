@@ -53,3 +53,10 @@ add_executable(vm_mini
         vm/Token.cpp
         vm/Token.h
         vm/Value.cpp)
+
+add_executable(rewrite rewrite/main.cpp
+        rewrite/main.cpp
+        rewrite/Lexer.cpp
+        rewrite/Lexer.h
+        rewrite/Token.h
+        rewrite/common.h)
