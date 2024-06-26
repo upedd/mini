@@ -15,7 +15,7 @@ int main() {
     Parser parser(lexer);
     //
     Expr expr = parser.expression();
-    std::cout << expr.index();
+    std::cout << to_string(expr);
     // while (true) {
     //     auto token = lexer.next_token();
     //     if (!token) {

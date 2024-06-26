@@ -1,5 +1,7 @@
 #ifndef PARSER_H
 #define PARSER_H
+#include <optional>
+
 #include "Lexer.h"
 #include "Expr.h"
 
@@ -12,8 +14,21 @@
  */
 class Parser {
 public:
-    explicit Parser(const Lexer &lexer) : lexer(lexer) {} // todo not final
-    Expr expression();
+    class Error : public std::runtime_error {
+    public:
+        Error(Token token, std::string_view message) : std::runtime_error(message.data()), token(token) {}
+        Token token;
+    };
+
+    explicit Parser(const Lexer &lexer) : lexer(lexer) {advance();} // todo not final
+    Expr integer(const Token &token);
+    Expr prefix(const Token& token);
+
+    std::optional<Expr> infix(const Expr& expr, const Token &token);
+
+    int get_precendece();
+
+    Expr expression(int precedence = 0);
 private:
     Token advance();
 
