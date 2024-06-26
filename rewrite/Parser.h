@@ -1,6 +1,7 @@
 #ifndef PARSER_H
 #define PARSER_H
-#include <optional>
+
+#include <vector>
 
 #include "Lexer.h"
 #include "Expr.h"
@@ -15,6 +16,10 @@
  */
 class Parser {
 public:
+    // C like precedence
+    // References:
+    // https://en.wikipedia.org/wiki/Operators_in_C_and_C%2B%2B#Operator_precedence
+    // https://en.cppreference.com/w/cpp/language/operator_precedence
     enum class Precedence {
         NONE,
         ASSIGMENT,
@@ -30,36 +35,43 @@ public:
         FACTOR,
         UNARY,
         CALL,
-        PRIMARY // literal of variable
+        PRIMARY // literal or variable
     };
 
+    static Precedence get_precendece(Token::Type token);
 
-    class Error : public std::runtime_error {
+    // Parser handles errors by quietly storing them instead of stopping.
+    // We want to continue parsing in order to provide user multiple issues in their code at once.
+    class Error {
     public:
-        Error(Token token, std::string_view message) : std::runtime_error(message.data()), token(token) {}
+        Error(Token token, std::string_view message) : message(message), token(token) {}
         Token token;
+        std::string message;
     };
+
+    const std::vector<Error>& get_errors();
 
     explicit Parser(const Lexer &lexer) : lexer(lexer) { // todo: not final
         advance();
     }
-    Expr integer() const;
 
-    Expr unary(Token::Type op);
-
-    Expr prefix();
-
-    Expr infix(Expr left);
-
-    Expr binary(Expr left);
     Expr expression(Precedence precedence = Precedence::NONE);
 private:
-
-    static Precedence get_precendece(Token::Type token);
-
-
+    void error(const Token& token, std::string_view message);
+    bool panic_mode = false;
+    std::vector<Error> errors;
 
     Token advance();
+    void consume(Token::Type type, std::string_view message);
+
+    Expr infix(Expr left);
+    std::optional<Expr> prefix();
+
+    Expr grouping();
+    Expr unary(Token::Type op);
+    Expr binary(Expr left);
+
+    Expr integer() const;
 
     Token current;
     Token next;

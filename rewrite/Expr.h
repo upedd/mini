@@ -19,7 +19,6 @@ using Expr = std::variant<LiteralExpr, UnaryExpr, BinaryExpr>;
 using ExprHandle = std::unique_ptr<Expr>;
 
 
-
 struct UnaryExpr {
     ExprHandle expr = nullptr;
     Token::Type op = Token::Type::NONE; // maybe use some specific unary op enum
@@ -37,8 +36,8 @@ struct overloaded : Ts... { using Ts::operator()...; };
 inline std::string to_string(const Expr& expr) {
     return std::visit(overloaded {
         [](const LiteralExpr& expr) {return std::to_string(expr.literal);},
-            [](const UnaryExpr& expr) {return std::format("({} {})", "+", to_string(*expr.expr));},
-                [](const BinaryExpr& expr) {return std::format("({} {} {})", "+", to_string(*expr.left), to_string(*expr.right));}
+            [](const UnaryExpr& expr) {return std::format("({} {})", Token::type_to_string(expr.op), to_string(*expr.expr));},
+                [](const BinaryExpr& expr) {return std::format("({} {} {})", Token::type_to_string(expr.op), to_string(*expr.left), to_string(*expr.right));}
     }, expr);
 }
 

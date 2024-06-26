@@ -15,7 +15,12 @@ int main() {
     Parser parser(lexer);
     //
     Expr expr = parser.expression();
-    std::cout << to_string(expr);
+    for (auto& error : parser.get_errors()) {
+        std::cerr << "Error at: " << error.token.to_string(source) << " Message: " << error.message << '\n';
+    }
+    if (parser.get_errors().empty()) {
+        std::cout << to_string(expr) << '\n';
+    }
     // while (true) {
     //     auto token = lexer.next_token();
     //     if (!token) {
