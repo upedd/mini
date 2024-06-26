@@ -78,10 +78,28 @@ struct Token {
     int length = 0;
 
     static std::string type_to_string(Type type);
+
+    /**
+     *
+     * @param source string used by lexer to produce this token.
+     * @return lexeme of this token.
+     */
+    [[nodiscard]] std::string get_lexeme(const std::string& source) const {
+        return source.substr(source_offset, length);
+    }
+
+    /**
+     *
+     * @param source string used by lexer to produce this token.
+     * @return string representation for logging purposes.
+     */
+    [[nodiscard]] std::string to_string(const std::string& source) const {
+        return "Token(type=" + type_to_string(type) + ", lexeme='" + get_lexeme(source) + "')";
+    }
 };
 
 inline std::string Token::type_to_string(Type type) {
-    // maybe to this using some macros magic
+    // maybe do this using some macros magic
     switch (type) {
         case Type::IDENTIFIER:
             return "IDENTIFIER";

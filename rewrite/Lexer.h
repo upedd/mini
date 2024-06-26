@@ -5,11 +5,12 @@
 
 #include "Token.h"
 
-// maybe lexer should work on streams?
+// maybe lexer should work on streams
+// should be an easy rewrite if needed.
 
 /**
- * Takes an istream and produces tokens.\n
- * Source must be kept alive for whole Lexer exectution!
+ * Given string with code produces tokens.\n
+ * Source must be valid for entire lexer lifetime.
  */
 class Lexer {
 public:
@@ -20,37 +21,25 @@ public:
 
     explicit Lexer(const std::string_view source) : source(source) {};
 
-    Token keyword_or_identifier();
-
-    std::expected<Token, Error> string();
-
-    Token integer_or_number();
-
     std::expected<Token, Error> next_token();
+private:
+    char advance();
+    [[nodiscard]] char current() const;
+    bool match(char c);
+    [[nodiscard]] bool at_end() const;
 
+    void skip_whitespace();
+    void consume_identifier();
+
+    [[nodiscard]] Token make_token(Token::Type type) const;
     [[nodiscard]] std::unexpected<Error> make_error(const std::string &message) const;
 
-    bool end();
+    Token keyword_or_identifier();
+    std::expected<Token, Error> string();
+    Token integer_or_number();
 
-private:
-    // source traversal functions
-    char advance();
-
-    char current() const;
-
-    char peek() const;
-    char peek_next();
-    bool match(char c);
-    void skip_whitespace();
-
-    Token make_token(Token::Type type) const;
-
-    inline static bool is_identifier_character(char c);
-    void consume_identifier();
-    int source_position = 0;
-    int start = 0;
-    int line = 1;
-    int line_offset = 0;
+    int current_pos = 0;
+    int start_pos = 0;
 
     std::string_view source;
 };

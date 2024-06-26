@@ -17,4 +17,8 @@ inline bool is_alphanum(const char c) {
     return is_alpha(c) || is_digit(c);
 }
 
+inline bool is_identifier(const char c) {
+    return is_alphanum(c) || c == '_';
+}
+
 #endif //COMMON_H

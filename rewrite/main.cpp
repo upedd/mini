@@ -1,15 +1,25 @@
+#include <fstream>
 #include <iostream>
+#include <sstream>
 
 #include "Lexer.h"
 
 int main() {
-    Lexer lexer("a := 4 + 3 * (12.5 + 3);\n loop (i in 3..4) {\n    print(a, i, \"abcd\");\n}");
+    std::ifstream in("test.bite");
+    std::stringstream ss;
+    ss << in.rdbuf();
+    std::string source = ss.str();
+
+    Lexer lexer(source);
 
     while (true) {
         auto token = lexer.next_token();
-        if (token->type == Token::Type::END) {
+        if (!token) {
+            std::cerr << token.error().message;
             break;
+        } else {
+            if (token->type == Token::Type::END) break;
+            std::cout << token->to_string(source) << '\n';
         }
-        std::cout << Token::type_to_string(token->type) << '\n';
     }
 }
