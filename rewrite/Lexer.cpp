@@ -1,141 +1,178 @@
 #include "Lexer.h"
 
+#include <expected>
+
 #include "common.h"
 
-Token::Type Lexer::keyword_or_identifier(char c) {
+Token Lexer::keyword_or_identifier() {
     // maybe optimize like v8 https://github.com/v8/v8/blob/e77eebfe3b747fb315bd3baad09bec0953e53e68/src/parsing/scanner.cc#L1643
     // bench if worth additional complexity
-
-    int start = source_position - 1; // we already consumed first character
     consume_identifier();
     int size = source_position - start;
     std::string_view current = source.substr(start, size);
 
     if (current == "class") {
-        return Token::Type::CLASS;
+        return make_token(Token::Type::CLASS);
     } else if (current == "fun") {
-        return Token::Type::FUN;
+        return make_token(Token::Type::FUN);
     } else if (current == "return") {
-        return Token::Type::RETURN;
+        return make_token(Token::Type::RETURN);
     } else if (current == "if") {
-        return Token::Type::IF;
+        return make_token(Token::Type::IF);
     } else if (current == "is") {
-        return Token::Type::IS;
+        return make_token(Token::Type::IS);
     } else if (current == "in") {
-        return Token::Type::IN;
+        return make_token(Token::Type::IN);
     } else if (current == "break") {
-        return Token::Type::BREAK;
+        return make_token(Token::Type::BREAK);
     } else if (current == "continue") {
-        return Token::Type::CONTINUE;
+        return make_token(Token::Type::CONTINUE);
     } else if (current == "match") {
-        return Token::Type::MATCH;
+        return make_token(Token::Type::MATCH);
     } else if (current == "true") {
-        return Token::Type::TRUE;
+        return make_token(Token::Type::TRUE);
     } else if (current == "false") {
-        return Token::Type::FALSE;
+        return make_token(Token::Type::FALSE);
     } else if (current == "else") {
-        return Token::Type::ELSE;
+        return make_token(Token::Type::ELSE);
     } else if (current == "this") {
-        return Token::Type::THIS;
+        return make_token(Token::Type::THIS);
     } else if (current == "loop") {
-        return Token::Type::LOOP;
+        return make_token(Token::Type::LOOP);
     } else if (current == "super") {
-        return Token::Type::SUPER;
+        return make_token(Token::Type::SUPER);
     }
-    return Token::Type::IDENTIFIER;
+    return make_token(Token::Type::IDENTIFIER);
 }
 
-Token Lexer::next_token() {
-    skip_whitespace();
+std::expected<Token, Lexer::Error> Lexer::string() {
+    while (!end() && current() != '"') {
+        advance();
+    }
 
-    switch (char c = next(); c) {
+    if (current() != '"') {
+        return make_error("Expected '\"' after string literal.'");
+    }
+
+    advance(); // eat closing "
+    return make_token(Token::Type::STRING);
+}
+
+Token Lexer::integer_or_number() {
+    // TODO: handle more number literals features i.e. hex prefix, binary prefix, separators...
+    while (is_digit(current())) {
+        advance();
+    }
+    // if no dot separator
+    if (!match('.')) {
+        return make_token(Token::Type::INTEGER);
+    }
+    // handle part after dot
+    while (is_digit(current())) {
+        advance();
+    }
+    return make_token(Token::Type::NUMBER);
+}
+
+std::expected<Token, Lexer::Error> Lexer::next_token() {
+    skip_whitespace();
+    start = source_position;
+    switch (char c = advance(); c) {
         case '!':
-            return Token(match('=') ? Token::Type::BANG_EQUAL : Token::Type::EQUAL);
+            return match('=') ? make_token(Token::Type::BANG_EQUAL) : make_token(Token::Type::EQUAL);
         case '+':
-            return Token(match('=') ? Token::Type::PLUS_EQUAL: Token::Type::PLUS);
+            return match('=') ? make_token(Token::Type::PLUS_EQUAL): make_token(Token::Type::PLUS);
         case '-':
-            return Token(match('=') ? Token::Type::MINUS_EQUAL : Token::Type::MINUS);
+            return match('=') ? make_token(Token::Type::MINUS_EQUAL) : make_token(Token::Type::MINUS);
         case '*':
-            return Token(match('=') ? Token::Type::STAR_EQUAL : Token::Type::STAR);
+            return match('=') ? make_token(Token::Type::STAR_EQUAL) : make_token(Token::Type::STAR);
         case '%':
-            return Token(match('=') ? Token::Type::PERCENT_EQUAL : Token::Type::PERCENT);
+            return match('=') ? make_token(Token::Type::PERCENT_EQUAL) : make_token(Token::Type::PERCENT);
         case '/': {
             if (match('/')) {
-                return Token(match('=') ? Token::Type::SLASH_SLASH_EQUAL : Token::Type::SLASH_SLASH);
+                return match('=') ? make_token(Token::Type::SLASH_SLASH_EQUAL) : make_token(Token::Type::SLASH_SLASH);
             }
-            return Token(match('=') ? Token::Type::SLASH_EQUAL : Token::Type::SLASH);
+            return match('=') ? make_token(Token::Type::SLASH_EQUAL) : make_token(Token::Type::SLASH);
         }
         case '&': {
             if (match('&')) {
-                return Token(Token::Type::AND_AND);
+                return make_token(Token::Type::AND_AND);
             }
-            return Token(match('=') ? Token::Type::AND_EQUAL : Token::Type::AND);
+            return match('=') ? make_token(Token::Type::AND_EQUAL) : make_token(Token::Type::AND);
         }
         case '|': {
             if (match('|')) {
-                return Token(Token::Type::BAR_BAR);
+                return make_token(Token::Type::BAR_BAR);
             }
-            return Token(match('=') ? Token::Type::BAR_EQUAL : Token::Type::BAR);
+            return match('=') ? make_token(Token::Type::BAR_EQUAL) : make_token(Token::Type::BAR);
         }
         case '^':
-            return Token(match('=') ? Token::Type::CARET_EQUAL : Token::Type::CARET);
+            return match('=') ? make_token(Token::Type::CARET_EQUAL) : make_token(Token::Type::CARET);
         case '=':
-            return Token(match('=') ? Token::Type::EQUAL_EQUAL : Token::Type::EQUAL);
+            return match('=') ? make_token(Token::Type::EQUAL_EQUAL) : make_token(Token::Type::EQUAL);
         case ':':
-            next(); // todo handle if not = after symbol
-            return Token(Token::Type::COLON_EQUAL);
+            advance(); // todo handle if not = after symbol
+            return make_token(Token::Type::COLON_EQUAL);
         case '{':
-            return Token(Token::Type::RIGHT_BRACE);
+            return make_token(Token::Type::LEFT_BRACE);
         case '}':
-            return Token(Token::Type::LEFT_BRACE);
+            return make_token(Token::Type::RIGHT_BRACE);
         case '(':
-            return Token(Token::Type::LEFT_PAREN);
+            return make_token(Token::Type::LEFT_PAREN);
         case ')':
-            return Token(Token::Type::RIGHT_PAREN);
+            return make_token(Token::Type::RIGHT_PAREN);
         case '[':
-            return Token(Token::Type::LEFT_BRACKET);
+            return make_token(Token::Type::LEFT_BRACKET);
         case ']':
-            return Token(Token::Type::RIGHT_BRACKET);
+            return make_token(Token::Type::RIGHT_BRACKET);
         case ',':
-            return Token(Token::Type::COMMA);
+            return make_token(Token::Type::COMMA);
         case ';':
-            return Token(Token::Type::SEMICOLON);
+            return make_token(Token::Type::SEMICOLON);
         case '.': {
             if (match('.')) {
-                return Token(match('.') ? Token::Type::DOT_DOT_DOT : Token::Type::DOT_DOT);
+                return match('.') ? make_token(Token::Type::DOT_DOT_DOT) : make_token(Token::Type::DOT_DOT);
             }
-            return Token(Token::Type::DOT);
+            return make_token(Token::Type::DOT);
         }
         case '<': {
             if (match('<')) {
-                return Token(match('=') ? Token::Type::LESS_LESS_EQUAL : Token::Type::LESS_LESS);
+                return match('=') ? make_token(Token::Type::LESS_LESS_EQUAL) : make_token(Token::Type::LESS_LESS);
             }
-            return Token(match('=') ? Token::Type::LESS_EQUAL : Token::Type::LESS);
+            return match('=') ? make_token(Token::Type::LESS_EQUAL) : make_token(Token::Type::LESS);
         }
         case '>': {
             if (match('>')) {
-                return Token(match('=') ? Token::Type::GREATER_GREATER_EQUAL : Token::Type::GREATER_GREATER);
+                return match('=') ? make_token(Token::Type::GREATER_GREATER_EQUAL) : make_token(Token::Type::GREATER_GREATER);
             }
-            return Token(match('=') ? Token::Type::GREATER_EQUAL : Token::Type::GREATER);
+            return match('=') ? make_token(Token::Type::GREATER_EQUAL) : make_token(Token::Type::GREATER);
         }
         case '"':
-            // todo string
-            return Token(Token::Type::STRING);
+            return string();
         case '\0':
-            return Token(Token::Type::END);
+            return make_token(Token::Type::END);
         default: {
             if (is_digit(c)) {
-                return Token(Token::Type::NUMBER);
+                return integer_or_number();
             }
-            return Token(keyword_or_identifier(c));
+            return keyword_or_identifier();
         }
     }
 }
 
-char Lexer::next() {
-    if (source_position + 1 >= source.size()) return '\0';
+std::unexpected<Lexer::Error> Lexer::make_error(const std::string& message) const {
+    return std::unexpected<Error>({start, message});
+}
+
+char Lexer::advance() {
+    if (source_position >= source.size()) return '\0';
     line_offset++;
     return source[source_position++];
+}
+
+char Lexer::current() const {
+    if (source_position >= source.size()) return '\0';
+    return source[source_position];
 }
 
 char Lexer::peek() const {
@@ -149,8 +186,8 @@ char Lexer::peek_next() {
 }
 
 bool Lexer::match(char c) {
-    if (peek() == c) {
-        next();
+    if (current() == c) {
+        advance();
         return true;
     }
     return false;
@@ -158,12 +195,17 @@ bool Lexer::match(char c) {
 
 void Lexer::skip_whitespace() {
     // todo comments
-    while (is_space(peek())) {
-        if (next() == '\n') {
+    while (is_space(current())) {
+        if (advance() == '\n') {
+            advance(); // skip ';'
             line++;
             line_offset = 0;
-        }
+        };
     }
+}
+
+Token Lexer::make_token(Token::Type type) const {
+    return {.type = type, .source_offset = start, .length = source_position - start};
 }
 
 inline bool Lexer::is_identifier_character(const char c) {
@@ -171,8 +213,8 @@ inline bool Lexer::is_identifier_character(const char c) {
 }
 
 void Lexer::consume_identifier() {
-    while (is_identifier_character(peek())) {
-        next();
+    while (is_identifier_character(current())) {
+        advance();
     }
 }
 
