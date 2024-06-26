@@ -12,7 +12,7 @@ struct UnaryExpr;
 struct BinaryExpr;
 
 struct LiteralExpr {
-    int literal = 0; // todo support other literals
+    int64_t literal = 0; // todo support other literals
 };
 
 using Expr = std::variant<LiteralExpr, UnaryExpr, BinaryExpr>;

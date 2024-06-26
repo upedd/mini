@@ -30,7 +30,7 @@ Expr Parser::grouping() {
 
 Expr Parser::integer() const {
     // todo temp
-    return LiteralExpr {std::stoi(current.get_lexeme(lexer.get_source()))};
+    return LiteralExpr {std::stoll(current.get_lexeme(lexer.get_source()))};
 }
 
 Expr Parser::unary(Token::Type op) {
