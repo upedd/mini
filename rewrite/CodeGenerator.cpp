@@ -28,7 +28,7 @@ void CodeGenerator::binary(const BinaryExpr &expr) {
             module.write(OpCode::ADD);
             break;
         case Token::Type::MINUS:
-            module.write(OpCode::NEGATE);
+            module.write(OpCode::SUBTRACT);
             break;
         case Token::Type::STAR:
             module.write(OpCode::MULTIPLY);
