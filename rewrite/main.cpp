@@ -2,6 +2,7 @@
 #include <iostream>
 #include <sstream>
 
+#include "CodeGenerator.h"
 #include "Lexer.h"
 #include "Parser.h"
 
@@ -19,7 +20,13 @@ int main() {
         std::cerr << "Error at: " << error.token.to_string(source) << " Message: " << error.message << '\n';
     }
     if (parser.get_errors().empty()) {
-        std::cout << to_string(expr) << '\n';
+        CodeGenerator code_gen;
+        code_gen.generate(expr);
+        auto module = code_gen.get_module();
+        std::cout << std::hex;
+        for (auto x : module.get_code()) {
+            std::cout << std::format("{:#x}", x) << ' ';
+        }
     }
     // while (true) {
     //     auto token = lexer.next_token();
