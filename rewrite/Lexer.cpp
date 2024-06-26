@@ -30,7 +30,7 @@ std::expected<Token, Lexer::Error> Lexer::next_token() {
             if (!match('=')) return make_error("Expected '=' after ':'.");
             return make_token(Token::Type::COLON_EQUAL);
         case '!':
-            return make_token(match('=') ? Token::Type::BANG_EQUAL : Token::Type::EQUAL);
+            return make_token(match('=') ? Token::Type::BANG_EQUAL : Token::Type::BANG);
         case '+':
             return make_token(match('=') ? Token::Type::PLUS_EQUAL: Token::Type::PLUS);
         case '-':
@@ -91,6 +91,10 @@ std::expected<Token, Lexer::Error> Lexer::next_token() {
             return make_error("Unexpected character.");
         }
     }
+}
+
+std::string_view Lexer::get_source() const {
+    return source;
 }
 
 char Lexer::advance() {

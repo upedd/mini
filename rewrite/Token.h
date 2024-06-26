@@ -62,7 +62,6 @@ struct Token {
         GET,
         SET,
         NIL,
-        END,
         THIS,
         COMMA,
         SEMICOLON,
@@ -70,7 +69,8 @@ struct Token {
         CONTINUE,
         NONE,
         MATCH,
-        RETURN, SUPER
+        RETURN, SUPER,
+        END // NOTE: Type END must always be last element in this enum.
     };
 
     Type type = Type::NONE;
@@ -84,8 +84,8 @@ struct Token {
      * @param source string used by lexer to produce this token.
      * @return lexeme of this token.
      */
-    [[nodiscard]] std::string get_lexeme(const std::string& source) const {
-        return source.substr(source_offset, length);
+    [[nodiscard]] std::string get_lexeme(std::string_view source) const {
+        return std::string(source.substr(source_offset, length));
     }
 
     /**
@@ -93,7 +93,7 @@ struct Token {
      * @param source string used by lexer to produce this token.
      * @return string representation for logging purposes.
      */
-    [[nodiscard]] std::string to_string(const std::string& source) const {
+    [[nodiscard]] std::string to_string(std::string_view source) const {
         return "Token(type=" + type_to_string(type) + ", lexeme='" + get_lexeme(source) + "')";
     }
 };

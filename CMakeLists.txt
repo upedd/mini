@@ -59,4 +59,7 @@ add_executable(rewrite rewrite/main.cpp
         rewrite/Lexer.cpp
         rewrite/Lexer.h
         rewrite/Token.h
-        rewrite/common.h)
+        rewrite/common.h
+        rewrite/Parser.cpp
+        rewrite/Parser.h
+        rewrite/Expr.h)

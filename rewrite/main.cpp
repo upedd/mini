@@ -3,6 +3,7 @@
 #include <sstream>
 
 #include "Lexer.h"
+#include "Parser.h"
 
 int main() {
     std::ifstream in("test.bite");
@@ -11,15 +12,18 @@ int main() {
     std::string source = ss.str();
 
     Lexer lexer(source);
-
-    while (true) {
-        auto token = lexer.next_token();
-        if (!token) {
-            std::cerr << token.error().message;
-            break;
-        } else {
-            if (token->type == Token::Type::END) break;
-            std::cout << token->to_string(source) << '\n';
-        }
-    }
+    Parser parser(lexer);
+    //
+    Expr expr = parser.expression();
+    std::cout << expr.index();
+    // while (true) {
+    //     auto token = lexer.next_token();
+    //     if (!token) {
+    //         std::cerr << token.error().message;
+    //         break;
+    //     } else {
+    //         if (token->type == Token::Type::END) break;
+    //         std::cout << token->to_string(source) << '\n';
+    //     }
+    // }
 }

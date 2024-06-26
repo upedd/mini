@@ -1,5 +1,5 @@
-#ifndef PARSER_H
-#define PARSER_H
+#ifndef LEXER_H
+#define LEXER_H
 #include <expected>
 #include <istream>
 
@@ -22,6 +22,8 @@ public:
     explicit Lexer(const std::string_view source) : source(source) {};
 
     std::expected<Token, Error> next_token();
+
+    [[nodiscard]] std::string_view get_source() const;
 private:
     char advance();
     [[nodiscard]] char current() const;
@@ -45,4 +47,4 @@ private:
 };
 
 
-#endif //PARSER_H
+#endif //LEXER_H
