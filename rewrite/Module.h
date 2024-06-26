@@ -13,7 +13,8 @@ public:
     void write(uint8_t data);
     void write(int64_t integer);
 
-    const std::vector<uint8_t>& get_code();
+    [[nodiscard]] const std::vector<uint8_t>& get_code() const;
+    [[nodiscard]] uint8_t get_at(int index) const;
 private:
     std::vector<uint8_t> code;
 };

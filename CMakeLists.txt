@@ -67,4 +67,8 @@ add_executable(rewrite rewrite/main.cpp
         rewrite/CodeGenerator.h
         rewrite/Module.cpp
         rewrite/Module.h
-        rewrite/OpCode.h)
+        rewrite/OpCode.h
+        rewrite/VM.cpp
+        rewrite/VM.h
+        rewrite/ModuleReader.cpp
+        rewrite/ModuleReader.h)

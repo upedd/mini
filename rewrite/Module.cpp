@@ -19,6 +19,10 @@ void Module::write(int64_t integer) {
     write(static_cast<uint8_t>(integer & 0xFF));
 }
 
-const std::vector<uint8_t> & Module::get_code() {
+const std::vector<uint8_t> & Module::get_code() const {
     return code;
+}
+
+uint8_t Module::get_at(int index) const {
+    return code[index];
 }

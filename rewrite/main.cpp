@@ -5,6 +5,7 @@
 #include "CodeGenerator.h"
 #include "Lexer.h"
 #include "Parser.h"
+#include "VM.h"
 
 int main() {
     std::ifstream in("test.bite");
@@ -23,10 +24,8 @@ int main() {
         CodeGenerator code_gen;
         code_gen.generate(expr);
         auto module = code_gen.get_module();
-        std::cout << std::hex;
-        for (auto x : module.get_code()) {
-            std::cout << std::format("{:#x}", x) << ' ';
-        }
+        VM vm(module);
+        vm.run();
     }
     // while (true) {
     //     auto token = lexer.next_token();
