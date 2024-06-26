@@ -65,10 +65,14 @@ struct Token {
         THIS,
         COMMA,
         SEMICOLON,
-        DOLLAR
+        BREAK,
+        CONTINUE,
+        NONE,
+        MATCH,
+        RETURN, SUPER
     };
 
-    Type type;
+    Type type = Type::NONE;
 };
 
 #endif //TOKEN_H
