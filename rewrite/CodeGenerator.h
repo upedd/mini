@@ -18,6 +18,7 @@ private:
     void literal(const LiteralExpr &expr);
     void unary(const UnaryExpr & expr);
     void binary(const BinaryExpr & expr);
+    void string_literal(const StringLiteral& expr);
 
     Module module;
 };

@@ -4,6 +4,9 @@
 #include <variant>
 #include <string>
 
+#include "common.h"
+
+
 // disambiguation tag for nil value
 struct Nil {
     explicit Nil() = default;
@@ -11,18 +14,21 @@ struct Nil {
 
 inline constexpr Nil nil_t {};
 
-using Value = std::variant<Nil, int64_t, double, bool>;
+// must ensure ptr is valid!
+struct String {
+    std::string* data;
+};
 
-template<class... Ts>
-struct overloaded_temp : Ts... { using Ts::operator()...; };
+using Value = std::variant<Nil, int64_t, double, bool, String>;
 
 // todo temp!
 constexpr std::string value_to_string(Value v) {
-    return std::visit(overloaded_temp {
-        [](Nil value) {return std::string("Nil");},
-            [](double value) {return std::to_string(value);},
-                [](int64_t value) {return std::to_string(value);},
-                    [](bool value) {return std::string(value ? "True" : "False");}
+    return std::visit(overloaded {
+        [](Nil) {return std::string("Nil");},
+        [](double value) {return std::to_string(value);},
+        [](int64_t value) {return std::to_string(value);},
+        [](bool value) {return std::string(value ? "True" : "False");},
+        [](String string) {return std::string("string: ") + *string.data;}
     }, v);
 }
 

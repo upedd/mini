@@ -69,6 +69,8 @@ private:
     Expr number();
     Expr literal();
 
+    Expr string();
+
     std::optional<Expr> prefix();
 
     Expr grouping();

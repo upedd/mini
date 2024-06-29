@@ -21,4 +21,10 @@ inline bool is_identifier(const char c) {
     return is_alphanum(c) || c == '_';
 }
 
+
+// helper for std::visit
+// source: https://en.cppreference.com/w/cpp/utility/variant/visit
+template<class... Ts>
+struct overloaded : Ts... { using Ts::operator()...; };
+
 #endif //COMMON_H

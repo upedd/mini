@@ -43,6 +43,8 @@ std::optional<Expr> Parser::prefix() {
             return integer();
         case Token::Type::NUMBER:
             return number();
+        case Token::Type::STRING:
+            return string();
         case Token::Type::TRUE:
         case Token::Type::FALSE:
         case Token::Type::NIL:
@@ -84,6 +86,10 @@ Expr Parser::literal() {
         case Token::Type::TRUE:
             return LiteralExpr {true};
     }
+}
+
+Expr Parser::string() {
+    return StringLiteral {std::string(current.get_lexeme(lexer.get_source()))};
 }
 
 

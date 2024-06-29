@@ -16,7 +16,11 @@ struct LiteralExpr {
     Value literal;
 };
 
-using Expr = std::variant<LiteralExpr, UnaryExpr, BinaryExpr>;
+struct StringLiteral {
+    std::string string;
+};
+
+using Expr = std::variant<LiteralExpr, StringLiteral, UnaryExpr, BinaryExpr>;
 using ExprHandle = std::unique_ptr<Expr>;
 
 
@@ -30,9 +34,6 @@ struct BinaryExpr {
     ExprHandle right = nullptr;
     Token::Type op = Token::Type::NONE; // maybe use some specific binary op enum
 };
-
-template<class... Ts>
-struct overloaded : Ts... { using Ts::operator()...; };
 
 // inline std::string to_string(const Expr& expr) {
 //     return std::visit(overloaded {

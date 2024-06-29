@@ -4,7 +4,8 @@ void CodeGenerator::generate(const Expr& expr) {
     std::visit(overloaded {
         [this](const LiteralExpr& expr) { literal(expr); },
         [this](const UnaryExpr& expr) { unary(expr); },
-        [this](const BinaryExpr& expr) { binary(expr); }
+        [this](const BinaryExpr& expr) { binary(expr); },
+        [this](const StringLiteral& expr) {string_literal(expr);}
     }, expr);
 }
 
@@ -39,6 +40,12 @@ void CodeGenerator::binary(const BinaryExpr &expr) {
         default:
             throw Error("Unexepected expression operator.");
     }
+}
+
+void CodeGenerator::string_literal(const StringLiteral &expr) {
+    int index = module.add_string_constant(expr.string);
+    module.write(OpCode::CONSTANT);
+    module.write(static_cast<uint8_t>(index)); // handle overflow!!!
 }
 
 Module CodeGenerator::get_module() {
