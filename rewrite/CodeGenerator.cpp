@@ -55,6 +55,21 @@ void CodeGenerator::binary(const BinaryExpr &expr) {
         case Token::Type::GREATER_EQUAL:
             module.write(OpCode::GREATER_EQUAL);
             break;
+        case Token::Type::GREATER_GREATER:
+            module.write(OpCode::RIGHT_SHIFT);
+            break;
+        case Token::Type::LESS_LESS:
+            module.write(OpCode::LEFT_SHIFT);
+            break;
+        case Token::Type::AND:
+            module.write(OpCode::BITWISE_AND);
+            break;
+        case Token::Type::BAR:
+            module.write(OpCode::BITWISE_OR);
+            break;
+        case Token::Type::CARET:
+            module.write(OpCode::BITWISE_XOR);
+            break;
         default:
             throw Error("Unexepected expression operator.");
     }

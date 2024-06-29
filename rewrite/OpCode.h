@@ -17,7 +17,12 @@ enum class OpCode : uint8_t {
     LESS,
     LESS_EQUAL,
     GREATER,
-    GREATER_EQUAL
+    GREATER_EQUAL,
+    LEFT_SHIFT,
+    RIGHT_SHIFT,
+    BITWISE_AND,
+    BITWISE_OR,
+    BITWISE_XOR
 };
 
 #endif //OPCODE_H

@@ -96,6 +96,12 @@ public:
     bool operator<=(const Value& other) const {
         return !(*this > other);
     }
+
+    Value operator&(const Value& other) const;
+    Value operator|(const Value& other) const;
+    Value operator<<(const Value& other) const;
+    Value operator>>(const Value& other) const;
+    Value operator^(const Value& other) const;
 };
 
 inline Value Value::operator+(const Value &other) const {
@@ -137,5 +143,22 @@ inline bool Value::operator<(const Value& other) const {
     }
     return this->convert_to_number() < other.convert_to_number();
 }
+
+inline Value Value::operator&(const Value &other) const {
+    return this->convert_to_int() & other.convert_to_int();
+}
+inline Value Value::operator|(const Value &other) const {
+    return this->convert_to_int() | other.convert_to_int();
+}
+inline Value Value::operator<<(const Value &other) const {
+    return this->convert_to_int() << other.convert_to_int();
+}
+inline Value Value::operator>>(const Value &other) const {
+    return this->convert_to_int() >> other.convert_to_int();
+}
+inline Value Value::operator^(const Value &other) const {
+    return this->convert_to_int() ^ other.convert_to_int();
+}
+
 
 #endif //VALUE_H

@@ -71,6 +71,11 @@ Expr Parser::infix(Expr left) {
         case Token::Type::LESS_EQUAL:
         case Token::Type::GREATER:
         case Token::Type::GREATER_EQUAL:
+        case Token::Type::LESS_LESS:
+        case Token::Type::GREATER_GREATER:
+        case Token::Type::AND:
+        case Token::Type::BAR:
+        case Token::Type::CARET:
             return binary(std::move(left));
         default:
             return left;
@@ -122,6 +127,15 @@ Parser::Precedence Parser::get_precendece(Token::Type token) {
         case Token::Type::GREATER:
         case Token::Type::GREATER_EQUAL:
             return Precedence::RELATIONAL;
+        case Token::Type::LESS_LESS:
+        case Token::Type::GREATER_GREATER:
+            return Precedence::BITWISE_SHIFT;
+        case Token::Type::AND:
+            return Precedence::BITWISE_AND;
+        case Token::Type::BAR:
+            return Precedence::BITWISE_OR;
+        case Token::Type::CARET:
+            return Precedence::BITWISE_XOR;
         default:
             return Precedence::NONE;
     }

@@ -32,6 +32,11 @@ void VM::tick() {
         case OpCode::LESS_EQUAL: BINARY_OPERATION(<=)
         case OpCode::GREATER: BINARY_OPERATION(>)
         case OpCode::GREATER_EQUAL: BINARY_OPERATION(>=)
+        case OpCode::RIGHT_SHIFT: BINARY_OPERATION(>>)
+        case OpCode::LEFT_SHIFT: BINARY_OPERATION(<<)
+        case OpCode::BITWISE_AND: BINARY_OPERATION(&)
+        case OpCode::BITWISE_OR: BINARY_OPERATION(|)
+        case OpCode::BITWISE_XOR: BINARY_OPERATION(^)
         case OpCode::NEGATE: {
             // optim just negate top?
             auto top = stack.back();
