@@ -34,6 +34,42 @@ void VM::tick() {
             stack.emplace_back(a / b);
             break;
         }
+        case OpCode::EQUAL: {
+            int64_t b = std::get<int64_t>(stack.back()); stack.pop_back();
+            int64_t a = std::get<int64_t>(stack.back()); stack.pop_back();
+            stack.emplace_back(a == b);
+            break;
+        }
+        case OpCode::NOT_EQUAL: {
+            int64_t b = std::get<int64_t>(stack.back()); stack.pop_back();
+            int64_t a = std::get<int64_t>(stack.back()); stack.pop_back();
+            stack.emplace_back(a != b);
+            break;
+        }
+        case OpCode::LESS: {
+            int64_t b = std::get<int64_t>(stack.back()); stack.pop_back();
+            int64_t a = std::get<int64_t>(stack.back()); stack.pop_back();
+            stack.emplace_back(a < b);
+            break;
+        }
+        case OpCode::LESS_EQUAL: {
+            int64_t b = std::get<int64_t>(stack.back()); stack.pop_back();
+            int64_t a = std::get<int64_t>(stack.back()); stack.pop_back();
+            stack.emplace_back(a <= b);
+            break;
+        }
+        case OpCode::GREATER: {
+            int64_t b = std::get<int64_t>(stack.back()); stack.pop_back();
+            int64_t a = std::get<int64_t>(stack.back()); stack.pop_back();
+            stack.emplace_back(a > b);
+            break;
+        }
+        case OpCode::GREATER_EQUAL: {
+            int64_t b = std::get<int64_t>(stack.back()); stack.pop_back();
+            int64_t a = std::get<int64_t>(stack.back()); stack.pop_back();
+            stack.emplace_back(a >= b);
+            break;
+        }
         case OpCode::NEGATE: {
             // optim just negate top?
             int64_t val = std::get<int64_t>(stack.back()); stack.pop_back();

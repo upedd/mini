@@ -65,6 +65,12 @@ Expr Parser::infix(Expr left) {
         case Token::Type::MINUS:
         case Token::Type::SLASH:
         case Token::Type::SLASH_SLASH:
+        case Token::Type::EQUAL_EQUAL:
+        case Token::Type::BANG_EQUAL:
+        case Token::Type::LESS:
+        case Token::Type::LESS_EQUAL:
+        case Token::Type::GREATER:
+        case Token::Type::GREATER_EQUAL:
             return binary(std::move(left));
         default:
             return left;
@@ -108,6 +114,14 @@ Parser::Precedence Parser::get_precendece(Token::Type token) {
         case Token::Type::SLASH:
         case Token::Type::SLASH_SLASH:
             return Precedence::FACTOR;
+        case Token::Type::EQUAL_EQUAL:
+        case Token::Type::BANG_EQUAL:
+            return Precedence::EQUALITY;
+        case Token::Type::LESS:
+        case Token::Type::LESS_EQUAL:
+        case Token::Type::GREATER:
+        case Token::Type::GREATER_EQUAL:
+            return Precedence::RELATIONAL;
         default:
             return Precedence::NONE;
     }

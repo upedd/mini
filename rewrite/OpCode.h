@@ -11,7 +11,13 @@ enum class OpCode : uint8_t {
     TRUE,
     FALSE,
     NIL,
-    CONSTANT
+    CONSTANT,
+    EQUAL,
+    NOT_EQUAL,
+    LESS,
+    LESS_EQUAL,
+    GREATER,
+    GREATER_EQUAL
 };
 
 #endif //OPCODE_H
