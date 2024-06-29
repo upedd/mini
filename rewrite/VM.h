@@ -14,7 +14,7 @@ public:
     void run();
 private:
     ModuleReader reader;
-    std::vector<int64_t> stack; // optim: should stack could be fixed array?
+    std::vector<Value> stack; // optim: should stack could be fixed array?
 };
 
 

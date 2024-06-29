@@ -46,6 +46,7 @@ Module CodeGenerator::get_module() {
 }
 
 void CodeGenerator::literal(const LiteralExpr& expr) {
-    module.write(OpCode::PUSH_INT);
-    module.write(expr.literal);
+    int index = module.add_constant(expr.literal);
+    module.write(OpCode::CONSTANT);
+    module.write(static_cast<uint8_t>(index)); // handle overflow!!!
 }

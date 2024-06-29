@@ -3,12 +3,15 @@
 #include <cstdint>
 
 enum class OpCode : uint8_t {
-    PUSH_INT,
     ADD,
     MULTIPLY,
     SUBTRACT,
     DIVIDE,
-    NEGATE
+    NEGATE,
+    TRUE,
+    FALSE,
+    NIL,
+    CONSTANT
 };
 
 #endif //OPCODE_H

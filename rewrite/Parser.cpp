@@ -41,6 +41,12 @@ std::optional<Expr> Parser::prefix() {
     switch (current.type) {
         case Token::Type::INTEGER:
             return integer();
+        case Token::Type::NUMBER:
+            return number();
+        case Token::Type::TRUE:
+        case Token::Type::FALSE:
+        case Token::Type::NIL:
+            return literal();
         case Token::Type::BANG:
         case Token::Type::MINUS:
             return unary(current.type);
@@ -60,6 +66,23 @@ Expr Parser::infix(Expr left) {
             return binary(std::move(left));
         default:
             return left;
+    }
+}
+
+Expr Parser::number() {
+    // todo better number parsing
+    return LiteralExpr {std::stod(current.get_lexeme(lexer.get_source()))};
+}
+
+Expr Parser::literal() {
+    // handle error
+    switch (current.type) {
+        case Token::Type::NIL:
+            return LiteralExpr {nil_t};
+        case Token::Type::FALSE:
+            return LiteralExpr {false};
+        case Token::Type::TRUE:
+            return LiteralExpr {true};
     }
 }
 

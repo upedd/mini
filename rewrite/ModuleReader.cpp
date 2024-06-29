@@ -23,3 +23,7 @@ int64_t ModuleReader::integer() {
 bool ModuleReader::at_end() const {
     return offset >= module.get_code().size();
 }
+
+Value ModuleReader::get_constant(int8_t int8) {
+    return module.get_constant(int8);
+}

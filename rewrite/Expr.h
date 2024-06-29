@@ -5,6 +5,7 @@
 #include <variant>
 
 #include "Token.h"
+#include "Value.h"
 
 // Reference: https://lesleylai.info/en/ast-in-cpp-part-1-variant/
 
@@ -12,7 +13,7 @@ struct UnaryExpr;
 struct BinaryExpr;
 
 struct LiteralExpr {
-    int64_t literal = 0; // todo support other literals
+    Value literal;
 };
 
 using Expr = std::variant<LiteralExpr, UnaryExpr, BinaryExpr>;
@@ -33,12 +34,12 @@ struct BinaryExpr {
 template<class... Ts>
 struct overloaded : Ts... { using Ts::operator()...; };
 
-inline std::string to_string(const Expr& expr) {
-    return std::visit(overloaded {
-        [](const LiteralExpr& expr) {return std::to_string(expr.literal);},
-            [](const UnaryExpr& expr) {return std::format("({} {})", Token::type_to_string(expr.op), to_string(*expr.expr));},
-                [](const BinaryExpr& expr) {return std::format("({} {} {})", Token::type_to_string(expr.op), to_string(*expr.left), to_string(*expr.right));}
-    }, expr);
-}
+// inline std::string to_string(const Expr& expr) {
+//     return std::visit(overloaded {
+//         [](const LiteralExpr& expr) {return std::to_string(expr.literal);},
+//             [](const UnaryExpr& expr) {return std::format("({} {})", Token::type_to_string(expr.op), to_string(*expr.expr));},
+//                 [](const BinaryExpr& expr) {return std::format("({} {} {})", Token::type_to_string(expr.op), to_string(*expr.left), to_string(*expr.right));}
+//     }, expr);
+// }
 
 #endif //EXPR_H

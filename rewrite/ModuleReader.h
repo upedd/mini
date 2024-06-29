@@ -10,6 +10,9 @@ public:
     OpCode opcode();
     int64_t integer();
     [[nodiscard]] bool at_end() const;
+
+    Value get_constant(int8_t int8);
+
 private:
     int offset = 0;
     const Module& module;

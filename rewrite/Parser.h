@@ -65,6 +65,10 @@ private:
     void consume(Token::Type type, std::string_view message);
 
     Expr infix(Expr left);
+
+    Expr number();
+    Expr literal();
+
     std::optional<Expr> prefix();
 
     Expr grouping();

@@ -182,6 +182,8 @@ Token Lexer::keyword_or_identifier() {
         return make_token(Token::Type::LOOP);
     } else if (current == "super") {
         return make_token(Token::Type::SUPER);
+    } else if (current == "nil") {
+        return make_token(Token::Type::NIL);
     }
     return make_token(Token::Type::IDENTIFIER);
 }
