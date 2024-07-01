@@ -18,8 +18,9 @@ struct ExprStmt {
 
 struct BlockStmt;
 struct IfStmt;
+struct WhileStmt;
 
-using Stmt = std::variant<VarStmt, ExprStmt, BlockStmt, IfStmt>;
+using Stmt = std::variant<VarStmt, ExprStmt, BlockStmt, IfStmt, WhileStmt>;
 using StmtHandle = std::unique_ptr<Stmt>;
 
 struct BlockStmt {
@@ -30,6 +31,11 @@ struct IfStmt {
     ExprHandle condition;
     StmtHandle then_stmt;
     StmtHandle else_stmt;
+};
+
+struct WhileStmt {
+    ExprHandle condition;
+    StmtHandle stmt;
 };
 
 inline std::string stmt_to_string(const Stmt& stmt, std::string_view source) {
@@ -45,6 +51,7 @@ inline std::string stmt_to_string(const Stmt& stmt, std::string_view source) {
                 return out;
             },
         [](const IfStmt& stmt) {return std::string("if_stmt");},
+        [](const WhileStmt& stmt) {return std::string("while_stmt");},
     }, stmt);
 }
 

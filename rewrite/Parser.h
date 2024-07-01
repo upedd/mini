@@ -66,6 +66,8 @@ public:
 
     Stmt if_statement();
 
+    Stmt while_statement();
+
     Stmt declaration();
 
     std::vector<Stmt> parse();

@@ -84,6 +84,12 @@ void VM::tick() {
             reader.add_offset(offset);
             break;
         }
+        case OpCode::LOOP: {
+            int offset = (static_cast<int>(reader.read()) << 8) | static_cast<int>(reader.read());
+            reader.add_offset(-offset);
+            break;
+        }
+
     }
 
 #undef BINARY_OPERATION

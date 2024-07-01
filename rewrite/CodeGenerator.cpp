@@ -18,7 +18,8 @@ void CodeGenerator::visit_stmt(const Stmt& stmt) {
         [this](const VarStmt& expr) { var_declaration(expr); },
         [this](const ExprStmt& expr) { expr_statement(expr); },
         [this](const BlockStmt& stmt) {block_statement(stmt);},
-        [this](const IfStmt& stmt) {if_statement(stmt);}
+        [this](const IfStmt& stmt) {if_statement(stmt);},
+        [this](const WhileStmt& stmt) {while_statement(stmt);}
     }, stmt);
 }
 
@@ -143,6 +144,20 @@ void CodeGenerator::end_scope() {
     while (!locals.empty() && locals.back().second > current_depth) {
         locals.pop_back();
     }
+}
+
+void CodeGenerator::while_statement(const WhileStmt &stmt) {
+    int loop_start = module.get_code_length();
+    visit_expr(*stmt.condition);
+    int jump = start_jump(OpCode::JUMP_IF_FALSE);
+    module.write(OpCode::POP);
+    visit_stmt(*stmt.stmt);
+    module.write(OpCode::LOOP);
+    int offset = module.get_code_length() - loop_start + 2;
+    module.write(static_cast<uint8_t>(offset >> 8 & 0xFF));
+    module.write(static_cast<uint8_t>(offset & 0xFF));
+    patch_jump(jump);
+    module.write(OpCode::POP);
 }
 
 void CodeGenerator::block_statement(const BlockStmt &stmt) {

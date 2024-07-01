@@ -199,6 +199,14 @@ Stmt Parser::if_statement() {
     return IfStmt {.condition = std::make_unique<Expr>(std::move(condition)), .then_stmt = std::make_unique<Stmt>(std::move(then_stmt)), .else_stmt = std::move(else_stmt)};
 }
 
+Stmt Parser::while_statement() {
+    consume(Token::Type::LEFT_PAREN, "Expected '(' after 'while'");
+    auto condition = expression();
+    consume(Token::Type::RIGHT_PAREN, "Expected ')' after 'while' condition");
+
+    return WhileStmt {.condition = std::make_unique<Expr>(std::move(condition)), .stmt = std::make_unique<Stmt>(declaration())};
+}
+
 Stmt Parser::declaration() {
     if (match(Token::Type::LET)) {
         return var_declaration();
@@ -208,6 +216,9 @@ Stmt Parser::declaration() {
     }
     if (match(Token::Type::IF)) {
         return if_statement();
+    }
+    if (match(Token::Type::WHILE)) {
+        return while_statement();
     }
     return expr_statement();
 }

@@ -19,12 +19,12 @@ public:
     Module get_module();
 
 
-
 private:
     void begin_scope();
 
     void end_scope();
 
+    void while_statement(const WhileStmt & stmt);
     void block_statement(const BlockStmt & stmt);
     void assigment(const AssigmentExpr & expr);
     void expr_statement(const ExprStmt & expr);
