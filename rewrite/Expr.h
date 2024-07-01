@@ -11,6 +11,7 @@
 
 struct UnaryExpr;
 struct BinaryExpr;
+struct AssigmentExpr;
 
 struct LiteralExpr {
     Value literal;
@@ -24,7 +25,7 @@ struct VariableExpr {
     Token identifier;
 };
 
-using Expr = std::variant<LiteralExpr, StringLiteral, UnaryExpr, BinaryExpr, VariableExpr>;
+using Expr = std::variant<LiteralExpr, StringLiteral, UnaryExpr, BinaryExpr, VariableExpr, AssigmentExpr>;
 using ExprHandle = std::unique_ptr<Expr>;
 
 
@@ -39,6 +40,11 @@ struct BinaryExpr {
     Token::Type op = Token::Type::NONE; // maybe use some specific binary op enum
 };
 
+struct AssigmentExpr {
+    Token identifier;
+    ExprHandle expr;
+};
+
 // todo refactor
 inline std::string expr_to_string(const Expr& expr) {
     return std::visit(overloaded {
@@ -46,7 +52,9 @@ inline std::string expr_to_string(const Expr& expr) {
         [](const UnaryExpr& expr) {return std::format("({} {})", Token::type_to_string(expr.op), expr_to_string(*expr.expr));},
         [](const BinaryExpr& expr) {return std::format("({} {} {})", Token::type_to_string(expr.op), expr_to_string(*expr.left), expr_to_string(*expr.right));},
         [](const StringLiteral& expr) {return expr.string;},
-        [](const VariableExpr& expr) {return std::string("var"); }
+        [](const VariableExpr& expr) {return std::string("var"); },
+        [](const AssigmentExpr& expr) {return std::string("assigment ") + expr_to_string(*expr.expr); },
+
     }, expr);
 }
 

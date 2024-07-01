@@ -107,7 +107,11 @@ Expr Parser::string() {
 }
 
 Expr Parser::identifier() {
-    return VariableExpr {current};
+    Token name = current;
+    if (match(Token::Type::EQUAL)) {
+        return AssigmentExpr {.identifier = name, .expr = std::make_unique<Expr>(expression())};
+    }
+    return VariableExpr {name};
 }
 
 

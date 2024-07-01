@@ -17,10 +17,8 @@ public:
     void generate(const std::vector<Stmt>& stmts, std::string_view source);
 
     Module get_module();
-
-
-
 private:
+    void assigment(const AssigmentExpr & expr);
     void expr_statement(const ExprStmt & expr);
 
     void variable(const VariableExpr& expr);

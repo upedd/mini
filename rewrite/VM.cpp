@@ -65,6 +65,11 @@ void VM::tick() {
             stack.push_back(stack[idx]); // handle overflow?
             break;
         }
+        case OpCode::SET: {
+            int idx = reader.read();
+            stack[idx] = stack.back();
+            break;
+        }
     }
 
 #undef BINARY_OPERATION

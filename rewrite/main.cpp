@@ -20,9 +20,9 @@ int main() {
     for (auto& error : parser.get_errors()) {
         std::cerr << "Error at: " << error.token.to_string(source) << " Message: " << error.message << '\n';
     }
-    // for (auto& stmt : stmts) {
-    //     std::cout << stmt_to_string(stmt, source) << '\n';
-    // }
+    for (auto& stmt : stmts) {
+        std::cout << stmt_to_string(stmt, source) << '\n';
+    }
     if (parser.get_errors().empty()) {
         CodeGenerator code_gen;
         code_gen.generate(stmts, source);

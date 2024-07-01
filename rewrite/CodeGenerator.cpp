@@ -8,7 +8,8 @@ void CodeGenerator::visit_expr(const Expr& expr) {
         [this](const UnaryExpr& expr) { unary(expr); },
         [this](const BinaryExpr& expr) { binary(expr); },
         [this](const StringLiteral& expr) {string_literal(expr);},
-        [this](const VariableExpr& expr) {variable(expr);}
+        [this](const VariableExpr& expr) {variable(expr);},
+        [this](const AssigmentExpr& expr) {assigment(expr);}
     }, expr);
 }
 
@@ -101,6 +102,19 @@ void CodeGenerator::generate(const std::vector<Stmt>& stmts, std::string_view so
 
 Module CodeGenerator::get_module() {
     return module;
+}
+
+void CodeGenerator::assigment(const AssigmentExpr &expr) {
+    int idx = -1;
+    for (int i = locals.size() - 1; i >= 0; --i) {
+        if (expr.identifier.get_lexeme(source) == locals[i]) {
+            idx = i;
+        }
+    }
+    assert(idx != -1); // todo: error handling
+    visit_expr(*expr.expr);
+    module.write(OpCode::SET);
+    module.write(static_cast<uint8_t>(idx));
 }
 
 void CodeGenerator::expr_statement(const ExprStmt &expr) {
