@@ -19,6 +19,14 @@ void Module::write(int64_t integer) {
     write(static_cast<uint8_t>(integer & 0xFF));
 }
 
+void Module::patch(int position, uint8_t data) {
+    code[position] = data;
+}
+
+int Module::get_code_length() {
+    return static_cast<int>(code.size());
+}
+
 int Module::add_string_constant(const std::string &string) {
     strings.push_back(string);
     return add_constant(strings.back());

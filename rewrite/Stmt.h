@@ -17,12 +17,19 @@ struct ExprStmt {
 };
 
 struct BlockStmt;
+struct IfStmt;
 
-using Stmt = std::variant<VarStmt, ExprStmt, BlockStmt>;
+using Stmt = std::variant<VarStmt, ExprStmt, BlockStmt, IfStmt>;
 using StmtHandle = std::unique_ptr<Stmt>;
 
 struct BlockStmt {
     std::vector<StmtHandle> stmts;
+};
+
+struct IfStmt {
+    ExprHandle condition;
+    StmtHandle then_stmt;
+    StmtHandle else_stmt;
 };
 
 inline std::string stmt_to_string(const Stmt& stmt, std::string_view source) {
@@ -36,7 +43,8 @@ inline std::string stmt_to_string(const Stmt& stmt, std::string_view source) {
                     out += ", ";
                 }
                 return out;
-            }
+            },
+        [](const IfStmt& stmt) {return std::string("if_stmt");},
     }, stmt);
 }
 

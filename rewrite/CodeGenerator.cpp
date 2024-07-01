@@ -18,6 +18,7 @@ void CodeGenerator::visit_stmt(const Stmt& stmt) {
         [this](const VarStmt& expr) { var_declaration(expr); },
         [this](const ExprStmt& expr) { expr_statement(expr); },
         [this](const BlockStmt& stmt) {block_statement(stmt);},
+        [this](const IfStmt& stmt) {if_statement(stmt);}
     }, stmt);
 }
 
@@ -94,6 +95,20 @@ void CodeGenerator::string_literal(const StringLiteral &expr) {
     module.write(static_cast<uint8_t>(index)); // handle overflow!!!
 }
 
+int CodeGenerator::start_jump(OpCode code) {
+    module.write(code);
+    module.write(static_cast<uint8_t>(0xFF));
+    module.write(static_cast<uint8_t>(0xFF));
+    return module.get_code_length() - 3; // start position of jump instruction
+}
+
+void CodeGenerator::patch_jump(int instruction_pos) {
+    int offset = module.get_code_length() - instruction_pos - 3;
+    // check jump
+    module.patch(instruction_pos + 1, static_cast<uint8_t>(offset >> 8 & 0xFF));
+    module.patch(instruction_pos + 2, static_cast<uint8_t>(offset & 0xFF));
+}
+
 void CodeGenerator::generate(const std::vector<Stmt>& stmts, std::string_view source) {
     this->source = source;
     for (auto& stmt : stmts) {
@@ -103,6 +118,20 @@ void CodeGenerator::generate(const std::vector<Stmt>& stmts, std::string_view so
 
 Module CodeGenerator::get_module() {
     return module;
+}
+
+void CodeGenerator::if_statement(const IfStmt &stmt) {
+    visit_expr(*stmt.condition);
+    int jump_to_else = start_jump(OpCode::JUMP_IF_FALSE);
+    module.write(OpCode::POP);
+    visit_stmt(*stmt.then_stmt);
+    int jump_to_end = start_jump(OpCode::JUMP);
+    patch_jump(jump_to_else);
+    module.write(OpCode::POP);
+    if (stmt.else_stmt) {
+        visit_stmt(*stmt.else_stmt);
+    }
+    patch_jump(jump_to_end);
 }
 
 void CodeGenerator::begin_scope() {

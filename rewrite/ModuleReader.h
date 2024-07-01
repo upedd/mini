@@ -10,6 +10,7 @@ public:
     OpCode opcode();
     int64_t integer();
     [[nodiscard]] bool at_end() const;
+    void add_offset(int offset);
 
     Value get_constant(int8_t int8);
 

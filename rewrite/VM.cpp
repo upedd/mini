@@ -70,6 +70,20 @@ void VM::tick() {
             stack[idx] = stack.back();
             break;
         }
+        case OpCode::JUMP_IF_FALSE: {
+            int offset = (static_cast<int>(reader.read()) << 8) | static_cast<int>(reader.read());
+            // todo better check
+            bool cond = std::get<bool>(stack.back());
+            if (!cond) {
+                reader.add_offset(offset);
+            }
+            break;
+        }
+        case OpCode::JUMP: {
+            int offset = (static_cast<int>(reader.read()) << 8) | static_cast<int>(reader.read());
+            reader.add_offset(offset);
+            break;
+        }
     }
 
 #undef BINARY_OPERATION

@@ -24,6 +24,10 @@ bool ModuleReader::at_end() const {
     return offset >= module.get_code().size();
 }
 
+void ModuleReader::add_offset(int offset) {
+    this->offset += offset;
+}
+
 Value ModuleReader::get_constant(int8_t int8) {
     return module.get_constant(int8);
 }

@@ -17,6 +17,9 @@ public:
     void generate(const std::vector<Stmt>& stmts, std::string_view source);
 
     Module get_module();
+
+
+
 private:
     void begin_scope();
 
@@ -25,7 +28,7 @@ private:
     void block_statement(const BlockStmt & stmt);
     void assigment(const AssigmentExpr & expr);
     void expr_statement(const ExprStmt & expr);
-
+    void if_statement(const IfStmt & stmt);
     void variable(const VariableExpr& expr);
     void var_declaration(const VarStmt & expr);
     void literal(const LiteralExpr &expr);
@@ -37,6 +40,9 @@ private:
     void unary(const UnaryExpr & expr);
     void binary(const BinaryExpr & expr);
     void string_literal(const StringLiteral& expr);
+
+    int start_jump(OpCode code);
+    void patch_jump(int instruction_pos);
 
     int current_depth = 0;
     std::vector<std::pair<std::string, int>> locals;

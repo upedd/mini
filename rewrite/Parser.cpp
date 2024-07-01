@@ -187,12 +187,27 @@ Stmt Parser::block() {
     return BlockStmt {std::move(stmts)};
 }
 
+Stmt Parser::if_statement() {
+    consume(Token::Type::LEFT_PAREN, "Expected '(' after 'if'");
+    auto condition = expression();
+    consume(Token::Type::RIGHT_PAREN, "Expected ')' after 'if' condition");
+    auto then_stmt = declaration();
+    StmtHandle else_stmt = nullptr;
+    if (match(Token::Type::ELSE)) {
+        else_stmt = std::make_unique<Stmt>(declaration());
+    }
+    return IfStmt {.condition = std::make_unique<Expr>(std::move(condition)), .then_stmt = std::make_unique<Stmt>(std::move(then_stmt)), .else_stmt = std::move(else_stmt)};
+}
+
 Stmt Parser::declaration() {
     if (match(Token::Type::LET)) {
         return var_declaration();
     }
     if (match(Token::Type::LEFT_BRACE)) {
         return block();
+    }
+    if (match(Token::Type::IF)) {
+        return if_statement();
     }
     return expr_statement();
 }

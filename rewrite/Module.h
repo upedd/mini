@@ -13,6 +13,9 @@ public:
     void write(OpCode code);
     void write(uint8_t data);
     void write(int64_t integer);
+    void patch(int position, uint8_t data);
+
+    int get_code_length();
 
     int add_string_constant(const std::string& string);
     int add_constant(const Value &value);
