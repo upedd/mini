@@ -154,6 +154,7 @@ void CodeGenerator::begin_scope() {
 void CodeGenerator::end_scope() {
     --current_depth;
     while (!locals.empty() && locals.back().second > current_depth) {
+        module.write(OpCode::POP);
         locals.pop_back();
     }
 }
