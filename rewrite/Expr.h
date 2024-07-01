@@ -35,12 +35,13 @@ struct BinaryExpr {
     Token::Type op = Token::Type::NONE; // maybe use some specific binary op enum
 };
 
-// inline std::string to_string(const Expr& expr) {
-//     return std::visit(overloaded {
-//         [](const LiteralExpr& expr) {return std::to_string(expr.literal);},
-//             [](const UnaryExpr& expr) {return std::format("({} {})", Token::type_to_string(expr.op), to_string(*expr.expr));},
-//                 [](const BinaryExpr& expr) {return std::format("({} {} {})", Token::type_to_string(expr.op), to_string(*expr.left), to_string(*expr.right));}
-//     }, expr);
-// }
+inline std::string expr_to_string(const Expr& expr) {
+    return std::visit(overloaded {
+        [](const LiteralExpr& expr) {return expr.literal.to_string();},
+        [](const UnaryExpr& expr) {return std::format("({} {})", Token::type_to_string(expr.op), expr_to_string(*expr.expr));},
+        [](const BinaryExpr& expr) {return std::format("({} {} {})", Token::type_to_string(expr.op), expr_to_string(*expr.left), expr_to_string(*expr.right));},
+        [](const StringLiteral& expr) {return expr.string;}
+    }, expr);
+}
 
 #endif //EXPR_H

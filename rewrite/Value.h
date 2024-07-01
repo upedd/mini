@@ -41,7 +41,7 @@ public:
 
     using value_variant_t::value_variant_t;
 
-     std::string to_string() {
+     [[nodiscard]] std::string to_string() const {
         return std::visit(overloaded {
             [](Nil) {return std::string("Nil");},
             [](int64_t value) {return std::to_string(value);},

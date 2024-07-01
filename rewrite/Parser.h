@@ -6,6 +6,7 @@
 #include "Lexer.h"
 #include "Expr.h"
 
+#include "Stmt.h"
 /**
  * Implementation of Pratt parser
  * References:
@@ -51,12 +52,19 @@ public:
 
     const std::vector<Error>& get_errors();
 
-    explicit Parser(const Lexer &lexer) : lexer(lexer) { // todo: not final
-        advance();
-    }
+    explicit Parser(const Lexer &lexer) : lexer(lexer) {} // todo: not final
 
-    Expr expression(Precedence precedence = Precedence::NONE);
+    bool match(Token::Type type);
+
+    Stmt var_declaration();
+
+    Stmt expr_statement();
+
+    Stmt declaration();
+
+    std::vector<Stmt> parse();
 private:
+    Expr expression(Precedence precedence = Precedence::NONE);
     void error(const Token& token, std::string_view message);
     bool panic_mode = false;
     std::vector<Error> errors;

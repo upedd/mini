@@ -1,5 +1,6 @@
 #include "Parser.h"
 
+
 Token Parser::advance() {
     current = next;
     while (true) { // todo is this loop safe?
@@ -139,6 +140,44 @@ Parser::Precedence Parser::get_precendece(Token::Type token) {
         default:
             return Precedence::NONE;
     }
+}
+
+bool Parser::match(Token::Type type) {
+    if (next.type == type) {
+        advance();
+        return true;
+    }
+    return false;
+}
+
+Stmt Parser::var_declaration() {
+    consume(Token::Type::IDENTIFIER, "expected identifier");
+    Token name = current;
+    Expr expr = match(Token::Type::EQUAL) ? expression() : LiteralExpr {nil_t};
+    consume(Token::Type::SEMICOLON, "Expected ';' after variable declaration.");
+    return VarStmt {.name = name, .value = std::make_unique<Expr>(std::move(expr))};
+}
+
+Stmt Parser::expr_statement() {
+    Stmt stmt = ExprStmt {std::make_unique<Expr>(expression())};
+    consume(Token::Type::SEMICOLON, "Expected ';' after expression");
+    return stmt;
+}
+
+Stmt Parser::declaration() {
+    if (match(Token::Type::LET)) {
+        return var_declaration();
+    }
+    return expr_statement();
+}
+
+std::vector<Stmt> Parser::parse() {
+    advance(); // populate current
+    std::vector<Stmt> stmts;
+    while (!match(Token::Type::END)) {
+        stmts.push_back(declaration());
+    }
+    return stmts;
 }
 
 Expr Parser::expression(Precedence precedence) {

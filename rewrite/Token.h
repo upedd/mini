@@ -69,7 +69,7 @@ struct Token {
         CONTINUE,
         NONE,
         MATCH,
-        RETURN, SUPER,
+        RETURN, SUPER, LET,
         END // NOTE: Type END must always be last element in this enum.
     };
 
@@ -237,6 +237,8 @@ inline std::string Token::type_to_string(Type type) {
             return "RETURN";
         case Type::SUPER:
             return "SUPER";
+        case Type::LET:
+            return "LET";
     }
     return "INVALID_TOKEN";
 }
