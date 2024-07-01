@@ -21,7 +21,7 @@ void Module::write(int64_t integer) {
 
 int Module::add_string_constant(const std::string &string) {
     strings.push_back(string);
-    return add_constant(String {&strings.back()});
+    return add_constant(strings.back());
 }
 
 int Module::add_constant(const Value &value) {

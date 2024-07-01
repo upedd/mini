@@ -8,6 +8,8 @@
 #include "VM.h"
 
 int main() {
+    // TODO better strings handling!
+
     std::ifstream in("test.bite");
     std::stringstream ss;
     ss << in.rdbuf();

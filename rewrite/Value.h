@@ -16,21 +16,21 @@ struct Nil {
 inline constexpr Nil nil_t {};
 
 // must ensure ptr is valid!
-struct String {
-    std::string* data;
-    bool operator==(const String& other) const {
-        auto& a = *this->data;
-        auto& b = *other.data;
-        return a == b;
-    }
-    std::strong_ordering operator<=>(const String& other) const {
-        auto& a = *this->data;
-        auto& b = *other.data;
-        return a <=> b;
-    }
-};
+// struct String {
+//     std::string* data;
+//     bool operator==(const String& other) const {
+//         auto& a = *this->data;
+//         auto& b = *other.data;
+//         return a == b;
+//     }
+//     std::strong_ordering operator<=>(const String& other) const {
+//         auto& a = *this->data;
+//         auto& b = *other.data;
+//         return a <=> b;
+//     }
+// };
 
-using value_variant_t = std::variant<Nil, int64_t, double, bool, String>;
+using value_variant_t = std::variant<Nil, int64_t, double, bool, std::string>;
 
 class Value : public value_variant_t {
 public:
@@ -47,7 +47,7 @@ public:
             [](int64_t value) {return std::to_string(value);},
             [](double value) {return std::to_string(value);},
             [](bool value) {return std::string(value ? "True" : "False");},
-            [](String string) {return std::string("string: ") + *string.data;}
+            [](const std::string& string) {return std::string("string: ") + string;}
         }, *this);
     }
 
