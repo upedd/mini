@@ -98,6 +98,11 @@ void VM::tick() {
             reader.add_offset(-offset);
             break;
         }
+        case OpCode::NOT: {
+            bool cond = std::get<bool>(stack.back()); stack.pop_back();
+            stack.emplace_back(!cond);
+            break;
+        }
 
     }
 

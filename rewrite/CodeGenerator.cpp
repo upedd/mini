@@ -30,6 +30,9 @@ void CodeGenerator::unary(const UnaryExpr &expr) {
         case Token::Type::MINUS:
             module.write(OpCode::NEGATE);
             break;
+        case Token::Type::BANG:
+            module.write(OpCode::NOT);
+            break;
         default:
             throw Error("Unexepected expression operator.");
     }

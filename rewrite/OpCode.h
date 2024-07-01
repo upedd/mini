@@ -23,7 +23,7 @@ enum class OpCode : uint8_t {
     BITWISE_AND,
     BITWISE_OR,
     BITWISE_XOR,
-    POP, GET, SET, JUMP_IF_FALSE, JUMP, LOOP, JUMP_IF_TRUE
+    POP, GET, SET, JUMP_IF_FALSE, JUMP, LOOP, JUMP_IF_TRUE, NOT
 };
 
 #endif //OPCODE_H
