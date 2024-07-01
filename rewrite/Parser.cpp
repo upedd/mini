@@ -55,6 +55,8 @@ std::optional<Expr> Parser::prefix() {
             return unary(current.type);
         case Token::Type::LEFT_PAREN:
             return grouping();
+        case Token::Type::IDENTIFIER:
+            return identifier();
         default: return {};
     }
 }
@@ -102,6 +104,10 @@ Expr Parser::literal() {
 
 Expr Parser::string() {
     return StringLiteral {std::string(current.get_lexeme(lexer.get_source()))};
+}
+
+Expr Parser::identifier() {
+    return VariableExpr {current};
 }
 
 

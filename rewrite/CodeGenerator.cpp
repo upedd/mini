@@ -1,16 +1,27 @@
 #include "CodeGenerator.h"
 
-void CodeGenerator::generate(const Expr& expr) {
+#include <cassert>
+
+void CodeGenerator::visit_expr(const Expr& expr) {
     std::visit(overloaded {
         [this](const LiteralExpr& expr) { literal(expr); },
         [this](const UnaryExpr& expr) { unary(expr); },
         [this](const BinaryExpr& expr) { binary(expr); },
-        [this](const StringLiteral& expr) {string_literal(expr);}
+        [this](const StringLiteral& expr) {string_literal(expr);},
+        [this](const VariableExpr& expr) {variable(expr);}
     }, expr);
 }
 
+void CodeGenerator::visit_stmt(const Stmt& stmt) {
+    std::visit(overloaded {
+        [this](const VarStmt& expr) { var_declaration(expr); },
+        [this](const ExprStmt& expr) { expr_statement(expr); },
+    }, stmt);
+}
+
+
 void CodeGenerator::unary(const UnaryExpr &expr) {
-    generate(*expr.expr);
+    visit_expr(*expr.expr);
     switch (expr.op) {
         case Token::Type::MINUS:
             module.write(OpCode::NEGATE);
@@ -21,8 +32,8 @@ void CodeGenerator::unary(const UnaryExpr &expr) {
 }
 
 void CodeGenerator::binary(const BinaryExpr &expr) {
-    generate(*expr.left);
-    generate(*expr.right);
+    visit_expr(*expr.left);
+    visit_expr(*expr.right);
 
     switch (expr.op) {
         case Token::Type::PLUS:
@@ -81,8 +92,37 @@ void CodeGenerator::string_literal(const StringLiteral &expr) {
     module.write(static_cast<uint8_t>(index)); // handle overflow!!!
 }
 
+void CodeGenerator::generate(const std::vector<Stmt>& stmts, std::string_view source) {
+    this->source = source;
+    for (auto& stmt : stmts) {
+        visit_stmt(stmt);
+    }
+}
+
 Module CodeGenerator::get_module() {
     return module;
+}
+
+void CodeGenerator::expr_statement(const ExprStmt &expr) {
+    visit_expr(*expr.expr);
+    module.write(OpCode::POP);
+}
+
+void CodeGenerator::variable(const VariableExpr &expr) {
+    int idx = -1;
+    for (int i = locals.size() - 1; i >= 0; --i) {
+        if (expr.identifier.get_lexeme(source) == locals[i]) {
+            idx = i;
+        }
+    }
+    assert(idx != -1); // todo: error handling
+    module.write(OpCode::GET);
+    module.write(static_cast<uint8_t>(idx)); // todo: handle overflow
+}
+
+void CodeGenerator::var_declaration(const VarStmt &expr) {
+    visit_expr(*expr.value);
+    locals.push_back(expr.name.get_lexeme(source));
 }
 
 void CodeGenerator::literal(const LiteralExpr& expr) {

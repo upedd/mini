@@ -79,6 +79,8 @@ private:
 
     Expr string();
 
+    Expr identifier();
+
     std::optional<Expr> prefix();
 
     Expr grouping();

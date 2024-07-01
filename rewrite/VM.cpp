@@ -56,6 +56,15 @@ void VM::tick() {
             stack.emplace_back(nil_t);
             break;
         }
+        case OpCode::POP: {
+            stack.pop_back();
+            break;
+        }
+        case OpCode::GET: {
+            int idx = reader.read();
+            stack.push_back(stack[idx]); // handle overflow?
+            break;
+        }
     }
 
 #undef BINARY_OPERATION

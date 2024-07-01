@@ -22,7 +22,8 @@ enum class OpCode : uint8_t {
     RIGHT_SHIFT,
     BITWISE_AND,
     BITWISE_OR,
-    BITWISE_XOR
+    BITWISE_XOR,
+    POP, GET
 };
 
 #endif //OPCODE_H
