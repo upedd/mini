@@ -103,6 +103,12 @@ void CodeGenerator::binary(const BinaryExpr &expr) {
         case Token::Type::CARET:
             module.write(OpCode::BITWISE_XOR);
             break;
+        case Token::Type::PERCENT:
+            module.write(OpCode::MODULO);
+            break;
+        case Token::Type::SLASH_SLASH:
+            module.write(OpCode::FLOOR_DIVISON);
+            break;
         default:
             throw Error("Unexepected expression operator.");
     }

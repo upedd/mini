@@ -82,6 +82,7 @@ Expr Parser::infix(Expr left) {
         case Token::Type::CARET:
         case Token::Type::AND_AND:
         case Token::Type::BAR_BAR:
+        case Token::Type::PERCENT:
             return binary(std::move(left));
         default:
             return left;
@@ -132,6 +133,7 @@ Parser::Precedence Parser::get_precendece(Token::Type token) {
         case Token::Type::STAR:
         case Token::Type::SLASH:
         case Token::Type::SLASH_SLASH:
+        case Token::Type::PERCENT:
             return Precedence::FACTOR;
         case Token::Type::EQUAL_EQUAL:
         case Token::Type::BANG_EQUAL:

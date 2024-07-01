@@ -11,7 +11,7 @@ void VM::tick() {
     stack.pop_back(); \
     auto a = stack.back(); \
     stack.pop_back(); \
-    stack.emplace_back(a op b); \
+    stack.emplace_back(a.op(b)); \
     break; \
 }
 
@@ -22,26 +22,28 @@ void VM::tick() {
             stack.push_back(reader.get_constant(index));
             break;
         }
-        case OpCode::ADD: BINARY_OPERATION(+)
-        case OpCode::MULTIPLY: BINARY_OPERATION(*)
-        case OpCode::SUBTRACT: BINARY_OPERATION(-)
-        case OpCode::DIVIDE: BINARY_OPERATION(/)
-        case OpCode::EQUAL: BINARY_OPERATION(==)
-        case OpCode::NOT_EQUAL: BINARY_OPERATION(!=)
-        case OpCode::LESS: BINARY_OPERATION(<)
-        case OpCode::LESS_EQUAL: BINARY_OPERATION(<=)
-        case OpCode::GREATER: BINARY_OPERATION(>)
-        case OpCode::GREATER_EQUAL: BINARY_OPERATION(>=)
-        case OpCode::RIGHT_SHIFT: BINARY_OPERATION(>>)
-        case OpCode::LEFT_SHIFT: BINARY_OPERATION(<<)
-        case OpCode::BITWISE_AND: BINARY_OPERATION(&)
-        case OpCode::BITWISE_OR: BINARY_OPERATION(|)
-        case OpCode::BITWISE_XOR: BINARY_OPERATION(^)
+        case OpCode::ADD: BINARY_OPERATION(add)
+        case OpCode::MULTIPLY: BINARY_OPERATION(multiply)
+        case OpCode::SUBTRACT: BINARY_OPERATION(subtract)
+        case OpCode::DIVIDE: BINARY_OPERATION(divide)
+        case OpCode::EQUAL: BINARY_OPERATION(equals)
+        case OpCode::NOT_EQUAL: BINARY_OPERATION(not_equals)
+        case OpCode::LESS: BINARY_OPERATION(less)
+        case OpCode::LESS_EQUAL: BINARY_OPERATION(less_equal)
+        case OpCode::GREATER: BINARY_OPERATION(greater)
+        case OpCode::GREATER_EQUAL: BINARY_OPERATION(greater_equal)
+        case OpCode::RIGHT_SHIFT: BINARY_OPERATION(shift_left)
+        case OpCode::LEFT_SHIFT: BINARY_OPERATION(shift_right)
+        case OpCode::BITWISE_AND: BINARY_OPERATION(binary_and)
+        case OpCode::BITWISE_OR: BINARY_OPERATION(binary_or)
+        case OpCode::BITWISE_XOR: BINARY_OPERATION(binary_xor)
+        case OpCode::MODULO: BINARY_OPERATION(modulo)
+        case OpCode::FLOOR_DIVISON: BINARY_OPERATION(floor_divide)
         case OpCode::NEGATE: {
             // optim just negate top?
             auto top = stack.back();
             stack.pop_back();
-            stack.emplace_back(top * -1);
+            stack.emplace_back(top.multiply(-1));
             break;
         }
         case OpCode::TRUE: {
@@ -105,7 +107,7 @@ void VM::tick() {
         }
         case OpCode::BINARY_NOT: {
             auto value = stack.back(); stack.pop_back();
-            stack.emplace_back(~value);
+            stack.emplace_back(value.binary_not());
         }
     }
 
