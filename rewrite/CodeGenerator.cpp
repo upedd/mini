@@ -17,6 +17,7 @@ void CodeGenerator::visit_stmt(const Stmt& stmt) {
     std::visit(overloaded {
         [this](const VarStmt& expr) { var_declaration(expr); },
         [this](const ExprStmt& expr) { expr_statement(expr); },
+        [this](const BlockStmt& stmt) {block_statement(stmt);},
     }, stmt);
 }
 
@@ -102,6 +103,12 @@ void CodeGenerator::generate(const std::vector<Stmt>& stmts, std::string_view so
 
 Module CodeGenerator::get_module() {
     return module;
+}
+
+void CodeGenerator::block_statement(const BlockStmt &stmt) {
+    for (auto& st : stmt.stmts) {
+        visit_stmt(*st);
+    }
 }
 
 void CodeGenerator::assigment(const AssigmentExpr &expr) {

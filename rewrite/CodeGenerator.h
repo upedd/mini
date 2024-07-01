@@ -18,6 +18,7 @@ public:
 
     Module get_module();
 private:
+    void block_statement(const BlockStmt & stmt);
     void assigment(const AssigmentExpr & expr);
     void expr_statement(const ExprStmt & expr);
 

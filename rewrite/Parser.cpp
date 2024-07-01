@@ -174,9 +174,25 @@ Stmt Parser::expr_statement() {
     return stmt;
 }
 
+bool Parser::check(Token::Type type) {
+    return next.type == type;
+}
+
+Stmt Parser::block() {
+    std::vector<StmtHandle> stmts;
+    while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
+        stmts.push_back(std::make_unique<Stmt>(declaration()));
+    }
+    consume(Token::Type::RIGHT_BRACE, "Expected '}' after block.");
+    return BlockStmt {std::move(stmts)};
+}
+
 Stmt Parser::declaration() {
     if (match(Token::Type::LET)) {
         return var_declaration();
+    }
+    if (match(Token::Type::LEFT_BRACE)) {
+        return block();
     }
     return expr_statement();
 }

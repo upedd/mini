@@ -60,6 +60,10 @@ public:
 
     Stmt expr_statement();
 
+    bool check(Token::Type type);
+
+    Stmt block();
+
     Stmt declaration();
 
     std::vector<Stmt> parse();
