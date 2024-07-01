@@ -38,6 +38,9 @@ private:
     void visit_stmt(const Stmt &stmt);
 
     void unary(const UnaryExpr & expr);
+
+    void logical(const BinaryExpr & expr);
+
     void binary(const BinaryExpr & expr);
     void string_literal(const StringLiteral& expr);
 

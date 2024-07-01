@@ -35,8 +35,20 @@ void CodeGenerator::unary(const UnaryExpr &expr) {
     }
 }
 
+void CodeGenerator::logical(const BinaryExpr &expr) {
+    int jump = start_jump(expr.op == Token::Type::AND_AND ? OpCode::JUMP_IF_FALSE : OpCode::JUMP_IF_TRUE);
+    module.write(OpCode::POP);
+    visit_expr(*expr.right);
+    patch_jump(jump);
+}
+
 void CodeGenerator::binary(const BinaryExpr &expr) {
     visit_expr(*expr.left);
+    if (expr.op == Token::Type::AND_AND || expr.op == Token::Type::BAR_BAR) {
+        logical(expr);
+        return;
+    }
+
     visit_expr(*expr.right);
 
     switch (expr.op) {
