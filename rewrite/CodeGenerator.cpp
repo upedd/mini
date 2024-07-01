@@ -33,6 +33,9 @@ void CodeGenerator::unary(const UnaryExpr &expr) {
         case Token::Type::BANG:
             module.write(OpCode::NOT);
             break;
+        case Token::Type::TILDE:
+            module.write(OpCode::BINARY_NOT);
+            break;
         default:
             throw Error("Unexepected expression operator.");
     }

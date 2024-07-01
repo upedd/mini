@@ -52,6 +52,7 @@ std::optional<Expr> Parser::prefix() {
             return literal();
         case Token::Type::BANG:
         case Token::Type::MINUS:
+        case Token::Type::TILDE:
             return unary(current.type);
         case Token::Type::LEFT_PAREN:
             return grouping();

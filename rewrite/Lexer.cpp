@@ -26,6 +26,8 @@ std::expected<Token, Lexer::Error> Lexer::next_token() {
             return make_token(Token::Type::COMMA);
         case ';':
             return make_token(Token::Type::SEMICOLON);
+        case '~':
+            return make_token(Token::Type::TILDE);
         case ':':
             if (!match('=')) return make_error("Expected '=' after ':'.");
             return make_token(Token::Type::COLON_EQUAL);

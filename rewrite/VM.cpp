@@ -103,7 +103,10 @@ void VM::tick() {
             stack.emplace_back(!cond);
             break;
         }
-
+        case OpCode::BINARY_NOT: {
+            auto value = stack.back(); stack.pop_back();
+            stack.emplace_back(~value);
+        }
     }
 
 #undef BINARY_OPERATION
