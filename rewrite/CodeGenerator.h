@@ -18,6 +18,10 @@ public:
 
     Module get_module();
 private:
+    void begin_scope();
+
+    void end_scope();
+
     void block_statement(const BlockStmt & stmt);
     void assigment(const AssigmentExpr & expr);
     void expr_statement(const ExprStmt & expr);
@@ -34,7 +38,8 @@ private:
     void binary(const BinaryExpr & expr);
     void string_literal(const StringLiteral& expr);
 
-    std::vector<std::string> locals;
+    int current_depth = 0;
+    std::vector<std::pair<std::string, int>> locals;
     Module module;
     std::string_view source; // temp
 };

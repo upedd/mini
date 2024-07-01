@@ -105,16 +105,29 @@ Module CodeGenerator::get_module() {
     return module;
 }
 
+void CodeGenerator::begin_scope() {
+    ++current_depth;
+}
+
+void CodeGenerator::end_scope() {
+    --current_depth;
+    while (!locals.empty() && locals.back().second > current_depth) {
+        locals.pop_back();
+    }
+}
+
 void CodeGenerator::block_statement(const BlockStmt &stmt) {
+    begin_scope();
     for (auto& st : stmt.stmts) {
         visit_stmt(*st);
     }
+    end_scope();
 }
 
 void CodeGenerator::assigment(const AssigmentExpr &expr) {
     int idx = -1;
     for (int i = locals.size() - 1; i >= 0; --i) {
-        if (expr.identifier.get_lexeme(source) == locals[i]) {
+        if (expr.identifier.get_lexeme(source) == locals[i].first) {
             idx = i;
         }
     }
@@ -132,7 +145,7 @@ void CodeGenerator::expr_statement(const ExprStmt &expr) {
 void CodeGenerator::variable(const VariableExpr &expr) {
     int idx = -1;
     for (int i = locals.size() - 1; i >= 0; --i) {
-        if (expr.identifier.get_lexeme(source) == locals[i]) {
+        if (expr.identifier.get_lexeme(source) == locals[i].first) {
             idx = i;
         }
     }
@@ -142,8 +155,17 @@ void CodeGenerator::variable(const VariableExpr &expr) {
 }
 
 void CodeGenerator::var_declaration(const VarStmt &expr) {
+    for (int i = locals.size() - 1; i >= 0; --i) {
+        auto& [name, depth] = locals[i];
+        if (depth < current_depth) {
+            break;
+        }
+        if (name == expr.name.get_lexeme(source)) {
+            throw Error("Variable redeclaration is disallowed.");
+        }
+    }
     visit_expr(*expr.value);
-    locals.push_back(expr.name.get_lexeme(source));
+    locals.emplace_back(expr.name.get_lexeme(source), current_depth);
 }
 
 void CodeGenerator::literal(const LiteralExpr& expr) {
