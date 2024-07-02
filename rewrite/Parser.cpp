@@ -23,6 +23,17 @@ void Parser::consume(Token::Type type, std::string_view message) {
     error(current, message);
 }
 
+Expr Parser::call(Expr left) {
+    std::vector<ExprHandle> arguments;
+    if(!check(Token::Type::RIGHT_PAREN)) {
+        do {
+            arguments.push_back(std::make_unique<Expr>(expression()));
+        } while (match(Token::Type::COMMA));
+    }
+    consume(Token::Type::RIGHT_PAREN, "Expected ')' after call arguments.");
+    return CallExpr {.callee = std::make_unique<Expr>(std::move(left)), .arguments = std::move(arguments)};
+}
+
 Expr Parser::grouping() {
     auto expr = expression();
     consume(Token::Type::RIGHT_PAREN, "Expected ')' after expression.");
@@ -84,6 +95,8 @@ Expr Parser::infix(Expr left) {
         case Token::Type::BAR_BAR:
         case Token::Type::PERCENT:
             return binary(std::move(left));
+        case Token::Type::LEFT_PAREN:
+            return call(std::move(left));
         default:
             return left;
     }
@@ -158,6 +171,8 @@ Parser::Precedence Parser::get_precendece(Token::Type token) {
             return Precedence::LOGICAL_AND;
         case Token::Type::BAR_BAR:
             return Precedence::LOGICAL_OR;
+        case Token::Type::LEFT_PAREN:
+            return Precedence::CALL;
         default:
             return Precedence::NONE;
     }
@@ -218,6 +233,23 @@ Stmt Parser::while_statement() {
     return WhileStmt {.condition = std::make_unique<Expr>(std::move(condition)), .stmt = std::make_unique<Stmt>(declaration())};
 }
 
+Stmt Parser::function_declaration() {
+    consume(Token::Type::IDENTIFIER, "expected function name");
+    Token name = current;
+    consume(Token::Type::LEFT_PAREN, "Expected '(' after function name");
+    std::vector<Token> parameters;
+    if (!check(Token::Type::RIGHT_PAREN)) {
+        do {
+            consume(Token::Type::IDENTIFIER, "Expected identifier");
+            parameters.push_back(current);
+        } while (match(Token::Type::COMMA));
+    }
+    consume(Token::Type::RIGHT_PAREN, "Expected ')' after function parameters");
+    consume(Token::Type::LEFT_BRACE, "Expected '{' before function body");
+    auto body = block();
+    return FunctionStmt {.name = name, .params = std::move(parameters), .body = std::make_unique<Stmt>(std::move(body))};
+}
+
 Stmt Parser::declaration() {
     if (match(Token::Type::LET)) {
         return var_declaration();
@@ -230,6 +262,9 @@ Stmt Parser::declaration() {
     }
     if (match(Token::Type::WHILE)) {
         return while_statement();
+    }
+    if (match(Token::Type::FUN)) {
+        return function_declaration();
     }
     return expr_statement();
 }

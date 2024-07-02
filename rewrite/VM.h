@@ -19,6 +19,8 @@ public:
         reader.set_frame(frames.back());
     }
 
+    void call_value(Value& value, int arguments_count);
+
     void tick();
     void run();
 private:

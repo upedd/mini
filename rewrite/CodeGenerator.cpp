@@ -9,7 +9,8 @@ void CodeGenerator::visit_expr(const Expr& expr) {
         [this](const BinaryExpr& expr) { binary(expr); },
         [this](const StringLiteral& expr) {string_literal(expr);},
         [this](const VariableExpr& expr) {variable(expr);},
-        [this](const AssigmentExpr& expr) {assigment(expr);}
+        [this](const AssigmentExpr& expr) {assigment(expr);},
+            [this](const CallExpr& expr) {call(expr);}
     }, expr);
 }
 
@@ -19,7 +20,8 @@ void CodeGenerator::visit_stmt(const Stmt& stmt) {
         [this](const ExprStmt& expr) { expr_statement(expr); },
         [this](const BlockStmt& stmt) {block_statement(stmt);},
         [this](const IfStmt& stmt) {if_statement(stmt);},
-        [this](const WhileStmt& stmt) {while_statement(stmt);}
+        [this](const WhileStmt& stmt) {while_statement(stmt);},
+        [this](const FunctionStmt& stmt) {function_statement(stmt);}
     }, stmt);
 }
 
@@ -134,8 +136,20 @@ void CodeGenerator::patch_jump(int instruction_pos) {
     current_module().patch(instruction_pos + 2, static_cast<uint8_t>(offset & 0xFF));
 }
 
+int &CodeGenerator::get_current_depth() {
+    return states.back().current_depth;
+}
+
+Function* CodeGenerator::get_current_function() const {
+    return states.back().function;
+}
+
+std::vector<std::pair<std::string, int>> CodeGenerator::get_current_locals() {
+    return states.back().locals;
+}
+
 Module& CodeGenerator::current_module() const {
-    return function->code;
+    return get_current_function()->code;
 }
 
 
@@ -151,7 +165,48 @@ Module CodeGenerator::get_module() {
 }
 
 Function* CodeGenerator::get_function() {
-    return function;
+    return get_current_function();
+}
+
+void CodeGenerator::define_variable(const std::string& variable_name) {
+    for (int i = get_current_locals().size() - 1; i >= 0; --i) {
+        auto& [name, depth] = get_current_locals()[i];
+        if (depth < get_current_depth()) {
+            break;
+        }
+        if (name == variable_name) {
+            throw Error("Function redeclaration is disallowed.");
+        }
+    }
+    get_current_locals().emplace_back(variable_name, get_current_depth());
+}
+
+void CodeGenerator::function_statement(const FunctionStmt &stmt) {
+    std::string function_name = std::string(stmt.name.get_lexeme(source));
+    Function* function = allocate_function();
+    function->name = function_name;
+    function->arity = stmt.params.size();
+
+    int constant = current_module().add_constant(function);
+    current_module().write(OpCode::CONSTANT);
+    current_module().write(static_cast<uint8_t>(constant));
+    define_variable(function_name);
+
+    states.emplace_back(function);
+    for (const Token& param : stmt.params) {
+        define_variable(param.get_lexeme(source));
+    }
+    visit_stmt(*stmt.body);
+    states.pop_back();
+}
+
+void CodeGenerator::call(const CallExpr &expr) {
+    visit_expr(*expr.callee);
+    for (const ExprHandle& argument : expr.arguments) {
+        visit_expr(*argument);
+    }
+    current_module().write(OpCode::CALL);
+    current_module().write(static_cast<uint8_t>(expr.arguments.size()));
 }
 
 void CodeGenerator::if_statement(const IfStmt &stmt) {
@@ -169,14 +224,14 @@ void CodeGenerator::if_statement(const IfStmt &stmt) {
 }
 
 void CodeGenerator::begin_scope() {
-    ++current_depth;
+    ++get_current_depth();
 }
 
 void CodeGenerator::end_scope() {
-    --current_depth;
-    while (!locals.empty() && locals.back().second > current_depth) {
+    --get_current_depth();
+    while (!get_current_locals().empty() && get_current_locals().back().second > get_current_depth()) {
         current_module().write(OpCode::POP);
-        locals.pop_back();
+        get_current_locals().pop_back();
     }
 }
 
@@ -204,8 +259,8 @@ void CodeGenerator::block_statement(const BlockStmt &stmt) {
 
 void CodeGenerator::assigment(const AssigmentExpr &expr) {
     int idx = -1;
-    for (int i = locals.size() - 1; i >= 0; --i) {
-        if (expr.identifier.get_lexeme(source) == locals[i].first) {
+    for (int i = get_current_locals().size() - 1; i >= 0; --i) {
+        if (expr.identifier.get_lexeme(source) == get_current_locals()[i].first) {
             idx = i;
         }
     }
@@ -222,8 +277,8 @@ void CodeGenerator::expr_statement(const ExprStmt &expr) {
 
 void CodeGenerator::variable(const VariableExpr &expr) {
     int idx = -1;
-    for (int i = locals.size() - 1; i >= 0; --i) {
-        if (expr.identifier.get_lexeme(source) == locals[i].first) {
+    for (int i = get_current_locals().size() - 1; i >= 0; --i) {
+        if (expr.identifier.get_lexeme(source) == get_current_locals()[i].first) {
             idx = i;
         }
     }
@@ -233,9 +288,9 @@ void CodeGenerator::variable(const VariableExpr &expr) {
 }
 
 void CodeGenerator::var_declaration(const VarStmt &expr) {
-    for (int i = locals.size() - 1; i >= 0; --i) {
-        auto& [name, depth] = locals[i];
-        if (depth < current_depth) {
+    for (int i = get_current_locals().size() - 1; i >= 0; --i) {
+        auto& [name, depth] = get_current_locals()[i];
+        if (depth < get_current_depth()) {
             break;
         }
         if (name == expr.name.get_lexeme(source)) {
@@ -243,7 +298,7 @@ void CodeGenerator::var_declaration(const VarStmt &expr) {
         }
     }
     visit_expr(*expr.value);
-    locals.emplace_back(expr.name.get_lexeme(source), current_depth);
+    get_current_locals().emplace_back(expr.name.get_lexeme(source), get_current_depth());
 }
 
 void CodeGenerator::literal(const LiteralExpr& expr) {

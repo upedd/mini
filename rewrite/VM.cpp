@@ -5,6 +5,11 @@
 #include "Function.h"
 
 
+void VM::call_value(Value &value, int arguments_count) {
+    Function* function = std::get<Function*>(value); // error check!
+    frames.emplace_back(function, 0, stack.size() - arguments_count - 1);
+}
+
 void VM::tick() {
     auto& frame = frames.back();
     reader.set_frame(frame);
@@ -111,6 +116,11 @@ void VM::tick() {
         case OpCode::BINARY_NOT: {
             auto value = stack.back(); stack.pop_back();
             stack.emplace_back(value.binary_not());
+        }
+        case OpCode::CALL: {
+            int arguments_count = reader.read();
+            call_value(stack[stack.size() - arguments_count - 1], arguments_count);
+            reader.set_frame(frames.back());
         }
     }
 

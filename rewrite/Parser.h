@@ -68,6 +68,8 @@ public:
 
     Stmt while_statement();
 
+    Stmt function_declaration();
+
     Stmt declaration();
 
     std::vector<Stmt> parse();
@@ -79,6 +81,8 @@ private:
 
     Token advance();
     void consume(Token::Type type, std::string_view message);
+
+    Expr call(Expr left);
 
     Expr infix(Expr left);
 

@@ -19,8 +19,9 @@ struct ExprStmt {
 struct BlockStmt;
 struct IfStmt;
 struct WhileStmt;
+struct FunctionStmt;
 
-using Stmt = std::variant<VarStmt, ExprStmt, BlockStmt, IfStmt, WhileStmt>;
+using Stmt = std::variant<VarStmt, ExprStmt, BlockStmt, IfStmt, WhileStmt, FunctionStmt>;
 using StmtHandle = std::unique_ptr<Stmt>;
 
 struct BlockStmt {
@@ -38,6 +39,12 @@ struct WhileStmt {
     StmtHandle stmt;
 };
 
+struct FunctionStmt {
+    Token name;
+    std::vector<Token> params;
+    StmtHandle body;
+};
+
 inline std::string stmt_to_string(const Stmt& stmt, std::string_view source) {
     return std::visit(overloaded {
         [source](const VarStmt& stmt) {return std::string("var ") + stmt.name.get_lexeme(source) + " = " + expr_to_string(*stmt.value);},
@@ -52,6 +59,7 @@ inline std::string stmt_to_string(const Stmt& stmt, std::string_view source) {
             },
         [](const IfStmt& stmt) {return std::string("if_stmt");},
         [](const WhileStmt& stmt) {return std::string("while_stmt");},
+        [](const FunctionStmt& stmt) {return std::string("function_stmt");}
     }, stmt);
 }
 

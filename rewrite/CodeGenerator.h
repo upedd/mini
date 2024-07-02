@@ -12,11 +12,26 @@ public:
     public:
         explicit Error(const std::string& message) : runtime_error(message) {}
     };
+    struct State {
+        Function* function = nullptr;
+        int current_depth = 0;
+        std::vector<std::pair<std::string, int>> locals;
+    };
+
+    CodeGenerator() {
+        states.emplace_back(allocate_function());
+    }
 
     void generate(const std::vector<Stmt>& stmts, std::string_view source);
 
     Module get_module();
     Function* get_function();
+
+    void define_variable(const std::string &name);
+
+    void function_statement(const FunctionStmt & stmt);
+
+    void call(const CallExpr& expr);
 
 private:
     void begin_scope();
@@ -46,11 +61,13 @@ private:
     int start_jump(OpCode code);
     void patch_jump(int instruction_pos);
 
+    int &get_current_depth();
+    Function* get_current_function() const;
+    std::vector<std::pair<std::string, int>> get_current_locals();
+
     Module& current_module() const;
 
-    int current_depth = 0;
-    Function* function = allocate_function();
-    std::vector<std::pair<std::string, int>> locals;
+    std::vector<State> states;
     //Module module;
     std::string_view source; // temp
 };

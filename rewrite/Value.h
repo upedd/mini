@@ -53,7 +53,8 @@ public:
             [](int64_t value) {return std::to_string(value);},
             [](double value) {return std::to_string(value);},
             [](bool value) {return std::string(value ? "True" : "False");},
-            [](const std::string& string) {return std::string("string: ") + string;}
+            [](const std::string& string) {return std::string("string: ") + string;},
+                [](Function* func) {return std::string("func");}
         }, *this);
     }
 

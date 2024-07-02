@@ -3,6 +3,7 @@
 #include <format>
 #include <memory>
 #include <variant>
+#include <vector>
 
 #include "Token.h"
 #include "Value.h"
@@ -12,6 +13,7 @@
 struct UnaryExpr;
 struct BinaryExpr;
 struct AssigmentExpr;
+struct CallExpr;
 
 struct LiteralExpr {
     Value literal;
@@ -25,7 +27,7 @@ struct VariableExpr {
     Token identifier;
 };
 
-using Expr = std::variant<LiteralExpr, StringLiteral, UnaryExpr, BinaryExpr, VariableExpr, AssigmentExpr>;
+using Expr = std::variant<LiteralExpr, StringLiteral, UnaryExpr, BinaryExpr, VariableExpr, AssigmentExpr, CallExpr>;
 using ExprHandle = std::unique_ptr<Expr>;
 
 
@@ -43,6 +45,11 @@ struct BinaryExpr {
 struct AssigmentExpr {
     Token identifier;
     ExprHandle expr;
+};
+
+struct CallExpr {
+    ExprHandle callee;
+    std::vector<ExprHandle> arguments;
 };
 
 // todo refactor
