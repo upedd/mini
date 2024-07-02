@@ -15,8 +15,8 @@ int main() {
     ss << in.rdbuf();
     std::string source = ss.str();
 
-    Lexer lexer(source);
-    Parser parser(lexer);
+    // Lexer lexer(source);
+    Parser parser(source);
     //
     std::vector<Stmt> stmts = parser.parse();
     for (auto& error : parser.get_errors()) {

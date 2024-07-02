@@ -57,17 +57,24 @@ inline ExprHandle make_expr_handle(Expr expr) {
 }
 
 // todo refactor
-inline std::string expr_to_string(const Expr& expr) {
-    return std::visit(overloaded {
-        [](const LiteralExpr& expr) {return expr.literal.to_string();},
-        [](const UnaryExpr& expr) {return std::format("({} {})", Token::type_to_string(expr.op), expr_to_string(*expr.expr));},
-        [](const BinaryExpr& expr) {return std::format("({} {} {})", Token::type_to_string(expr.op), expr_to_string(*expr.left), expr_to_string(*expr.right));},
-        [](const StringLiteral& expr) {return expr.string;},
-        [](const VariableExpr& expr) {return std::string("var"); },
-        [](const AssigmentExpr& expr) {return std::string("assigment ") + expr_to_string(*expr.expr); },
-        [](const CallExpr& expr) {return std::string("call expression!"); },
+inline std::string expr_to_string(const Expr &expr) {
+    return std::visit(overloaded{
+                          [](const LiteralExpr &expr) { return expr.literal.to_string(); },
+                          [](const UnaryExpr &expr) {
+                              return std::format("({} {})", Token::type_to_string(expr.op), expr_to_string(*expr.expr));
+                          },
+                          [](const BinaryExpr &expr) {
+                              return std::format("({} {} {})", Token::type_to_string(expr.op),
+                                                 expr_to_string(*expr.left), expr_to_string(*expr.right));
+                          },
+                          [](const StringLiteral &expr) { return expr.string; },
+                          [](const VariableExpr &expr) { return std::string("var"); },
+                          [](const AssigmentExpr &expr) {
+                              return std::string("assigment ") + expr_to_string(*expr.expr);
+                          },
+                          [](const CallExpr &expr) { return std::string("call expression!"); },
 
-    }, expr);
+                      }, expr);
 }
 
 #endif //EXPR_H

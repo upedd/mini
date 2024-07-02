@@ -5,8 +5,8 @@
 
 #include "Lexer.h"
 #include "Expr.h"
-
 #include "Stmt.h"
+
 /**
  * Implementation of Pratt parser
  * References:
@@ -17,6 +17,44 @@
  */
 class Parser {
 public:
+    // Parser handles errors by quietly storing them instead of stopping.
+    // We want to continue parsing in order to provide user multiple issues in their code at once.
+    class Error {
+    public:
+        Error(Token token, std::string_view message) : message(message), token(token) {}
+        Token token;
+        std::string message;
+    };
+
+    const std::vector<Error>& get_errors();
+
+    explicit Parser(const std::string_view source) : lexer(source) {}
+
+    std::vector<Stmt> parse();
+private:
+    bool panic_mode = false;
+    std::vector<Error> errors;
+
+    void error(const Token& token, std::string_view message);
+    void synchronize();
+
+    bool match(Token::Type type);
+    [[nodiscard]] bool check(Token::Type type) const;
+    Token advance();
+    void consume(Token::Type type, std::string_view message);
+
+    Stmt declaration();
+    Stmt statement();
+
+    Stmt var_declaration();
+    Stmt function_declaration();
+
+    Stmt expr_statement();
+    Stmt block_statement();
+    Stmt if_statement();
+    Stmt while_statement();
+    Stmt return_statement();
+
     // C like precedence
     // References:
     // https://en.wikipedia.org/wiki/Operators_in_C_and_C%2B%2B#Operator_precedence
@@ -41,57 +79,21 @@ public:
 
     static Precedence get_precendece(Token::Type token);
 
-    // Parser handles errors by quietly storing them instead of stopping.
-    // We want to continue parsing in order to provide user multiple issues in their code at once.
-    class Error {
-    public:
-        Error(Token token, std::string_view message) : message(message), token(token) {}
-        Token token;
-        std::string message;
-    };
-
-    const std::vector<Error>& get_errors();
-    explicit Parser(const Lexer &lexer) : lexer(lexer) {} // todo: not final
-
-    std::vector<Stmt> parse();
-private:
-    Stmt var_declaration();
-    Stmt function_declaration();
-
-    Stmt expr_statement();
-    Stmt block_statement();
-    Stmt if_statement();
-    Stmt while_statement();
-    Stmt return_statement();
-
-    Stmt declaration();
-    Stmt statement();
-
-    Expr call(Expr left);
     Expr expression(Precedence precedence = Precedence::NONE);
-    void error(const Token& token, std::string_view message);
-    bool panic_mode = false;
-    std::vector<Error> errors;
+    std::optional<Expr> prefix();
 
-    bool match(Token::Type type);
-    [[nodiscard]] bool check(Token::Type type) const;
-    Token advance();
-    void consume(Token::Type type, std::string_view message);
+    Expr integer() const;
+    Expr number() const;
+    Expr keyword() const;
+    Expr string() const;
+    Expr identifier();
+    Expr grouping();
+    Expr unary(Token::Type op);
 
     Expr infix(Expr left);
 
-    Expr number();
-    Expr keyword();
-    Expr string();
-    Expr identifier();
-
-    std::optional<Expr> prefix();
-
-    Expr grouping();
-    Expr unary(Token::Type op);
     Expr binary(Expr left);
-
-    Expr integer() const;
+    Expr call(Expr left);
 
     Token current;
     Token next;

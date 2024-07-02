@@ -27,4 +27,14 @@ inline bool is_identifier(const char c) {
 template<class... Ts>
 struct overloaded : Ts... { using Ts::operator()...; };
 
+// https://en.cppreference.com/w/cpp/experimental/scope_exit/scope_exit
+template<class Fn>
+class scope_exit {
+public:
+    explicit scope_exit(Fn&& fn) : fn(fn) {}
+    ~scope_exit() { fn(); }
+private:
+    Fn fn;
+};
+
 #endif //COMMON_H
