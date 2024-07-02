@@ -261,9 +261,13 @@ std::optional<Expr> Parser::prefix() {
     }
 }
 
-Expr Parser::integer() const {
-    // todo temp
-    return LiteralExpr {std::stoll(current.get_lexeme(lexer.get_source()))};
+Expr Parser::integer() {
+    std::string literal = current.get_lexeme(lexer.get_source());
+    std::expected<bite_int, ConversionError> result = string_to_int(literal);
+    if (!result) {
+        error(current, result.error().what());
+    }
+    return LiteralExpr {*result};
 }
 
 Expr Parser::number() const {
