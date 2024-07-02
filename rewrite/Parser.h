@@ -51,48 +51,38 @@ public:
     };
 
     const std::vector<Error>& get_errors();
-
     explicit Parser(const Lexer &lexer) : lexer(lexer) {} // todo: not final
-
-    bool match(Token::Type type);
-
-    Stmt var_declaration();
-
-    Stmt expr_statement();
-
-    bool check(Token::Type type);
-
-    Stmt block();
-
-    Stmt if_statement();
-
-    Stmt while_statement();
-
-    Stmt function_declaration();
-
-    Stmt return_statement();
-
-    Stmt declaration();
 
     std::vector<Stmt> parse();
 private:
+    Stmt var_declaration();
+    Stmt function_declaration();
+
+    Stmt expr_statement();
+    Stmt block_statement();
+    Stmt if_statement();
+    Stmt while_statement();
+    Stmt return_statement();
+
+    Stmt declaration();
+    Stmt statement();
+
+    Expr call(Expr left);
     Expr expression(Precedence precedence = Precedence::NONE);
     void error(const Token& token, std::string_view message);
     bool panic_mode = false;
     std::vector<Error> errors;
 
+    bool match(Token::Type type);
+    [[nodiscard]] bool check(Token::Type type) const;
     Token advance();
     void consume(Token::Type type, std::string_view message);
-
-    Expr call(Expr left);
 
     Expr infix(Expr left);
 
     Expr number();
-    Expr literal();
-
+    Expr keyword();
     Expr string();
-
     Expr identifier();
 
     std::optional<Expr> prefix();

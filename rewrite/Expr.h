@@ -52,6 +52,10 @@ struct CallExpr {
     std::vector<ExprHandle> arguments;
 };
 
+inline ExprHandle make_expr_handle(Expr expr) {
+    return std::make_unique<Expr>(std::move(expr));
+}
+
 // todo refactor
 inline std::string expr_to_string(const Expr& expr) {
     return std::visit(overloaded {
