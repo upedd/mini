@@ -29,7 +29,7 @@ void Parser::synchronize() {
     }
 }
 
-const std::vector<Parser::Error>& Parser::get_errors() {
+const std::vector<Parser::Error> &Parser::get_errors() {
     return errors;
 }
 
@@ -106,9 +106,9 @@ Stmt Parser::statement() {
 Stmt Parser::var_declaration() {
     consume(Token::Type::IDENTIFIER, "expected identifier");
     Token name = current;
-    Expr expr = match(Token::Type::EQUAL) ? expression() : LiteralExpr {nil_t};
+    Expr expr = match(Token::Type::EQUAL) ? expression() : LiteralExpr{nil_t};
     consume(Token::Type::SEMICOLON, "Expected ';' after variable declaration.");
-    return VarStmt {.name = name, .value = make_expr_handle(std::move(expr))};
+    return VarStmt{.name = name, .value = make_expr_handle(std::move(expr))};
 }
 
 Stmt Parser::function_declaration() {
@@ -125,13 +125,15 @@ Stmt Parser::function_declaration() {
     consume(Token::Type::RIGHT_PAREN, "Expected ')' after function parameters");
     consume(Token::Type::LEFT_BRACE, "Expected '{' before function body");
     auto body = block_statement();
-    return FunctionStmt {.name = name,
+    return FunctionStmt{
+        .name = name,
         .params = std::move(parameters),
-        .body = std::make_unique<Stmt>(std::move(body))};
+        .body = std::make_unique<Stmt>(std::move(body))
+    };
 }
 
 Stmt Parser::expr_statement() {
-    Stmt stmt = ExprStmt { make_expr_handle(expression()) };
+    Stmt stmt = ExprStmt{make_expr_handle(expression())};
     consume(Token::Type::SEMICOLON, "Expected ';' after expression");
     return stmt;
 }
@@ -142,7 +144,7 @@ Stmt Parser::block_statement() {
         stmts.push_back(std::make_unique<Stmt>(declaration()));
     }
     consume(Token::Type::RIGHT_BRACE, "Expected '}' after block.");
-    return BlockStmt {std::move(stmts)};
+    return BlockStmt{std::move(stmts)};
 }
 
 Stmt Parser::if_statement() {
@@ -154,9 +156,11 @@ Stmt Parser::if_statement() {
     if (match(Token::Type::ELSE)) {
         else_stmt = std::make_unique<Stmt>(statement());
     }
-    return IfStmt {.condition = make_expr_handle(std::move(condition)),
+    return IfStmt{
+        .condition = make_expr_handle(std::move(condition)),
         .then_stmt = std::make_unique<Stmt>(std::move(then_stmt)),
-        .else_stmt = std::move(else_stmt)};
+        .else_stmt = std::move(else_stmt)
+    };
 }
 
 Stmt Parser::while_statement() {
@@ -164,8 +168,10 @@ Stmt Parser::while_statement() {
     auto condition = expression();
     consume(Token::Type::RIGHT_PAREN, "Expected ')' after 'while' condition");
 
-    return WhileStmt {.condition = make_expr_handle(std::move(condition)),
-        .stmt = std::make_unique<Stmt>(declaration())};
+    return WhileStmt{
+        .condition = make_expr_handle(std::move(condition)),
+        .stmt = std::make_unique<Stmt>(declaration())
+    };
 }
 
 Stmt Parser::return_statement() {
@@ -174,7 +180,7 @@ Stmt Parser::return_statement() {
         expr = make_expr_handle(expression());
         consume(Token::Type::SEMICOLON, "Exepected ';' after return value.");
     }
-    return ReturnStmt {std::move(expr)};
+    return ReturnStmt{std::move(expr)};
 }
 
 Parser::Precedence Parser::get_precendece(Token::Type token) {
@@ -262,29 +268,29 @@ Expr Parser::integer() const {
 
 Expr Parser::number() const {
     // todo better number parsing
-    return LiteralExpr {std::stod(current.get_lexeme(lexer.get_source()))};
+    return LiteralExpr{std::stod(current.get_lexeme(lexer.get_source()))};
 }
 
 Expr Parser::string() const {
-    return StringLiteral {std::string(current.get_lexeme(lexer.get_source()))};
+    return StringLiteral{std::string(current.get_lexeme(lexer.get_source()))};
 }
 
 Expr Parser::identifier() {
     Token name = current;
     if (match(Token::Type::EQUAL)) {
-        return AssigmentExpr {.identifier = name, .expr = make_expr_handle(expression())};
+        return AssigmentExpr{.identifier = name, .expr = make_expr_handle(expression())};
     }
-    return VariableExpr {name};
+    return VariableExpr{name};
 }
 
 Expr Parser::keyword() const {
     switch (current.type) {
         case Token::Type::NIL:
-            return LiteralExpr {nil_t};
+            return LiteralExpr{nil_t};
         case Token::Type::FALSE:
-            return LiteralExpr {false};
+            return LiteralExpr{false};
         case Token::Type::TRUE:
-            return LiteralExpr {true};
+            return LiteralExpr{true};
         default: assert(false); // unreachable!
     }
 }
@@ -296,7 +302,7 @@ Expr Parser::grouping() {
 }
 
 Expr Parser::unary(Token::Type operator_type) {
-    return UnaryExpr { .expr = make_expr_handle(expression(Precedence::UNARY)), .op = operator_type };
+    return UnaryExpr{.expr = make_expr_handle(expression(Precedence::UNARY)), .op = operator_type};
 }
 
 Expr Parser::infix(Expr left) {
@@ -330,17 +336,19 @@ Expr Parser::infix(Expr left) {
 
 Expr Parser::binary(Expr left) {
     Token::Type op = current.type;
-    return BinaryExpr {make_expr_handle(std::move(left)),
-        make_expr_handle(expression(get_precendece(op))), op};
+    return BinaryExpr{
+        make_expr_handle(std::move(left)),
+        make_expr_handle(expression(get_precendece(op))), op
+    };
 }
 
 Expr Parser::call(Expr left) {
     std::vector<ExprHandle> arguments;
-    if(!check(Token::Type::RIGHT_PAREN)) {
+    if (!check(Token::Type::RIGHT_PAREN)) {
         do {
             arguments.push_back(make_expr_handle(expression()));
         } while (match(Token::Type::COMMA));
     }
     consume(Token::Type::RIGHT_PAREN, "Expected ')' after call arguments.");
-    return CallExpr {.callee = make_expr_handle(std::move(left)), .arguments = std::move(arguments)};
+    return CallExpr{.callee = make_expr_handle(std::move(left)), .arguments = std::move(arguments)};
 }
