@@ -1,11 +1,11 @@
 #ifndef MODULEREADER_H
 #define MODULEREADER_H
 #include "Module.h"
+#include "CallFrame.h"
 
 // Module must be kept alive for entire ModuleReader lifetime!
 class ModuleReader {
 public:
-    explicit ModuleReader(const Module& module) : module(module) {};
     uint8_t read();
     OpCode opcode();
     int64_t integer();
@@ -14,9 +14,10 @@ public:
 
     Value get_constant(int8_t int8);
 
+    void set_frame(CallFrame& value);
+
 private:
-    int offset = 0;
-    const Module& module;
+    CallFrame* frame = nullptr;
 };
 
 

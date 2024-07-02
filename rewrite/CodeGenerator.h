@@ -1,8 +1,7 @@
 #ifndef CODEGENERATOR_H
 #define CODEGENERATOR_H
-#include <unordered_map>
-
 #include "Expr.h"
+#include "Function.h"
 #include "Module.h"
 #include "Stmt.h"
 
@@ -17,7 +16,7 @@ public:
     void generate(const std::vector<Stmt>& stmts, std::string_view source);
 
     Module get_module();
-
+    Function* get_function();
 
 private:
     void begin_scope();
@@ -47,9 +46,12 @@ private:
     int start_jump(OpCode code);
     void patch_jump(int instruction_pos);
 
+    Module& current_module() const;
+
     int current_depth = 0;
+    Function* function = allocate_function();
     std::vector<std::pair<std::string, int>> locals;
-    Module module;
+    //Module module;
     std::string_view source; // temp
 };
 

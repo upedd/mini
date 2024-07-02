@@ -8,7 +8,6 @@
 
 #include "common.h"
 
-
 // disambiguation tag for nil value
 struct Nil {
     auto operator<=>(const Nil&) const = default;
@@ -31,7 +30,13 @@ inline constexpr Nil nil_t {};
 //     }
 // };
 
-using value_variant_t = std::variant<Nil, int64_t, double, bool, std::string>;
+// struct Object {
+//
+// };
+
+struct Function;
+
+using value_variant_t = std::variant<Nil, int64_t, double, bool, std::string, Function*>;
 
 class Value : public value_variant_t {
 public:
@@ -42,7 +47,7 @@ public:
 
     using value_variant_t::value_variant_t;
 
-     [[nodiscard]] std::string to_string() const {
+    [[nodiscard]] std::string to_string() const {
         return std::visit(overloaded {
             [](Nil) {return std::string("Nil");},
             [](int64_t value) {return std::to_string(value);},
@@ -187,6 +192,7 @@ inline Value Value::shift_right(const Value &other) const {
 inline Value Value::binary_xor(const Value &other) const {
     return this->convert_to_int() ^ other.convert_to_int();
 }
+
 
 
 #endif //VALUE_H

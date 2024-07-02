@@ -28,8 +28,8 @@ int main() {
     if (parser.get_errors().empty()) {
         CodeGenerator code_gen;
         code_gen.generate(stmts, source);
-        auto module = code_gen.get_module();
-        VM vm(module);
+        auto* func = code_gen.get_function();
+        VM vm(func);
         vm.run();
     }
     // while (true) {

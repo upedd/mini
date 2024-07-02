@@ -2,9 +2,12 @@
 
 #include <iostream>
 
+#include "Function.h"
 
 
 void VM::tick() {
+    auto& frame = frames.back();
+    reader.set_frame(frame);
 
 #define BINARY_OPERATION(op) { \
     auto b = stack.back(); \
@@ -64,12 +67,12 @@ void VM::tick() {
         }
         case OpCode::GET: {
             int idx = reader.read();
-            stack.push_back(stack[idx]); // handle overflow?
+            stack.push_back(stack[frame.frame_pointer + idx]); // handle overflow?
             break;
         }
         case OpCode::SET: {
             int idx = reader.read();
-            stack[idx] = stack.back();
+            stack[frame.frame_pointer + idx] = stack.back();
             break;
         }
         case OpCode::JUMP_IF_FALSE: {

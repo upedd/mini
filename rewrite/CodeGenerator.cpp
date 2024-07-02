@@ -28,13 +28,13 @@ void CodeGenerator::unary(const UnaryExpr &expr) {
     visit_expr(*expr.expr);
     switch (expr.op) {
         case Token::Type::MINUS:
-            module.write(OpCode::NEGATE);
+            current_module().write(OpCode::NEGATE);
             break;
         case Token::Type::BANG:
-            module.write(OpCode::NOT);
+            current_module().write(OpCode::NOT);
             break;
         case Token::Type::TILDE:
-            module.write(OpCode::BINARY_NOT);
+            current_module() .write(OpCode::BINARY_NOT);
             break;
         default:
             throw Error("Unexepected expression operator.");
@@ -43,7 +43,7 @@ void CodeGenerator::unary(const UnaryExpr &expr) {
 
 void CodeGenerator::logical(const BinaryExpr &expr) {
     int jump = start_jump(expr.op == Token::Type::AND_AND ? OpCode::JUMP_IF_FALSE : OpCode::JUMP_IF_TRUE);
-    module.write(OpCode::POP);
+    current_module().write(OpCode::POP);
     visit_expr(*expr.right);
     patch_jump(jump);
 }
@@ -59,55 +59,55 @@ void CodeGenerator::binary(const BinaryExpr &expr) {
 
     switch (expr.op) {
         case Token::Type::PLUS:
-            module.write(OpCode::ADD);
+            current_module().write(OpCode::ADD);
             break;
         case Token::Type::MINUS:
-            module.write(OpCode::SUBTRACT);
+            current_module().write(OpCode::SUBTRACT);
             break;
         case Token::Type::STAR:
-            module.write(OpCode::MULTIPLY);
+            current_module().write(OpCode::MULTIPLY);
             break;
         case Token::Type::SLASH:
-            module.write(OpCode::DIVIDE);
+            current_module().write(OpCode::DIVIDE);
             break;
         case Token::Type::EQUAL_EQUAL:
-            module.write(OpCode::EQUAL);
+            current_module().write(OpCode::EQUAL);
             break;
         case Token::Type::BANG_EQUAL:
-            module.write(OpCode::NOT_EQUAL);
+            current_module().write(OpCode::NOT_EQUAL);
             break;
         case Token::Type::LESS:
-            module.write(OpCode::LESS);
+            current_module().write(OpCode::LESS);
             break;
         case Token::Type::LESS_EQUAL:
-            module.write(OpCode::LESS_EQUAL);
+            current_module().write(OpCode::LESS_EQUAL);
             break;
         case Token::Type::GREATER:
-            module.write(OpCode::GREATER);
+            current_module().write(OpCode::GREATER);
             break;
         case Token::Type::GREATER_EQUAL:
-            module.write(OpCode::GREATER_EQUAL);
+            current_module().write(OpCode::GREATER_EQUAL);
             break;
         case Token::Type::GREATER_GREATER:
-            module.write(OpCode::RIGHT_SHIFT);
+            current_module().write(OpCode::RIGHT_SHIFT);
             break;
         case Token::Type::LESS_LESS:
-            module.write(OpCode::LEFT_SHIFT);
+            current_module().write(OpCode::LEFT_SHIFT);
             break;
         case Token::Type::AND:
-            module.write(OpCode::BITWISE_AND);
+            current_module().write(OpCode::BITWISE_AND);
             break;
         case Token::Type::BAR:
-            module.write(OpCode::BITWISE_OR);
+            current_module().write(OpCode::BITWISE_OR);
             break;
         case Token::Type::CARET:
-            module.write(OpCode::BITWISE_XOR);
+            current_module().write(OpCode::BITWISE_XOR);
             break;
         case Token::Type::PERCENT:
-            module.write(OpCode::MODULO);
+            current_module().write(OpCode::MODULO);
             break;
         case Token::Type::SLASH_SLASH:
-            module.write(OpCode::FLOOR_DIVISON);
+            current_module().write(OpCode::FLOOR_DIVISON);
             break;
         default:
             throw Error("Unexepected expression operator.");
@@ -115,24 +115,29 @@ void CodeGenerator::binary(const BinaryExpr &expr) {
 }
 
 void CodeGenerator::string_literal(const StringLiteral &expr) {
-    int index = module.add_string_constant(expr.string);
-    module.write(OpCode::CONSTANT);
-    module.write(static_cast<uint8_t>(index)); // handle overflow!!!
+    int index = current_module().add_string_constant(expr.string);
+    current_module().write(OpCode::CONSTANT);
+    current_module().write(static_cast<uint8_t>(index)); // handle overflow!!!
 }
 
 int CodeGenerator::start_jump(OpCode code) {
-    module.write(code);
-    module.write(static_cast<uint8_t>(0xFF));
-    module.write(static_cast<uint8_t>(0xFF));
-    return module.get_code_length() - 3; // start position of jump instruction
+    current_module().write(code);
+    current_module().write(static_cast<uint8_t>(0xFF));
+    current_module().write(static_cast<uint8_t>(0xFF));
+    return current_module().get_code_length() - 3; // start position of jump instruction
 }
 
 void CodeGenerator::patch_jump(int instruction_pos) {
-    int offset = module.get_code_length() - instruction_pos - 3;
+    int offset = current_module().get_code_length() - instruction_pos - 3;
     // check jump
-    module.patch(instruction_pos + 1, static_cast<uint8_t>(offset >> 8 & 0xFF));
-    module.patch(instruction_pos + 2, static_cast<uint8_t>(offset & 0xFF));
+    current_module().patch(instruction_pos + 1, static_cast<uint8_t>(offset >> 8 & 0xFF));
+    current_module().patch(instruction_pos + 2, static_cast<uint8_t>(offset & 0xFF));
 }
+
+Module& CodeGenerator::current_module() const {
+    return function->code;
+}
+
 
 void CodeGenerator::generate(const std::vector<Stmt>& stmts, std::string_view source) {
     this->source = source;
@@ -142,17 +147,21 @@ void CodeGenerator::generate(const std::vector<Stmt>& stmts, std::string_view so
 }
 
 Module CodeGenerator::get_module() {
-    return module;
+    return current_module();
+}
+
+Function* CodeGenerator::get_function() {
+    return function;
 }
 
 void CodeGenerator::if_statement(const IfStmt &stmt) {
     visit_expr(*stmt.condition);
     int jump_to_else = start_jump(OpCode::JUMP_IF_FALSE);
-    module.write(OpCode::POP);
+    current_module().write(OpCode::POP);
     visit_stmt(*stmt.then_stmt);
     int jump_to_end = start_jump(OpCode::JUMP);
     patch_jump(jump_to_else);
-    module.write(OpCode::POP);
+    current_module().write(OpCode::POP);
     if (stmt.else_stmt) {
         visit_stmt(*stmt.else_stmt);
     }
@@ -166,23 +175,23 @@ void CodeGenerator::begin_scope() {
 void CodeGenerator::end_scope() {
     --current_depth;
     while (!locals.empty() && locals.back().second > current_depth) {
-        module.write(OpCode::POP);
+        current_module().write(OpCode::POP);
         locals.pop_back();
     }
 }
 
 void CodeGenerator::while_statement(const WhileStmt &stmt) {
-    int loop_start = module.get_code_length();
+    int loop_start = current_module().get_code_length();
     visit_expr(*stmt.condition);
     int jump = start_jump(OpCode::JUMP_IF_FALSE);
-    module.write(OpCode::POP);
+    current_module().write(OpCode::POP);
     visit_stmt(*stmt.stmt);
-    module.write(OpCode::LOOP);
-    int offset = module.get_code_length() - loop_start + 2;
-    module.write(static_cast<uint8_t>(offset >> 8 & 0xFF));
-    module.write(static_cast<uint8_t>(offset & 0xFF));
+    current_module().write(OpCode::LOOP);
+    int offset = current_module().get_code_length() - loop_start + 2;
+    current_module().write(static_cast<uint8_t>(offset >> 8 & 0xFF));
+    current_module().write(static_cast<uint8_t>(offset & 0xFF));
     patch_jump(jump);
-    module.write(OpCode::POP);
+    current_module().write(OpCode::POP);
 }
 
 void CodeGenerator::block_statement(const BlockStmt &stmt) {
@@ -202,13 +211,13 @@ void CodeGenerator::assigment(const AssigmentExpr &expr) {
     }
     assert(idx != -1); // todo: error handling
     visit_expr(*expr.expr);
-    module.write(OpCode::SET);
-    module.write(static_cast<uint8_t>(idx));
+    current_module().write(OpCode::SET);
+    current_module().write(static_cast<uint8_t>(idx));
 }
 
 void CodeGenerator::expr_statement(const ExprStmt &expr) {
     visit_expr(*expr.expr);
-    module.write(OpCode::POP);
+    current_module().write(OpCode::POP);
 }
 
 void CodeGenerator::variable(const VariableExpr &expr) {
@@ -219,8 +228,8 @@ void CodeGenerator::variable(const VariableExpr &expr) {
         }
     }
     assert(idx != -1); // todo: error handling
-    module.write(OpCode::GET);
-    module.write(static_cast<uint8_t>(idx)); // todo: handle overflow
+    current_module().write(OpCode::GET);
+    current_module().write(static_cast<uint8_t>(idx)); // todo: handle overflow
 }
 
 void CodeGenerator::var_declaration(const VarStmt &expr) {
@@ -238,7 +247,7 @@ void CodeGenerator::var_declaration(const VarStmt &expr) {
 }
 
 void CodeGenerator::literal(const LiteralExpr& expr) {
-    int index = module.add_constant(expr.literal);
-    module.write(OpCode::CONSTANT);
-    module.write(static_cast<uint8_t>(index)); // handle overflow!!!
+    int index = current_module().add_constant(expr.literal);
+    current_module().write(OpCode::CONSTANT);
+    current_module().write(static_cast<uint8_t>(index)); // handle overflow!!!
 }

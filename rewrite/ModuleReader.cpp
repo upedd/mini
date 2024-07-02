@@ -1,7 +1,7 @@
 #include "ModuleReader.h"
 
 uint8_t ModuleReader::read() {
-    return module.get_at(offset++);
+    return frame->function->code.get_at(frame->instruction_pointer++);
 }
 
 OpCode ModuleReader::opcode() {
@@ -21,13 +21,17 @@ int64_t ModuleReader::integer() {
 }
 
 bool ModuleReader::at_end() const {
-    return offset >= module.get_code().size();
+    return frame->instruction_pointer >= frame->function->code.get_code().size();
 }
 
 void ModuleReader::add_offset(int offset) {
-    this->offset += offset;
+    frame->instruction_pointer += offset;
 }
 
 Value ModuleReader::get_constant(int8_t int8) {
-    return module.get_constant(int8);
+    return frame->function->code.get_constant(int8);
+}
+
+void ModuleReader::set_frame(CallFrame &value) {
+    frame = &value;
 }

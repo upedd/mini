@@ -74,4 +74,6 @@ add_executable(rewrite rewrite/main.cpp
         rewrite/ModuleReader.h
         rewrite/Value.h
         rewrite/Value.cpp
-        rewrite/Stmt.h)
+        rewrite/Stmt.h
+        rewrite/Function.h
+        rewrite/CallFrame.h)
