@@ -8,15 +8,15 @@ OpCode ModuleReader::opcode() {
     return static_cast<OpCode>(read());
 }
 
-int64_t ModuleReader::integer() {
-    int64_t output = static_cast<int64_t>(read()) << 56;
-    output |= static_cast<int64_t>(read()) << 48;
-    output |= static_cast<int64_t>(read()) << 40;
-    output |= static_cast<int64_t>(read()) << 32;
-    output |= static_cast<int64_t>(read()) << 24;
-    output |= static_cast<int64_t>(read()) << 16;
-    output |= static_cast<int64_t>(read()) << 8;
-    output |= static_cast<int64_t>(read());
+bite_int ModuleReader::integer() {
+    bite_int output = static_cast<bite_int>(read()) << 56;
+    output |= static_cast<bite_int>(read()) << 48;
+    output |= static_cast<bite_int>(read()) << 40;
+    output |= static_cast<bite_int>(read()) << 32;
+    output |= static_cast<bite_int>(read()) << 24;
+    output |= static_cast<bite_int>(read()) << 16;
+    output |= static_cast<bite_int>(read()) << 8;
+    output |= static_cast<bite_int>(read());
     return output;
 }
 

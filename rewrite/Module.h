@@ -12,7 +12,7 @@ class Module {
 public:
     void write(OpCode code);
     void write(uint8_t data);
-    void write(int64_t integer);
+    void write(bite_int integer);
     void patch(int position, uint8_t data);
 
     int get_code_length();

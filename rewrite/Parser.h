@@ -82,7 +82,7 @@ private:
     Expr expression(Precedence precedence = Precedence::NONE);
     std::optional<Expr> prefix();
 
-    Expr integer() const;
+    Expr integer();
     Expr number() const;
     Expr keyword() const;
     Expr string() const;

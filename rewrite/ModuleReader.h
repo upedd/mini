@@ -8,7 +8,7 @@ class ModuleReader {
 public:
     uint8_t read();
     OpCode opcode();
-    int64_t integer();
+    bite_int integer();
     [[nodiscard]] bool at_end() const;
     void add_offset(int offset);
 

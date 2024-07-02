@@ -7,6 +7,7 @@
 #include <cmath>
 
 #include "common.h"
+#include "types.h"
 
 // disambiguation tag for nil value
 struct Nil {
@@ -36,7 +37,7 @@ inline constexpr Nil nil_t {};
 
 struct Function;
 
-using value_variant_t = std::variant<Nil, int64_t, double, bool, std::string, Function*>;
+using value_variant_t = std::variant<Nil, bite_int, double, bool, std::string, Function*>;
 
 class Value : public value_variant_t {
 public:
@@ -50,7 +51,7 @@ public:
     [[nodiscard]] std::string to_string() const {
         return std::visit(overloaded {
             [](Nil) {return std::string("Nil");},
-            [](int64_t value) {return std::to_string(value);},
+            [](bite_int value) {return std::to_string(value);},
             [](double value) {return std::to_string(value);},
             [](bool value) {return std::string(value ? "True" : "False");},
             [](const std::string& string) {return std::string("string: ") + string;},
@@ -59,7 +60,7 @@ public:
     }
 
     [[nodiscard]] bool is_integer() const {
-        return std::holds_alternative<int64_t>(*this);
+        return std::holds_alternative<bite_int>(*this);
     }
 
     [[nodiscard]] bool is_floating() const {
@@ -69,17 +70,17 @@ public:
          return is_integer() || is_floating();
      }
 
-    [[nodiscard]] int64_t get_integer() const {
-        return std::get<int64_t>(*this);
+    [[nodiscard]] bite_int get_integer() const {
+        return std::get<bite_int>(*this);
     }
 
     [[nodiscard]] double get_floating() const {
          return std::get<double>(*this);
      }
 
-    [[nodiscard]] int64_t convert_to_int() const {
+    [[nodiscard]] bite_int convert_to_int() const {
         if (is_integer()) return get_integer();
-        if (is_floating()) static_cast<int64_t>(get_floating());
+        if (is_floating()) static_cast<bite_int>(get_floating());
         throw Error("Expected type convertible to number");
     }
     [[nodiscard]] double convert_to_number() const {

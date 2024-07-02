@@ -8,7 +8,7 @@ void Module::write(uint8_t data) {
     code.push_back(data);
 }
 
-void Module::write(int64_t integer) {
+void Module::write(bite_int integer) {
     write(static_cast<uint8_t>(integer >> 56 & 0xFF));
     write(static_cast<uint8_t>(integer >> 48 & 0xFF));
     write(static_cast<uint8_t>(integer >> 40 & 0xFF));
