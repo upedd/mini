@@ -33,6 +33,8 @@ public:
 
     void call(const CallExpr& expr);
 
+    void return_statement(const ReturnStmt & stmt);
+
 private:
     void begin_scope();
 
@@ -63,7 +65,8 @@ private:
 
     int &get_current_depth();
     Function* get_current_function() const;
-    std::vector<std::pair<std::string, int>> get_current_locals();
+
+    std::vector<std::pair<std::string, int>> &get_current_locals();
 
     Module& current_module() const;
 

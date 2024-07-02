@@ -21,7 +21,9 @@ void CodeGenerator::visit_stmt(const Stmt& stmt) {
         [this](const BlockStmt& stmt) {block_statement(stmt);},
         [this](const IfStmt& stmt) {if_statement(stmt);},
         [this](const WhileStmt& stmt) {while_statement(stmt);},
-        [this](const FunctionStmt& stmt) {function_statement(stmt);}
+        [this](const FunctionStmt& stmt) {function_statement(stmt);},
+        [this](const ReturnStmt& stmt) {return_statement(stmt);},
+
     }, stmt);
 }
 
@@ -144,7 +146,7 @@ Function* CodeGenerator::get_current_function() const {
     return states.back().function;
 }
 
-std::vector<std::pair<std::string, int>> CodeGenerator::get_current_locals() {
+std::vector<std::pair<std::string, int>> &CodeGenerator::get_current_locals() {
     return states.back().locals;
 }
 
@@ -193,10 +195,16 @@ void CodeGenerator::function_statement(const FunctionStmt &stmt) {
     define_variable(function_name);
 
     states.emplace_back(function);
+    begin_scope();
+    define_variable(function_name);
     for (const Token& param : stmt.params) {
         define_variable(param.get_lexeme(source));
     }
     visit_stmt(*stmt.body);
+    // emit default retrun
+    current_module().write(OpCode::NIL);
+    current_module().write(OpCode::RETURN);
+    end_scope();
     states.pop_back();
 }
 
@@ -207,6 +215,15 @@ void CodeGenerator::call(const CallExpr &expr) {
     }
     current_module().write(OpCode::CALL);
     current_module().write(static_cast<uint8_t>(expr.arguments.size()));
+}
+
+void CodeGenerator::return_statement(const ReturnStmt &stmt) {
+    if (stmt.expr != nullptr) {
+        visit_expr(*stmt.expr);
+    } else {
+        current_module().write(OpCode::NIL);
+    }
+    current_module().write(OpCode::RETURN);
 }
 
 void CodeGenerator::if_statement(const IfStmt &stmt) {

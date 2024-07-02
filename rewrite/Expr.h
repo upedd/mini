@@ -61,6 +61,7 @@ inline std::string expr_to_string(const Expr& expr) {
         [](const StringLiteral& expr) {return expr.string;},
         [](const VariableExpr& expr) {return std::string("var"); },
         [](const AssigmentExpr& expr) {return std::string("assigment ") + expr_to_string(*expr.expr); },
+        [](const CallExpr& expr) {return std::string("call expression!"); },
 
     }, expr);
 }

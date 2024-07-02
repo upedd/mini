@@ -121,6 +121,18 @@ void VM::tick() {
             int arguments_count = reader.read();
             call_value(stack[stack.size() - arguments_count - 1], arguments_count);
             reader.set_frame(frames.back());
+            break;
+        }
+        case OpCode::RETURN: {
+            Value result = stack.back(); stack.pop_back();
+            // todo: check
+            // discard all values on stack!
+            while (stack.size() >= frames.back().frame_pointer) {
+                stack.pop_back();
+            }
+            frames.pop_back();
+            reader.set_frame(frames.back());
+            stack.push_back(result);
         }
     }
 

@@ -70,6 +70,8 @@ public:
 
     Stmt function_declaration();
 
+    Stmt return_statement();
+
     Stmt declaration();
 
     std::vector<Stmt> parse();

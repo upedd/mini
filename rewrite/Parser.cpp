@@ -250,6 +250,15 @@ Stmt Parser::function_declaration() {
     return FunctionStmt {.name = name, .params = std::move(parameters), .body = std::make_unique<Stmt>(std::move(body))};
 }
 
+Stmt Parser::return_statement() {
+    ExprHandle expr = nullptr;
+    if (!match(Token::Type::SEMICOLON)) {
+        expr = std::make_unique<Expr>(expression());
+        consume(Token::Type::SEMICOLON, "Exepected ';' after return value.");
+    }
+    return ReturnStmt {std::move(expr)};
+}
+
 Stmt Parser::declaration() {
     if (match(Token::Type::LET)) {
         return var_declaration();
@@ -265,6 +274,9 @@ Stmt Parser::declaration() {
     }
     if (match(Token::Type::FUN)) {
         return function_declaration();
+    }
+    if (match(Token::Type::RETURN)) {
+        return return_statement();
     }
     return expr_statement();
 }
