@@ -84,7 +84,7 @@ std::expected<Token, Lexer::Error> Lexer::next_token() {
         case '"':
             return string();
         default: {
-            if (is_digit(c)) {
+            if (is_digit(c)) { // TODO: number literals should be able to start with dot
                 return integer_or_number();
             }
             if (is_identifier(c)) {
@@ -208,8 +208,7 @@ std::expected<Token, Lexer::Error> Lexer::string() {
 }
 
 Token Lexer::integer_or_number() {
-    // TODO: handle more complex floating point literals
-    while (is_hex_digit(current()) || current() == '_' || current() == 'x' || current() == 'X') {
+    while (is_number_literal_char(current())) {
         advance();
     }
     // if no dot separator
@@ -217,7 +216,7 @@ Token Lexer::integer_or_number() {
         return make_token(Token::Type::INTEGER);
     }
     // handle part after dot
-    while (is_digit(current())) {
+    while (is_number_literal_char(current())) {
         advance();
     }
     return make_token(Token::Type::NUMBER);

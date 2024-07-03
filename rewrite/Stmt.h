@@ -55,7 +55,7 @@ struct ReturnStmt {
 inline std::string stmt_to_string(const Stmt& stmt, std::string_view source) {
     return std::visit(overloaded {
         [source](const VarStmt& stmt) {
-            return std::format("(define {} {}", stmt.name.get_lexeme(source), expr_to_string(*stmt.value, source));
+            return std::format("(define {} {})", stmt.name.get_lexeme(source), expr_to_string(*stmt.value, source));
         },
         [source](const ExprStmt& stmt) {
             return expr_to_string(*stmt.expr, source);

@@ -77,4 +77,6 @@ add_executable(rewrite rewrite/main.cpp
         rewrite/Stmt.h
         rewrite/Function.h
         rewrite/CallFrame.h
-        rewrite/types.h)
+        rewrite/types.h
+        rewrite/conversions.h
+        rewrite/conversions.cpp)

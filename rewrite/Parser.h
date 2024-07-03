@@ -83,7 +83,7 @@ private:
     std::optional<Expr> prefix();
 
     Expr integer();
-    Expr number() const;
+    Expr number();
     Expr keyword() const;
     Expr string() const;
     Expr identifier();

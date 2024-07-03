@@ -2,6 +2,8 @@
 
 #include <cassert>
 
+#include "conversions.h"
+
 void Parser::error(const Token &token, std::string_view message) {
     if (panic_mode) return;
     panic_mode = true;
@@ -270,9 +272,13 @@ Expr Parser::integer() {
     return LiteralExpr {*result};
 }
 
-Expr Parser::number() const {
-    // todo better number parsing
-    return LiteralExpr{std::stod(current.get_lexeme(lexer.get_source()))};
+Expr Parser::number() {
+    std::string literal = current.get_lexeme(lexer.get_source());
+    std::expected<double, ConversionError> result = string_to_floating(literal);
+    if (!result) {
+        error(current, result.error().what());
+    }
+    return LiteralExpr {*result};
 }
 
 Expr Parser::string() const {
