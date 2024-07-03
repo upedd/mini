@@ -11,12 +11,47 @@ class Compiler {
 public:
     class Error : public std::runtime_error {
     public:
-        explicit Error(const std::string& message) : runtime_error(message) {}
+        explicit Error(const std::string &message) : runtime_error(message) {
+        }
     };
+
+    class Locals {
+    public:
+        [[nodiscard]] int get(const std::string &name) const;
+
+        [[nodiscard]] bool contains(const std::string &name, int depth) const;
+
+        bool define(const std::string &name, int depth);
+
+        // returns number of elements that have been erased
+        int erase_above(int depth);
+
+    private:
+        std::vector<std::pair<std::string, int> > locals;
+    };
+
+    class JumpDestination {
+    public:
+        explicit JumpDestination(const int position) : position(position) {}
+
+        void make_jump(Program& program) const;
+    private:
+        int position;
+    };
+
+    class JumpHandle {
+    public:
+        explicit JumpHandle( const int instruction_position) : instruction_position(instruction_position) {}
+
+        void mark_destination(Program &program) const;
+    private:
+        int instruction_position;
+    };
+
     struct State {
-        Function* function = nullptr;
+        Function *function = nullptr;
         int current_depth = 0;
-        std::vector<std::pair<std::string, int>> locals;
+        Locals locals;
     };
 
     explicit Compiler(std::string_view source) : parser(source), source(source), main("", 0) {
@@ -25,63 +60,73 @@ public:
 
     void compile();
 
-    [[nodiscard]] const Function& get_main() const;
+    [[nodiscard]] const Function &get_main() const;
 
     Module get_module();
-    Function* get_function();
+
+    Function *get_function();
 
     void define_variable(const std::string &name);
 
-    void function_declration(const FunctionStmt & stmt);
+    void function_declaration(const FunctionStmt &stmt);
 
-    void call(const CallExpr& expr);
+    void call(const CallExpr &expr);
 
-    void return_statement(const ReturnStmt & stmt);
+    void return_statement(const ReturnStmt &stmt);
 
 private:
     void emit(OpCode op_code);
+
     void emit(bite_byte byte);
 
     void begin_scope();
 
     void end_scope();
 
-    Program& current_program();
+    Program &current_program() const;
 
-    void while_statement(const WhileStmt & stmt);
-    void block_statement(const BlockStmt & stmt);
-    void assigment(const AssigmentExpr & expr);
-    void expr_statement(const ExprStmt & expr);
-    void if_statement(const IfStmt & stmt);
-    void variable(const VariableExpr& expr);
-    void variable_declaration(const VarStmt & expr);
+    void while_statement(const WhileStmt &stmt);
+
+    void block_statement(const BlockStmt &stmt);
+
+    void assigment(const AssigmentExpr &expr);
+
+    void expr_statement(const ExprStmt &expr);
+
+    void if_statement(const IfStmt &stmt);
+
+    void variable(const VariableExpr &expr);
+
+    void variable_declaration(const VarStmt &expr);
+
     void literal(const LiteralExpr &expr);
 
     void visit_expr(const Expr &expr);
 
     void visit_stmt(const Stmt &stmt);
 
-    void unary(const UnaryExpr & expr);
+    void unary(const UnaryExpr &expr);
 
-    void logical(const BinaryExpr & expr);
+    void logical(const BinaryExpr &expr);
 
-    void binary(const BinaryExpr & expr);
-    void string_literal(const StringLiteral& expr);
+    void binary(const BinaryExpr &expr);
 
-    int start_jump(OpCode code);
-    void patch_jump(int instruction_pos);
+    void string_literal(const StringLiteral &expr);
 
     int &get_current_depth();
 
-    Function* current_function() const;
-    std::vector<std::pair<std::string, int>> &get_current_locals();
+    Function *current_function() const;
+
+    Locals &current_locals();
+
+    [[nodiscard]] JumpDestination mark_destination() const;
+    JumpHandle start_jump(OpCode op_code);
 
     Parser parser;
     Function main;
     std::vector<State> states;
     std::string_view source;
 };
-
 
 
 #endif //COMPILER_H

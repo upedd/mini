@@ -5,7 +5,7 @@
 void Compiler::visit_stmt(const Stmt &statement) {
     std::visit(overloaded{
                    [this](const VarStmt &stmt) { variable_declaration(stmt); },
-                   [this](const FunctionStmt &stmt) { function_declration(stmt); },
+                   [this](const FunctionStmt &stmt) { function_declaration(stmt); },
                    [this](const ExprStmt &stmt) { expr_statement(stmt); },
                    [this](const BlockStmt &stmt) { block_statement(stmt); },
                    [this](const IfStmt &stmt) { if_statement(stmt); },
@@ -15,35 +15,29 @@ void Compiler::visit_stmt(const Stmt &statement) {
 }
 
 void Compiler::variable_declaration(const VarStmt &expr) {
-    for (int i = get_current_locals().size() - 1; i >= 0; --i) {
-        auto &[name, depth] = get_current_locals()[i];
-        if (depth < get_current_depth()) {
-            break;
-        }
-        if (name == expr.name.get_lexeme(source)) {
-            throw Error("Variable redeclaration is disallowed.");
-        }
-    }
+    auto name = expr.name.get_lexeme(source);
     visit_expr(*expr.value);
-    get_current_locals().emplace_back(expr.name.get_lexeme(source), get_current_depth());
+    if (!current_locals().define(name, get_current_depth())) {
+        throw Error("Variable redefinition in same scope is disallowed."); // todo: better error handling!
+    }
 }
 
-void Compiler::function_declration(const FunctionStmt &stmt) {
+void Compiler::function_declaration(const FunctionStmt &stmt) {
     std::string function_name = std::string(stmt.name.get_lexeme(source));
-    Function *function = allocate_function();
-    function->name = function_name;
-    function->arity = stmt.params.size();
+    Function *function = new Function(function_name, stmt.params.size()); // TODO: memory leak!
 
-    int constant = current_function().add_constant(function);
+    int constant = current_function()->add_constant(function);
     emit(OpCode::CONSTANT);
     emit(static_cast<uint8_t>(constant));
-    define_variable(function_name);
+    if (!current_locals().define(stmt.name.get_lexeme(source), get_current_depth())) {
+        throw Error("Variable redefinition in same scope is disallowed."); // todo: better error handling!
+    }
 
     states.emplace_back(function);
     begin_scope();
     define_variable(function_name);
     for (const Token &param: stmt.params) {
-        define_variable(param.get_lexeme(source));
+        current_locals().define(param.get_lexeme(source), get_current_depth());
     }
     visit_stmt(*stmt.body);
     // emit default retrun
@@ -68,29 +62,27 @@ void Compiler::block_statement(const BlockStmt &stmt) {
 
 void Compiler::if_statement(const IfStmt &stmt) {
     visit_expr(*stmt.condition);
-    int jump_to_else = start_jump(OpCode::JUMP_IF_FALSE);
+    auto jump_to_else = start_jump(OpCode::JUMP_IF_FALSE);
     emit(OpCode::POP);
     visit_stmt(*stmt.then_stmt);
-    int jump_to_end = start_jump(OpCode::JUMP);
-    patch_jump(jump_to_else);
+    auto jump_to_end = start_jump(OpCode::JUMP);
+    jump_to_else.mark_destination(current_program());
     emit(OpCode::POP);
     if (stmt.else_stmt) {
         visit_stmt(*stmt.else_stmt);
     }
-    patch_jump(jump_to_end);
+    jump_to_end.mark_destination(current_program());
 }
 
 void Compiler::while_statement(const WhileStmt &stmt) {
-    int loop_start = current_program().size();
+    auto destination = mark_destination();
     visit_expr(*stmt.condition);
-    int jump = start_jump(OpCode::JUMP_IF_FALSE);
+    auto jump_to_end = start_jump(OpCode::JUMP_IF_FALSE);
     emit(OpCode::POP);
     visit_stmt(*stmt.stmt);
     emit(OpCode::LOOP);
-    int offset = current_program().size() - loop_start + 2;
-    emit(static_cast<uint8_t>(offset >> 8 & 0xFF));
-    emit(static_cast<uint8_t>(offset & 0xFF));
-    patch_jump(jump);
+    destination.make_jump(current_program());
+    jump_to_end.mark_destination(current_program());
     emit(OpCode::POP);
 }
 
@@ -183,37 +175,27 @@ void Compiler::binary(const BinaryExpr &expr) {
 }
 
 void Compiler::logical(const BinaryExpr &expr) {
-    int jump = start_jump(expr.op == Token::Type::AND_AND ? OpCode::JUMP_IF_FALSE : OpCode::JUMP_IF_TRUE);
+    auto jump = start_jump(expr.op == Token::Type::AND_AND ? OpCode::JUMP_IF_FALSE : OpCode::JUMP_IF_TRUE);
     emit(OpCode::POP);
     visit_expr(*expr.right);
-    patch_jump(jump);
+    jump.mark_destination(current_program());
 }
 
 void Compiler::string_literal(const StringLiteral &expr) {
-    int index = current_module().add_string_constant(expr.string);
+    int index = current_function()->add_constant(expr.string);
     emit(OpCode::CONSTANT);
     emit(index); // handle overflow!!!
 }
 
 void Compiler::variable(const VariableExpr &expr) {
-    int idx = -1;
-    for (int i = get_current_locals().size() - 1; i >= 0; --i) {
-        if (expr.identifier.get_lexeme(source) == get_current_locals()[i].first) {
-            idx = i;
-        }
-    }
+    int idx = current_locals().get(expr.identifier.get_lexeme(source));
     assert(idx != -1); // todo: error handling
     emit(OpCode::GET);
-    emit(static_cast<uint8_t>(idx)); // todo: handle overflow
+    emit(idx); // todo: handle overflow
 }
 
 void Compiler::assigment(const AssigmentExpr &expr) {
-    int idx = -1;
-    for (int i = get_current_locals().size() - 1; i >= 0; --i) {
-        if (expr.identifier.get_lexeme(source) == get_current_locals()[i].first) {
-            idx = i;
-        }
-    }
+    int idx = current_locals().get(expr.identifier.get_lexeme(source));
     assert(idx != -1); // todo: error handling
     visit_expr(*expr.expr);
     emit(OpCode::SET);
@@ -230,20 +212,6 @@ void Compiler::call(const CallExpr &expr) {
     emit(static_cast<uint8_t>(expr.arguments.size()));
 }
 
-int Compiler::start_jump(OpCode code) {
-    emit(code);
-    emit(0xFF);
-    emit(0xFF);
-    return current_module().get_code_length() - 3; // start position of jump instruction
-}
-
-void Compiler::patch_jump(int instruction_pos) {
-    int offset = current_module().get_code_length() - instruction_pos - 3;
-    // check jump
-    current_module().patch(instruction_pos + 1, static_cast<uint8_t>(offset >> 8 & 0xFF));
-    current_module().patch(instruction_pos + 2, static_cast<uint8_t>(offset & 0xFF));
-}
-
 int &Compiler::get_current_depth() {
     return states.back().current_depth;
 }
@@ -252,8 +220,64 @@ Function *Compiler::current_function() const {
     return states.back().function;
 }
 
-std::vector<std::pair<std::string, int> > &Compiler::get_current_locals() {
+Compiler::Locals& Compiler::current_locals() {
     return states.back().locals;
+}
+
+Compiler::JumpDestination Compiler::mark_destination() const {
+    return JumpDestination(current_program().size());
+}
+
+Compiler::JumpHandle Compiler::start_jump(OpCode op_code) {
+    emit(op_code);
+    emit(0xFF);
+    emit(0xFF);
+    return JumpHandle(current_program().size() - 3);
+}
+
+int Compiler::Locals::get(const std::string &name) const {
+    for (int i = locals.size(); i >= 0; --i) {
+        if (locals[i].first == name) return i;
+    }
+    return -1;
+}
+
+bool Compiler::Locals::contains(const std::string &name, int depth) const {
+    for (int i = locals.size(); i >= 0; --i) {
+        auto& [local_name, local_depth] = locals[i];
+        if (local_depth < depth) break;
+
+        if (local_name == name) return true;
+    }
+    return false;
+}
+
+bool Compiler::Locals::define(const std::string &name, int depth) {
+    if (contains(name, depth)) return false;
+    locals.emplace_back(name, depth);
+    return true;
+}
+
+int Compiler::Locals::erase_above(const int depth) {
+    int cnt = 0;
+    while (!locals.empty() && locals.back().second > depth) {
+        locals.pop_back();
+        ++cnt;
+    }
+    return cnt;
+}
+
+void Compiler::JumpDestination::make_jump(Program &program) const {
+    int offset = program.size() - position + 2;
+    program.write(static_cast<uint8_t>(offset >> 8 & 0xFF));
+    program.write(static_cast<uint8_t>(offset & 0xFF));
+}
+
+void Compiler::JumpHandle::mark_destination(Program &program) const {
+    int offset = program.size() - instruction_position - 3;
+    // check jump
+    program.patch(instruction_position + 1, static_cast<uint8_t>(offset >> 8 & 0xFF));
+    program.patch(instruction_position + 2, static_cast<uint8_t>(offset & 0xFF));
 }
 
 void Compiler::compile() {
@@ -265,27 +289,6 @@ void Compiler::compile() {
 const Function &Compiler::get_main() const {
     return main;
 }
-
-Function *Compiler::get_function() {
-    return current_function();
-}
-
-void Compiler::define_variable(const std::string &variable_name) {
-    for (int i = get_current_locals().size() - 1; i >= 0; --i) {
-        auto &[name, depth] = get_current_locals()[i];
-        if (depth < get_current_depth()) {
-            break;
-        }
-        if (name == variable_name) {
-            throw Error("Function redeclaration is disallowed.");
-        }
-    }
-    get_current_locals().emplace_back(variable_name, get_current_depth());
-}
-
-
-
-
 
 void Compiler::emit(OpCode op_code) {
     current_function()->get_program().write(op_code);
@@ -302,17 +305,13 @@ void Compiler::begin_scope() {
 
 void Compiler::end_scope() {
     --get_current_depth();
-    while (!get_current_locals().empty() && get_current_locals().back().second > get_current_depth()) {
+    int erased_cnt = current_locals().erase_above(get_current_depth());
+    // optim: maybe some pop many instruction
+    for (int i = 0; i < erased_cnt; ++i) {
         emit(OpCode::POP);
-        get_current_locals().pop_back();
     }
 }
 
-Program &Compiler::current_program() {
+Program &Compiler::current_program() const {
     return current_function()->get_program();
 }
-
-
-
-
-
