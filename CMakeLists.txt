@@ -63,8 +63,8 @@ add_executable(rewrite rewrite/main.cpp
         rewrite/Parser.cpp
         rewrite/Parser.h
         rewrite/Expr.h
-        rewrite/CodeGenerator.cpp
-        rewrite/CodeGenerator.h
+        rewrite/Compiler.cpp
+        rewrite/Compiler.h
         rewrite/Module.cpp
         rewrite/Module.h
         rewrite/OpCode.h
@@ -79,4 +79,7 @@ add_executable(rewrite rewrite/main.cpp
         rewrite/CallFrame.h
         rewrite/types.h
         rewrite/conversions.h
-        rewrite/conversions.cpp)
+        rewrite/conversions.cpp
+        rewrite/Program.cpp
+        rewrite/Program.h
+        rewrite/Function.cpp)

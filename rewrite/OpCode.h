@@ -1,8 +1,9 @@
 #ifndef OPCODE_H
 #define OPCODE_H
-#include <cstdint>
 
-enum class OpCode : uint8_t {
+#include "types.h"
+
+enum class OpCode : bite_byte {
     ADD,
     MULTIPLY,
     SUBTRACT,

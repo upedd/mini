@@ -2,7 +2,7 @@
 #include <iostream>
 #include <sstream>
 
-#include "CodeGenerator.h"
+#include "Compiler.h"
 #include "Lexer.h"
 #include "Parser.h"
 #include "VM.h"
@@ -26,7 +26,7 @@ int main() {
         std::cout << stmt_to_string(stmt, source) << '\n';
     }
     if (parser.get_errors().empty()) {
-        CodeGenerator code_gen;
+        Compiler code_gen;
         code_gen.generate(stmts, source);
         auto* func = code_gen.get_function();
         VM vm(func);
