@@ -106,7 +106,7 @@ std::optional<ConversionError> validate_floating_string(const std::string& strin
     return {};
 }
 
-std::expected<double, ConversionError> string_to_floating(const std::string &string) {
+std::expected<bite_float, ConversionError> string_to_floating(const std::string &string) {
     std::string number = remove_digit_separator(string);
     if (auto error = validate_floating_string(string)) return std::unexpected(*error);
 

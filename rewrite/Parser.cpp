@@ -274,7 +274,7 @@ Expr Parser::integer() {
 
 Expr Parser::number() {
     std::string literal = current.get_lexeme(lexer.get_source());
-    std::expected<double, ConversionError> result = string_to_floating(literal);
+    std::expected<bite_float, ConversionError> result = string_to_floating(literal);
     if (!result) {
         error(current, result.error().what());
     }

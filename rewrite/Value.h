@@ -37,7 +37,7 @@ inline constexpr Nil nil_t {};
 
 struct Function;
 
-using value_variant_t = std::variant<Nil, bite_int, double, bool, std::string, Function*>;
+using value_variant_t = std::variant<Nil, bite_int, bite_float, bool, std::string, Function*>;
 
 class Value : public value_variant_t {
 public:
@@ -52,7 +52,7 @@ public:
         return std::visit(overloaded {
             [](Nil) {return std::string("Nil");},
             [](bite_int value) {return std::to_string(value);},
-            [](double value) {return std::to_string(value);},
+            [](bite_float value) {return std::to_string(value);},
             [](bool value) {return std::string(value ? "True" : "False");},
             [](const std::string& string) {return std::string("string: ") + string;},
                 [](Function* func) {return std::string("func");}
@@ -64,7 +64,7 @@ public:
     }
 
     [[nodiscard]] bool is_floating() const {
-        return std::holds_alternative<double>(*this);
+        return std::holds_alternative<bite_float>(*this);
     }
     [[nodiscard]] bool is_number() const {
          return is_integer() || is_floating();
@@ -74,8 +74,8 @@ public:
         return std::get<bite_int>(*this);
     }
 
-    [[nodiscard]] double get_floating() const {
-         return std::get<double>(*this);
+    [[nodiscard]] bite_float get_floating() const {
+         return std::get<bite_float>(*this);
      }
 
     [[nodiscard]] bite_int convert_to_int() const {
@@ -83,9 +83,9 @@ public:
         if (is_floating()) static_cast<bite_int>(get_floating());
         throw Error("Expected type convertible to number");
     }
-    [[nodiscard]] double convert_to_number() const {
+    [[nodiscard]] bite_float convert_to_number() const {
         if (is_floating()) return get_floating();
-        if (is_integer()) return static_cast<double>(get_integer());
+        if (is_integer()) return static_cast<bite_float>(get_integer());
         throw Error("Expected type convertible to number");
     }
 

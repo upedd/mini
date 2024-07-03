@@ -13,6 +13,6 @@ public:
 // todo: comments!
 std::expected<bite_int, ConversionError> string_to_int(const std::string& string);
 
-std::expected<double, ConversionError> string_to_floating(const std::string& string);
+std::expected<bite_float, ConversionError> string_to_floating(const std::string& string);
 
 #endif //CONVERSIONS_H
