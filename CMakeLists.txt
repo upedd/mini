@@ -78,4 +78,6 @@ add_executable(rewrite rewrite/main.cpp
         rewrite/conversions.cpp
         rewrite/Program.cpp
         rewrite/Program.h
-        rewrite/Function.cpp)
+        rewrite/Function.cpp
+        rewrite/debug.h
+)
