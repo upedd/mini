@@ -5,148 +5,179 @@
 #include "Function.h"
 
 
-void VM::call_value(Value &value, int arguments_count) {
-    Function* function = std::get<Function*>(value); // error check!
-    frames.emplace_back(function, 0, stack.size() - arguments_count - 1);
+uint8_t VM::fetch() {
+    CallFrame &frame = frames.back();
+    return frame.function->get_program().get_at(frame.instruction_pointer++);
 }
 
-void VM::tick() {
-    auto& frame = frames.back();
-    reader.set_frame(frame);
+OpCode VM::fetch_opcode() {
+    return static_cast<OpCode>(fetch());
+}
 
+uint16_t VM::fetch_short() {
+    return static_cast<uint16_t>(fetch()) << 8 | fetch();
+}
+
+void VM::jump_by_offset(int offset) {
+    frames.back().instruction_pointer += offset;
+}
+
+Value VM::get_constant(const int idx) const {
+    return frames.back().function->get_constant(idx);
+}
+
+Value VM::pop() {
+    auto value = peek();
+    stack.pop_back();
+    return value;
+}
+
+Value VM::peek(const int n) const {
+    return stack[stack.size() - n - 1];
+}
+
+void VM::push(const Value &value) {
+    stack.push_back(value);
+}
+
+Value VM::get_from_slot(int index) {
+    return stack[frames.back().frame_pointer + index];
+}
+
+void VM::set_in_slot(const int index, const Value &value) {
+    stack[frames.back().frame_pointer + index] = value;
+}
+
+
+std::optional<VM::RuntimeError> VM::call_value(const Value &value, const int arguments_count) {
+    std::optional<Function*> function = value.as<Function*>();
+    if (!function) {
+        return RuntimeError("Expected callable value such as function or class");
+    }
+    if (arguments_count != function.value()->get_arity()) {
+        return RuntimeError(std::format("Expected {} but got {} arguments", function.value()->get_arity(), arguments_count));
+    }
+    frames.emplace_back(*function, 0, stack.size() - arguments_count - 1);
+    return {};
+}
+
+std::expected<Value, VM::RuntimeError> VM::run() {
 #define BINARY_OPERATION(op) { \
-    auto b = stack.back(); \
-    stack.pop_back(); \
-    auto a = stack.back(); \
-    stack.pop_back(); \
-    stack.emplace_back(a.op(b)); \
+    auto b = pop(); \
+    auto a = pop(); \
+    push(a.op(b)); \
     break; \
 }
-
-    OpCode code = reader.opcode();
-    switch (code) {
-        case OpCode::CONSTANT: {
-            int8_t index = reader.read();
-            stack.push_back(reader.get_constant(index));
-            break;
-        }
-        case OpCode::ADD: BINARY_OPERATION(add)
-        case OpCode::MULTIPLY: BINARY_OPERATION(multiply)
-        case OpCode::SUBTRACT: BINARY_OPERATION(subtract)
-        case OpCode::DIVIDE: BINARY_OPERATION(divide)
-        case OpCode::EQUAL: BINARY_OPERATION(equals)
-        case OpCode::NOT_EQUAL: BINARY_OPERATION(not_equals)
-        case OpCode::LESS: BINARY_OPERATION(less)
-        case OpCode::LESS_EQUAL: BINARY_OPERATION(less_equal)
-        case OpCode::GREATER: BINARY_OPERATION(greater)
-        case OpCode::GREATER_EQUAL: BINARY_OPERATION(greater_equal)
-        case OpCode::RIGHT_SHIFT: BINARY_OPERATION(shift_left)
-        case OpCode::LEFT_SHIFT: BINARY_OPERATION(shift_right)
-        case OpCode::BITWISE_AND: BINARY_OPERATION(binary_and)
-        case OpCode::BITWISE_OR: BINARY_OPERATION(binary_or)
-        case OpCode::BITWISE_XOR: BINARY_OPERATION(binary_xor)
-        case OpCode::MODULO: BINARY_OPERATION(modulo)
-        case OpCode::FLOOR_DIVISON: BINARY_OPERATION(floor_divide)
-        case OpCode::NEGATE: {
-            // optim just negate top?
-            auto top = stack.back();
-            stack.pop_back();
-            stack.emplace_back(top.multiply(-1));
-            break;
-        }
-        case OpCode::TRUE: {
-            stack.emplace_back(true);
-            break;
-        }
-        case OpCode::FALSE: {
-            stack.emplace_back(false);
-            break;
-        }
-        case OpCode::NIL: {
-            stack.emplace_back(nil_t);
-            break;
-        }
-        case OpCode::POP: {
-            stack.pop_back();
-            break;
-        }
-        case OpCode::GET: {
-            int idx = reader.read();
-            stack.push_back(stack[frame.frame_pointer + idx]); // handle overflow?
-            break;
-        }
-        case OpCode::SET: {
-            int idx = reader.read();
-            stack[frame.frame_pointer + idx] = stack.back();
-            break;
-        }
-        case OpCode::JUMP_IF_FALSE: {
-            int offset = (static_cast<int>(reader.read()) << 8) | static_cast<int>(reader.read());
-            // todo better check
-            bool cond = std::get<bool>(stack.back());
-            if (!cond) {
-                reader.add_offset(offset);
-            }
-            break;
-        }
-        case OpCode::JUMP_IF_TRUE: {
-            int offset = (static_cast<int>(reader.read()) << 8) | static_cast<int>(reader.read());
-            // todo better check
-            bool cond = std::get<bool>(stack.back());
-            if (cond) {
-                reader.add_offset(offset);
-            }
-            break;
-        }
-        case OpCode::JUMP: {
-            int offset = (static_cast<int>(reader.read()) << 8) | static_cast<int>(reader.read());
-            reader.add_offset(offset);
-            break;
-        }
-        case OpCode::LOOP: {
-            int offset = (static_cast<int>(reader.read()) << 8) | static_cast<int>(reader.read());
-            reader.add_offset(-offset);
-            break;
-        }
-        case OpCode::NOT: {
-            bool cond = std::get<bool>(stack.back()); stack.pop_back();
-            stack.emplace_back(!cond);
-            break;
-        }
-        case OpCode::BINARY_NOT: {
-            auto value = stack.back(); stack.pop_back();
-            stack.emplace_back(value.binary_not());
-        }
-        case OpCode::CALL: {
-            int arguments_count = reader.read();
-            call_value(stack[stack.size() - arguments_count - 1], arguments_count);
-            reader.set_frame(frames.back());
-            break;
-        }
-        case OpCode::RETURN: {
-            Value result = stack.back(); stack.pop_back();
-            // todo: check
-            // discard all values on stack!
-            while (stack.size() >= frames.back().frame_pointer) {
-                stack.pop_back();
-            }
-            frames.pop_back();
-            reader.set_frame(frames.back());
-            stack.push_back(result);
-        }
-    }
-
-#undef BINARY_OPERATION
-}
-
-void VM::run() {
-    while (!reader.at_end()) {
-        tick();
-
-        // todo temp debug
+    while (true) {
         for (auto &x: stack) {
             std::cout << x.to_string() << ' ';
         }
         std::cout << '\n';
+        switch (fetch_opcode()) {
+            case OpCode::CONSTANT: {
+                uint8_t index = fetch();
+                push(get_constant(index));
+                break;
+            }
+            case OpCode::ADD: BINARY_OPERATION(add)
+            case OpCode::MULTIPLY: BINARY_OPERATION(multiply)
+            case OpCode::SUBTRACT: BINARY_OPERATION(subtract)
+            case OpCode::DIVIDE: BINARY_OPERATION(divide)
+            case OpCode::EQUAL: BINARY_OPERATION(equals)
+            case OpCode::NOT_EQUAL: BINARY_OPERATION(not_equals)
+            case OpCode::LESS: BINARY_OPERATION(less)
+            case OpCode::LESS_EQUAL: BINARY_OPERATION(less_equal)
+            case OpCode::GREATER: BINARY_OPERATION(greater)
+            case OpCode::GREATER_EQUAL: BINARY_OPERATION(greater_equal)
+            case OpCode::RIGHT_SHIFT: BINARY_OPERATION(shift_left)
+            case OpCode::LEFT_SHIFT: BINARY_OPERATION(shift_right)
+            case OpCode::BITWISE_AND: BINARY_OPERATION(binary_and)
+            case OpCode::BITWISE_OR: BINARY_OPERATION(binary_or)
+            case OpCode::BITWISE_XOR: BINARY_OPERATION(binary_xor)
+            case OpCode::MODULO: BINARY_OPERATION(modulo)
+            case OpCode::FLOOR_DIVISON: BINARY_OPERATION(floor_divide)
+            case OpCode::NEGATE: {
+                // optim just negate top?
+                auto top = pop();
+                push(top.multiply(-1));
+                break;
+            }
+            case OpCode::TRUE: {
+                push(true);
+                break;
+            }
+            case OpCode::FALSE: {
+                push(false);
+                break;
+            }
+            case OpCode::NIL: {
+                push(nil_t);
+                break;
+            }
+            case OpCode::POP: {
+                pop();
+                break;
+            }
+            case OpCode::GET: {
+                int idx = fetch();
+                push(get_from_slot(idx)); // handle overflow?
+                break;
+            }
+            case OpCode::SET: {
+                int idx = fetch();
+                set_in_slot(idx, peek());
+                break;
+            }
+            case OpCode::JUMP_IF_FALSE: {
+                int offset = fetch_short();
+                if (peek().is_falsey()) {
+                    jump_by_offset(offset);
+                }
+                break;
+            }
+            case OpCode::JUMP_IF_TRUE: {
+                int offset = fetch_short();
+                if (!peek().is_falsey()) {
+                    jump_by_offset(offset);
+                }
+                break;
+            }
+            case OpCode::JUMP: {
+                int offset = fetch_short();
+                jump_by_offset(offset);
+                break;
+            }
+            case OpCode::LOOP: {
+                int offset = fetch_short();
+                jump_by_offset(-offset);
+                break;
+            }
+            case OpCode::NOT: {
+                std::optional<bool> condition = pop().as<bool>();
+                if (!condition)
+                    return std::unexpected(RuntimeError("Negation is only supported on boolean type."));
+                push(!condition.value());
+                break;
+            }
+            case OpCode::BINARY_NOT: {
+                auto value = pop();
+                push(value.binary_not());
+            }
+            case OpCode::CALL: {
+                int arguments_count = fetch();
+                if (auto error = call_value(peek(arguments_count), arguments_count)) {
+                    return std::unexpected(*error);
+                }
+                break;
+            }
+            case OpCode::RETURN: {
+                Value result = pop();
+                pop(); // pop function
+                frames.pop_back();
+                push(result);
+                if (frames.empty()) return pop();
+            }
+        }
     }
+#undef BINARY_OPERATION
 }

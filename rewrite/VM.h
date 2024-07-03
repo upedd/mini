@@ -4,8 +4,6 @@
 #include <vector>
 
 #include "CallFrame.h"
-#include "Module.h"
-#include "ModuleReader.h"
 
 class VM {
 public:
@@ -16,15 +14,23 @@ public:
 
     explicit VM(Function* function) {
         frames.emplace_back(function, 0, 0);
-        reader.set_frame(frames.back());
     }
 
-    void call_value(Value& value, int arguments_count);
+    uint8_t fetch();
+    OpCode fetch_opcode();
+    uint16_t fetch_short();
+    void jump_by_offset(int offset);
+    [[nodiscard]] Value get_constant(int idx) const;
+    Value pop();
+    [[nodiscard]] Value peek(int n = 0) const;
+    void push(const Value& value);
+    Value get_from_slot(int index);
+    void set_in_slot(int index, const Value &value);
 
-    void tick();
-    void run();
+    std::optional<RuntimeError> call_value(const Value &value, int arguments_count);
+
+    std::expected<Value, RuntimeError> run();
 private:
-    ModuleReader reader;
     std::vector<Value> stack; // optim: should stack could be fixed array?
     std::vector<CallFrame> frames;
 };

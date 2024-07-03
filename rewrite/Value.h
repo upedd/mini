@@ -5,6 +5,7 @@
 #include <string>
 #include <stdexcept>
 #include <cmath>
+#include <optional>
 
 #include "common.h"
 #include "types.h"
@@ -57,6 +58,30 @@ public:
             [](const std::string& string) {return std::string("string: ") + string;},
                 [](Function* func) {return std::string("func");}
         }, *this);
+    }
+
+    template<typename T>
+    [[nodiscard]] std::optional<T> as() const {
+        if (is<T>()) {
+            return get<T>();
+        }
+        return {};
+    }
+
+    template<typename T>
+    [[nodiscard]] T get() const {
+        return std::get<T>(*this);
+    }
+
+    template<typename T>
+    [[nodiscard]] bool is() const {
+        return std::holds_alternative<T>(*this);
+    }
+
+    [[nodiscard]] bool is_falsey() const {
+        if (is<bool>()) return get<bool>();
+        if (is<Nil>()) return false;
+        return true;
     }
 
     [[nodiscard]] bool is_integer() const {

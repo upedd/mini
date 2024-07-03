@@ -2,7 +2,6 @@
 #define COMPILER_H
 #include "Expr.h"
 #include "Function.h"
-#include "Module.h"
 #include "Parser.h"
 #include "Stmt.h"
 
@@ -61,8 +60,6 @@ public:
     void compile();
 
     [[nodiscard]] const Function &get_main() const;
-
-    Module get_module();
 
     Function *get_function();
 

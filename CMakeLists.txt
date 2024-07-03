@@ -65,13 +65,9 @@ add_executable(rewrite rewrite/main.cpp
         rewrite/Expr.h
         rewrite/Compiler.cpp
         rewrite/Compiler.h
-        rewrite/Module.cpp
-        rewrite/Module.h
         rewrite/OpCode.h
         rewrite/VM.cpp
         rewrite/VM.h
-        rewrite/ModuleReader.cpp
-        rewrite/ModuleReader.h
         rewrite/Value.h
         rewrite/Value.cpp
         rewrite/Stmt.h

@@ -3,8 +3,6 @@
 #include <sstream>
 
 #include "Compiler.h"
-#include "Lexer.h"
-#include "Parser.h"
 #include "VM.h"
 
 int main() {

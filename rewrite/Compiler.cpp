@@ -29,13 +29,13 @@ void Compiler::function_declaration(const FunctionStmt &stmt) {
     int constant = current_function()->add_constant(function);
     emit(OpCode::CONSTANT);
     emit(static_cast<uint8_t>(constant));
-    if (!current_locals().define(stmt.name.get_lexeme(source), get_current_depth())) {
+    if (!current_locals().define(function_name, get_current_depth())) {
         throw Error("Variable redefinition in same scope is disallowed."); // todo: better error handling!
     }
 
     states.emplace_back(function);
     begin_scope();
-    define_variable(function_name);
+    current_locals().define(function_name, get_current_depth());
     for (const Token &param: stmt.params) {
         current_locals().define(param.get_lexeme(source), get_current_depth());
     }
@@ -243,7 +243,7 @@ int Compiler::Locals::get(const std::string &name) const {
 }
 
 bool Compiler::Locals::contains(const std::string &name, int depth) const {
-    for (int i = locals.size(); i >= 0; --i) {
+    for (int i = locals.size() - 1; i >= 0; --i) {
         auto& [local_name, local_depth] = locals[i];
         if (local_depth < depth) break;
 
@@ -284,6 +284,9 @@ void Compiler::compile() {
     for (auto &stmt: parser.parse()) {
         visit_stmt(stmt);
     }
+    // default return at main
+    emit(OpCode::NIL);
+    emit(OpCode::RETURN);
 }
 
 const Function &Compiler::get_main() const {

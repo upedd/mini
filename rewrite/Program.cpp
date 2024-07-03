@@ -15,3 +15,7 @@ void Program::patch(int position, bite_byte byte) {
 std::size_t Program::size() const {
     return code.size();
 }
+
+uint8_t Program::get_at(int idx) {
+    return code[idx];
+}
