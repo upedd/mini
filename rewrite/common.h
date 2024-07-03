@@ -2,7 +2,6 @@
 #define COMMON_H
 #include <cassert>
 #include <expected>
-#include <optional>
 
 #include "types.h"
 
@@ -27,9 +26,8 @@ inline bool is_identifier(const char c) {
 }
 
 inline char to_upper(const char c) {
-    assert(is_alpha(c));
     if (c >= 'a' && c <= 'z') {
-        static_cast<char>(c - 32);
+        return static_cast<char>(c - 32);
     }
     return c;
 }
@@ -68,7 +66,7 @@ public:
 
 inline std::expected<bite_int, ConversionError> decimal_string_to_int(const std::string& string) {
     bite_int integer = 0;
-    for (std::size_t i = 0; i <= string.size(); ++i) {
+    for (std::size_t i = 0; i < string.size(); ++i) {
         if (string[i] == '_') continue;
         if (!is_digit(string[i])) {
             return std::unexpected(
@@ -83,7 +81,7 @@ inline std::expected<bite_int, ConversionError> decimal_string_to_int(const std:
 
 inline std::expected<bite_int, ConversionError> binary_string_to_int(const std::string& string) {
     bite_int integer = 0;
-    for (std::size_t i = 2; i <= string.size(); ++i) {
+    for (std::size_t i = 2; i < string.size(); ++i) {
         if (string[i] == '_') continue;
         if (!is_binary_digit(string[i])) {
             return std::unexpected(
@@ -99,7 +97,7 @@ inline std::expected<bite_int, ConversionError> binary_string_to_int(const std::
 inline std::expected<bite_int, ConversionError> hex_string_to_int(const std::string& string) {
 
     bite_int integer = 0;
-    for (std::size_t i = 2; i <= string.size(); ++i) {
+    for (std::size_t i = 2; i < string.size(); ++i) {
         if (string[i] == '_') continue;
         if (!is_hex_digit(string[i])) {
             return std::unexpected(
@@ -114,7 +112,7 @@ inline std::expected<bite_int, ConversionError> hex_string_to_int(const std::str
 
 inline std::expected<bite_int, ConversionError> octal_string_to_int(const std::string& string) {
     bite_int integer = 0;
-    for (std::size_t i = 0; i <= string.size(); ++i) {
+    for (std::size_t i = 0; i < string.size(); ++i) {
         if (string[i] == '_') continue;
         if (!is_octal_digit(string[i])) {
             return std::unexpected(
@@ -130,8 +128,9 @@ inline std::expected<bite_int, ConversionError> octal_string_to_int(const std::s
 
 inline std::expected<bite_int, ConversionError> string_to_int(const std::string& string) {
     if (string[0] == '0') {
+        if (string.size() == 1) return 0;
         if (to_upper(string[1]) == 'X') {
-            return decimal_string_to_int(string);
+            return hex_string_to_int(string);
         }
         if (to_upper(string[1]) == 'B') {
             return binary_string_to_int(string);

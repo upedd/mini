@@ -208,8 +208,8 @@ std::expected<Token, Lexer::Error> Lexer::string() {
 }
 
 Token Lexer::integer_or_number() {
-    // TODO: handle more number literals features i.e. hex prefix, binary prefix, separators...
-    while (is_digit(current())) {
+    // TODO: handle more complex floating point literals
+    while (is_hex_digit(current()) || current() == '_' || current() == 'x' || current() == 'X') {
         advance();
     }
     // if no dot separator
