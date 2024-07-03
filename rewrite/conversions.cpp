@@ -59,44 +59,62 @@ std::expected<bite_int, ConversionError> string_to_int(const std::string &string
         if (string.size() == 1) return 0;
         if (to_upper(string[1]) == 'X') { // hex
             number = remove_digit_separator(string.substr(2));
-            auto error = validate_hex_string(number);
-            if (error) return std::unexpected(*error);
+            if (auto error = validate_hex_string(number)) return std::unexpected(*error);
             base = 16;
         } else if (to_upper(string[1]) == 'B') { // binary
             number = remove_digit_separator(string.substr(2));
-            auto error = validate_binary_string(number);
-            if (error) return std::unexpected(*error);
+            if (auto error = validate_binary_string(number)) return std::unexpected(*error);
             base = 2;
         } else { // octal
             number = remove_digit_separator(string.substr(1));
-            auto error = validate_octal_string(number);
-            if (error) return std::unexpected(*error);
+            if (auto error = validate_octal_string(number)) return std::unexpected(*error);
             base = 8;
         }
     } else { // decimal
         number = remove_digit_separator(string);
-        auto error = validate_decimal_string(number);
-        if (error) return std::unexpected(*error);
+        if (auto error = validate_decimal_string(number)) return std::unexpected(*error);
     }
     return wrapped_stoll(number, base);
 }
 
-std::expected<double, ConversionError> string_to_floating(const std::string &string) {
-    // todo: validate number!
-    std::string number;
-    for (char c : string) {
-        number += c;
+std::optional<ConversionError> validate_floating_string(const std::string& string) {
+    bool is_hex = string.starts_with("0x") || string.starts_with("0X");
+    std::string number = is_hex ? string.substr(2) : string;
+    bool in_exponent = false;
+    for (auto& c : number) {
+        if (in_exponent) {
+            if (is_hex && !is_hex_digit(c)) {
+                return ConversionError(std::string("Expected hex digit in exponent but got '") + c + "'.");
+            }
+            if (!is_hex && !is_digit(c)) {
+                return ConversionError(std::string("Expected decimal digit in exponent but got '") + c + "'.");
+            }
+        } else {
+            if (c == '.') continue; // we don't need to validate if literal contains multiple dot separators as lexer guarantees only one will be present
+            if ((is_hex && to_upper(c) == 'P') || (!is_hex && to_upper(c) == 'E')) {
+                in_exponent = true;
+                continue;
+            }
+            if (is_hex && !is_hex_digit(c)) {
+                return ConversionError(std::string("Expected hex digit but got '") + c + "'.");
+            }
+            if (!is_hex && !is_digit(c)) {
+                return ConversionError(std::string("Expected decimal digit but got '") + c + "'.");
+            }
+        }
     }
+    return {};
+}
+
+std::expected<double, ConversionError> string_to_floating(const std::string &string) {
+    std::string number = remove_digit_separator(string);
+    if (auto error = validate_floating_string(string)) return std::unexpected(*error);
 
     try {
         return std::stod(number);
     } catch (const std::out_of_range&) {
-        return std::unexpected(
-            ConversionError(std::string("Literal value is too big."))
-        );
+        return make_conversion_error("Literal value is too big.");
     } catch (const std::invalid_argument&) {
-        return std::unexpected(
-            ConversionError(std::string("Literal parsing failed unexpectedly."))
-        );
+        return make_conversion_error("Literal parsing failed unexpectedly.");
     }
 }
