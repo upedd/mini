@@ -7,23 +7,13 @@
 
 // Reference: https://lesleylai.info/en/ast-in-cpp-part-1-variant/
 
-struct VarStmt {
-    Token name;
-    ExprHandle value;
-};
-
-struct ExprStmt {
-    ExprHandle expr;
-};
-
+struct ExprStmt;
+struct VarStmt;
 struct BlockStmt;
 struct IfStmt;
 struct WhileStmt;
 struct FunctionStmt;
-
-struct ReturnStmt {
-    ExprHandle expr;
-};
+struct ReturnStmt;
 
 using Stmt = std::variant<VarStmt, ExprStmt, BlockStmt, IfStmt, WhileStmt, FunctionStmt, ReturnStmt>;
 using StmtHandle = std::unique_ptr<Stmt>;
@@ -49,22 +39,70 @@ struct FunctionStmt {
     StmtHandle body;
 };
 
+struct VarStmt {
+    Token name;
+    ExprHandle value;
+};
+
+struct ExprStmt {
+    ExprHandle expr;
+};
+
+struct ReturnStmt {
+    ExprHandle expr;
+};
+
 inline std::string stmt_to_string(const Stmt& stmt, std::string_view source) {
     return std::visit(overloaded {
-        [source](const VarStmt& stmt) {return std::string("var ") + stmt.name.get_lexeme(source) + " = " + expr_to_string(*stmt.value);},
-        [](const ExprStmt& stmt) {return expr_to_string(*stmt.expr);},
+        [source](const VarStmt& stmt) {
+            return std::format("(define {} {}", stmt.name.get_lexeme(source), expr_to_string(*stmt.value, source));
+        },
+        [source](const ExprStmt& stmt) {
+            return expr_to_string(*stmt.expr, source);
+        },
         [source](const BlockStmt& stmt) {
-                std::string out = "block: ";
-                for (auto& st : stmt.stmts) {
-                    out += stmt_to_string(*st, source);
-                    out += ", ";
+                std::string blocks;
+                for (auto& s : stmt.stmts) {
+                    blocks += stmt_to_string(*s, source);
+                    if (s != stmt.stmts.back()) blocks += " ";
                 }
-                return out;
+                return std::format("({})", blocks);
             },
-        [](const IfStmt& stmt) {return std::string("if_stmt");},
-        [](const WhileStmt& stmt) {return std::string("while_stmt");},
-        [](const FunctionStmt& stmt) {return std::string("function_stmt");},
-        [](const ReturnStmt& stmt) {return std::string("return_stmt");},
+        [source](const IfStmt& stmt) {
+            if (stmt.else_stmt != nullptr) {
+                return std::format("(if {} {} {})",
+                    expr_to_string(*stmt.condition, source),
+                    stmt_to_string(*stmt.then_stmt, source),
+                    stmt_to_string(*stmt.else_stmt, source));
+            }
+            return std::format("(if {} {})",
+                    expr_to_string(*stmt.condition, source),
+                    stmt_to_string(*stmt.then_stmt, source));
+        },
+        [source](const WhileStmt& stmt) {
+            return std::format("(while {} {})",
+                expr_to_string(*stmt.condition, source),
+                stmt_to_string(*stmt.stmt, source));
+        },
+        [source](const FunctionStmt& stmt) {
+            std::string parameters_string;
+            for (auto& param : stmt.params) {
+                parameters_string += param.get_lexeme(source);
+                if (param.get_lexeme(source) != stmt.params.back().get_lexeme(source)) {
+                   parameters_string += " ";
+                }
+            }
+            return std::format("(fun {} ({}) {})",
+                stmt.name.get_lexeme(source),
+                parameters_string,
+                stmt_to_string(*stmt.body, source));
+        },
+        [source](const ReturnStmt& stmt) {
+            if (stmt.expr != nullptr) {
+                return std::format("(return {})", expr_to_string(*stmt.expr, source));
+            }
+            return std::string("retrun");
+        },
 
     }, stmt);
 }
