@@ -8,3 +8,7 @@ int Function::add_constant(const Value &value) {
 Value Function::get_constant(int idx) {
     return constants[idx];
 }
+
+std::vector<Value> & Function::get_constants() {
+    return constants;
+}

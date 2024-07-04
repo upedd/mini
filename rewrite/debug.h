@@ -143,7 +143,7 @@ inline void Disassembler::disassemble(const std::string& name) {
                 break;
             case OpCode::CLOSURE: {
                 int constant = program.get_at(offset++);
-                auto* func = function.get_constant(constant).get<Function*>();
+                auto* func = reinterpret_cast<Function*>(function.get_constant(constant).get<Object*>());
                 std::cout << (offset - 1) << ": " << "CLOSURE " << constant << '\n';
                 for (int i = 0; i < func->get_upvalue_count(); ++i) {
                     bool is_local = program.get_at(offset++);

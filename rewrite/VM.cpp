@@ -1,7 +1,7 @@
 #include "VM.h"
 
 #include <iostream>
-
+#include <algorithm>
 
 uint8_t VM::fetch() {
     CallFrame &frame = frames.back();
@@ -49,36 +49,37 @@ void VM::set_in_slot(const int index, const Value &value) {
 
 std::optional<VM::RuntimeError> VM::call_value(const Value &value, const int arguments_count) {
     // todo: refactor!
-    std::optional<Closure*> closure = value.as<Closure*>();
+    std::optional<Closure *> closure = reinterpret_cast<Closure*>(*value.as<Object *>());
     if (!closure) {
         return RuntimeError("Expected callable value such as function or class");
     }
 
     if (arguments_count != closure.value()->get_function()->get_arity()) {
-        return RuntimeError(std::format("Expected {} but got {} arguments", closure.value()->get_function()->get_arity(), arguments_count));
+        return RuntimeError(std::format("Expected {} but got {} arguments",
+                                        closure.value()->get_function()->get_arity(), arguments_count));
     }
     frames.emplace_back(*closure, 0, stack_index - arguments_count - 1);
     return {};
 }
 
-Upvalue * VM::capture_upvalue(int index) {
-    auto* value = &get_from_slot(index);
-    Upvalue* upvalue = nullptr;
-    for (auto open : open_upvalues) {
+Upvalue *VM::capture_upvalue(int index) {
+    auto *value = &get_from_slot(index);
+    Upvalue *upvalue = nullptr;
+    for (auto open: open_upvalues) {
         if (open->location == value) {
             upvalue = open;
             break;
         }
     }
     if (upvalue == nullptr) {
-        upvalue = new Upvalue(value);
+        upvalue = allocate<Upvalue>(new Upvalue(value));
         open_upvalues.emplace(upvalue);
     }
     return upvalue;
 }
 
 void VM::close_upvalues(const Value &value) {
-    for (auto open : open_upvalues) {
+    for (auto open: open_upvalues) {
         if (open->location >= &value) {
             open->closed = *open->location;
             open->location = &open->closed;
@@ -86,8 +87,8 @@ void VM::close_upvalues(const Value &value) {
     }
 }
 
-void VM::mark_object(Object* object) {
-    if (object == nullptr) return;
+void VM::mark_object(Object *object) {
+    if (object == nullptr || object->is_marked) return;
     object->is_marked = true;
     gray_objects.push_back(object);
 #ifdef DEBUG_LOG_GC
@@ -96,8 +97,8 @@ void VM::mark_object(Object* object) {
 }
 
 void VM::mark_value(const Value &value) {
-    if (value.is<Object*>()) {
-        mark_object(value.get<Object*>());
+    if (value.is<Object *>()) {
+        mark_object(value.get<Object *>());
     }
 }
 
@@ -106,24 +107,57 @@ void VM::mark_roots() {
         mark_value(stack[i]);
     }
 
-    for (auto& frame : frames) {
+    for (auto &frame: frames) {
         mark_object(frame.closure);
     }
 
-    for (auto& open_upvalue : open_upvalues) {
+    for (auto &open_upvalue: open_upvalues) {
         mark_object(open_upvalue);
     }
     // TODO!!! mark compiler objects
 }
 
 void VM::blacken_object(Object *object) {
-    // TODO
+#ifdef DEBUG_LOG_GC
+    std::cout << "Set object color to black.\n";
+#endif
+    if (auto *upvalue = reinterpret_cast<Upvalue *>(object)) {
+        mark_value(upvalue->closed);
+    }
+    if (auto *function = reinterpret_cast<Function *>(object)) {
+        // TODO: mark function name!
+        for (auto &value: function->get_constants()) {
+            mark_value(value);
+        }
+    }
+    if (auto *closure = reinterpret_cast<Closure *>(object)) {
+        mark_object(closure->get_function());
+        for (auto *upvalue: closure->upvalues) {
+            mark_object(upvalue);
+        }
+    }
 }
 
 void VM::trace_references() {
     while (!gray_objects.empty()) {
-        Object* object = gray_objects.back(); gray_objects.pop_back();
+        Object *object = gray_objects.back();
+        gray_objects.pop_back();
         blacken_object(object);
+    }
+}
+
+void VM::sweep() {
+    std::vector<Object*> to_erase; // todo do more optimally
+    for (auto* object : objects) {
+        if (!object->is_marked) {
+            to_erase.push_back(object);
+        } else {
+            object->is_marked = false;
+        }
+    }
+    for (auto* object : to_erase) {
+        objects.erase(std::find(objects.begin(), objects.end(), object));
+        delete object;
     }
 }
 
@@ -134,6 +168,7 @@ void VM::collect_garbage() {
 
     mark_roots();
     trace_references();
+    sweep();
 
 #ifdef DEBUG_LOG_GC
     std::cout << "--- gc end\n";
@@ -148,7 +183,6 @@ std::expected<Value, VM::RuntimeError> VM::run() {
     break; \
 }
     while (true) {
-
         switch (fetch_opcode()) {
             case OpCode::CONSTANT: {
                 uint8_t index = fetch();
@@ -259,8 +293,8 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 break;
             }
             case OpCode::CLOSURE: {
-                Function* function = *get_constant(fetch()).as<Function*>();
-                auto* closure = new Closure(function); // mem leak
+                Function *function = reinterpret_cast<Function*>(*get_constant(fetch()).as<Object*>());
+                auto *closure = allocate<Closure>(new Closure(function)); // mem leak
                 push(closure);
                 for (int i = 0; i < closure->get_function()->get_upvalue_count(); ++i) {
                     int is_local = fetch();

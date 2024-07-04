@@ -44,10 +44,6 @@ public:
 
     void close_upvalues(const Value & peek);
 
-    // Garbage collection
-    template<typename T>
-    Object allocate();
-
     void mark_object(Object* object);
 
     void mark_value(const Value& value);
@@ -58,9 +54,15 @@ public:
 
     void trace_references();
 
+    void sweep();
+
     void collect_garbage();
 
+    template<class T>
+    T *allocate(T *ptr);
+
     std::vector<Object*> gray_objects;
+    std::vector<Object*> objects;
 
     std::expected<Value, RuntimeError> run();
 private:
@@ -72,12 +74,11 @@ private:
 };
 
 template<typename T>
-Object VM::allocate() {
+T* VM::allocate(T* ptr) {
 #ifdef DEBUG_STRESS_GC
     collect_garbage();
 #endif
-    Object ptr = Object(new T());
-
+    objects.push_back(ptr);
 #ifdef DEBUG_LOG_GC
     std::cout << "Allocated " << sizeof(T) << " bytes of memory.\n";
 #endif

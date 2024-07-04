@@ -39,6 +39,7 @@ inline constexpr Nil nil_t {};
 class Object {
 public:
     bool is_marked = false;
+    virtual ~Object() = default;
 };
 
 class Function;
@@ -48,7 +49,7 @@ class Upvalue;
 //using object_variant_t = std::variant<std::string*, Function*, Closure*, Upvalue*>;
 
 
-using value_variant_t = std::variant<Nil, bite_int, bite_float, bool, Object*>;
+using value_variant_t = std::variant<Nil, bite_int, bite_float, bool, Object*, std::string>;
 
 class Value : public value_variant_t {
 public:
@@ -66,6 +67,7 @@ public:
             [](bite_float value) {return std::to_string(value);},
             [](bool value) {return std::string(value ? "True" : "False");},
             [](Object* object) {return std::string("object");},
+                [](std::string) {return std::string("string");}
         }, *this);
     }
 
@@ -157,6 +159,7 @@ public:
 
 class Upvalue : public Object {
 public:
+    explicit Upvalue(Value* location) : location(location) {}
     Value* location = nullptr;
     Value closed = Value{nil_t};
 };

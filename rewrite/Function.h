@@ -8,16 +8,20 @@
 
 class Function : public Object {
 public:
-    Function(std::string name, const int arity) : name(std::move(name)), arity(arity) {}
+    Function(std::string name, const int arity) : name(std::move(name)),
+                                                  arity(arity), upvalue_count(0) {}
 
-    Program& get_program() { return program; }
+    Program &get_program() { return program; }
     [[nodiscard]] int get_arity() const { return arity; }
 
-    int add_constant(const Value & value);
+    int add_constant(const Value &value);
+
     Value get_constant(int idx);
 
-    [[nodiscard]] int get_upvalue_count() const {return upvalue_count;}
-    void set_upvalue_count(const int count) {upvalue_count = count;}
+    [[nodiscard]] int get_upvalue_count() const { return upvalue_count; }
+    void set_upvalue_count(const int count) { upvalue_count = count; }
+
+    std::vector<Value>& get_constants();
 
 private:
     std::string name;
@@ -27,14 +31,17 @@ private:
     int upvalue_count;
 };
 
-class Closure : public Object{
+class Closure : public Object {
 public:
-    explicit Closure(Function* function) : function(function) {}
-    [[nodiscard]] Function* get_function() const { return function; }
+    explicit Closure(Function *function) : function(function) {
+    }
 
-    std::vector<Upvalue*> upvalues;
+    [[nodiscard]] Function *get_function() const { return function; }
+
+    std::vector<Upvalue *> upvalues;
+
 private:
-    Function* function;
+    Function *function;
 };
 
 #endif //FUNCTION_H
