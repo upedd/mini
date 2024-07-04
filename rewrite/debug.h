@@ -8,7 +8,7 @@ class Disassembler {
 public:
     explicit Disassembler(Function& function) : function(function) {}
 
-    void disassemble();
+    void disassemble(const std::string &name);
 private:
     void simple_opcode(const std::string& name);
     void constant_inst(const std::string& name);
@@ -37,7 +37,8 @@ inline void Disassembler::jump_inst(const std::string& name) {
     std::cout << offset - 3 << ": " << name << ' ' << x << '\n';
 }
 
-inline void Disassembler::disassemble() {
+inline void Disassembler::disassemble(const std::string& name) {
+    std::cout << "--- " << name << " ---\n";
     auto program = function.get_program();
     while (offset < program.size()) {
         switch (static_cast<OpCode>(program.get_at(offset++))) {
@@ -140,9 +141,25 @@ inline void Disassembler::disassemble() {
             case OpCode::RETURN:
                 simple_opcode("RETURN");
                 break;
-            case OpCode::CLOSURE:
-                constant_inst("CLOSURE");
+            case OpCode::CLOSURE: {
+                int constant = program.get_at(offset++);
+                auto* func = function.get_constant(constant).get<Function*>();
+                std::cout << (offset - 1) << ": " << "CLOSURE " << constant << '\n';
+                for (int i = 0; i < func->get_upvalue_count(); ++i) {
+                    bool is_local = program.get_at(offset++);
+                    int index = program.get_at(offset++);
+                    std::cout << "      " << (is_local ? "local " : "upvalue ") << index << '\n';
+                }
                 break;
+            }
+            case OpCode::GET_UPVALUE: {
+                arg_inst("GET_UPVALUE");
+                break;
+            }
+            case OpCode::SET_UPVALUE: {
+                arg_inst("SET_UPVALUE");
+                break;
+            }
         }
     }
 }

@@ -26,19 +26,19 @@ Value VM::get_constant(const int idx) const {
 
 Value VM::pop() {
     auto value = peek();
-    stack.pop_back();
+    --stack_index;
     return value;
 }
 
 Value VM::peek(const int n) const {
-    return stack[stack.size() - n - 1];
+    return stack[stack_index - n - 1];
 }
 
 void VM::push(const Value &value) {
-    stack.push_back(value);
+    stack[stack_index++] = value;
 }
 
-Value VM::get_from_slot(int index) {
+Value &VM::get_from_slot(int index) {
     return stack[frames.back().frame_pointer + index];
 }
 
@@ -57,8 +57,13 @@ std::optional<VM::RuntimeError> VM::call_value(const Value &value, const int arg
     if (arguments_count != closure.value()->get_function()->get_arity()) {
         return RuntimeError(std::format("Expected {} but got {} arguments", closure.value()->get_function()->get_arity(), arguments_count));
     }
-    frames.emplace_back(*closure, 0, stack.size() - arguments_count - 1);
+    frames.emplace_back(*closure, 0, stack_index - arguments_count - 1);
     return {};
+}
+
+Upvalue * VM::capture_upvalue(int index) {
+    auto* upvalue = new Upvalue(&get_from_slot(index)); // memory
+    return upvalue;
 }
 
 std::expected<Value, VM::RuntimeError> VM::run() {
@@ -170,7 +175,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
             }
             case OpCode::RETURN: {
                 Value result = pop();
-                while (stack.size() > frames.back().frame_pointer) {
+                while (stack_index > frames.back().frame_pointer) {
                     pop();
                 }
                 frames.pop_back();
@@ -182,11 +187,30 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 Function* function = *get_constant(fetch()).as<Function*>();
                 auto* closure = new Closure(function); // mem leak
                 push(closure);
+                for (int i = 0; i < closure->get_function()->get_upvalue_count(); ++i) {
+                    int is_local = fetch();
+                    int index = fetch();
+                    if (is_local) {
+                        closure->upvalues.push_back(capture_upvalue(index));
+                    } else {
+                        closure->upvalues.push_back(frames.back().closure->upvalues[index]);
+                    }
+                }
+                break;
+            }
+            case OpCode::GET_UPVALUE: {
+                int slot = fetch();
+                push(*frames.back().closure->upvalues[slot]->location);
+                break;
+            }
+            case OpCode::SET_UPVALUE: {
+                int slot = fetch();
+                *frames.back().closure->upvalues[slot]->location = peek();
                 break;
             }
         }
-        for (auto &x: stack) {
-            std::cout << x.to_string() << ' ';
+        for (int i = 0; i < stack_index; ++i) {
+            std::cout << stack[i].to_string() << ' ';
         }
         std::cout << '\n';
     }

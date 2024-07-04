@@ -2,6 +2,8 @@
 
 #include <cassert>
 
+#include "debug.h"
+
 void Compiler::visit_stmt(const Stmt &statement) {
     std::visit(overloaded{
                    [this](const VarStmt &stmt) { variable_declaration(stmt); },
@@ -42,6 +44,11 @@ void Compiler::function_declaration(const FunctionStmt &stmt) {
     emit(OpCode::RETURN);
     end_scope();
     function->set_upvalue_count(states.back().upvalues.size());
+    auto upvalues_copy = states.back().upvalues; // todo: elimainate this copy
+
+    Disassembler disassembler(*function);
+    disassembler.disassemble(function_name);
+
     states.pop_back();
 
     int constant = current_function()->add_constant(function);
@@ -50,8 +57,8 @@ void Compiler::function_declaration(const FunctionStmt &stmt) {
 
     // todo: check!
     for (int i = 0; i < function->get_upvalue_count(); ++i) {
-        emit(states.back().upvalues[i].is_local);
-        emit(states.back().upvalues[i].index);
+        emit(upvalues_copy[i].is_local);
+        emit(upvalues_copy[i].index);
     }
 }
 
@@ -82,7 +89,7 @@ int Compiler::add_upvalue(int index, bool is_local, int distance) {
 }
 
 int Compiler::resolve_upvalue(const std::string &name, int distance) {
-    if (states.size() > distance + 2) {
+    if (states.size() < distance + 2) {
         return -1;
     }
     int local = states[states.size() - distance - 2].locals.get(name);
@@ -92,7 +99,7 @@ int Compiler::resolve_upvalue(const std::string &name, int distance) {
 
     int upvalue = resolve_upvalue(name, distance + 1);
     if (upvalue != -1) {
-        return add_upvalue(local, false, distance);
+        return add_upvalue(upvalue, false, distance);
     }
 
     return -1;
@@ -220,7 +227,7 @@ void Compiler::logical(const BinaryExpr &expr) {
 }
 
 void Compiler::string_literal(const StringLiteral &expr) {
-    int index = current_function()->add_constant(expr.string);
+    int index = current_function()->add_constant(expr.string); // memory!
     emit(OpCode::CONSTANT);
     emit(index); // handle overflow!!!
 }
@@ -230,7 +237,7 @@ void Compiler::variable(const VariableExpr &expr) {
     int idx = current_locals().get(name);
 
     if (idx == -1) {
-        idx = resolve_upvalue(name, TODO);
+        idx = resolve_upvalue(name, 0);
         assert(idx != -1); // todo: error handling
         emit(OpCode::GET_UPVALUE);
         emit(idx);
@@ -246,7 +253,7 @@ void Compiler::assigment(const AssigmentExpr &expr) {
     int idx = current_locals().get(name);
     visit_expr(*expr.expr);
     if (idx == -1) {
-        idx = resolve_upvalue(name, TODO);
+        idx = resolve_upvalue(name, 0);
         assert(idx != -1); // todo: error handling
         emit(OpCode::SET_UPVALUE);
         emit(idx);

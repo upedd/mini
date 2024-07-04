@@ -38,8 +38,10 @@ inline constexpr Nil nil_t {};
 
 struct Function;
 struct Closure;
+struct Upvalue;
 
-using value_variant_t = std::variant<Nil, bite_int, bite_float, bool, std::string, Function*, Closure*>;
+
+using value_variant_t = std::variant<Nil, bite_int, bite_float, bool, std::string, Function*, Closure*, Upvalue*>;
 
 class Value : public value_variant_t {
 public:
@@ -58,8 +60,8 @@ public:
             [](bool value) {return std::string(value ? "True" : "False");},
             [](const std::string& string) {return std::string("string: ") + string;},
             [](Function* func) {return std::string("func");},
-            [](Closure* closure) {return std::string("closure");}
-
+            [](Closure* closure) {return std::string("closure");},
+            [](Upvalue* upvalue) {return std::string("upvalue");},
         }, *this);
     }
 
@@ -148,6 +150,11 @@ public:
     Value binary_not() const;
 
 };
+
+struct Upvalue {
+    Value* location;
+};
+
 
 inline Value Value::add(const Value &other) const {
     if (this->is_integer() && other.is_integer()) {

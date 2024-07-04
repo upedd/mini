@@ -25,14 +25,19 @@ public:
     Value pop();
     [[nodiscard]] Value peek(int n = 0) const;
     void push(const Value& value);
-    Value get_from_slot(int index);
+
+    Value &get_from_slot(int index);
     void set_in_slot(int index, const Value &value);
 
     std::optional<RuntimeError> call_value(const Value &value, int arguments_count);
 
+    Upvalue* capture_upvalue(int index);
+
     std::expected<Value, RuntimeError> run();
 private:
-    std::vector<Value> stack; // optim: should stack could be fixed array?
+    // stack dynamic allocation breaks upvalues!
+    int stack_index = 0;
+    std::array<Value, 256> stack; // optim: should stack could be fixed array?
     std::vector<CallFrame> frames;
 };
 

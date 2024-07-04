@@ -31,6 +31,8 @@ class Closure {
 public:
     explicit Closure(Function* function) : function(function) {}
     [[nodiscard]] Function* get_function() const { return function; }
+
+    std::vector<Upvalue*> upvalues;
 private:
     Function* function;
 };
