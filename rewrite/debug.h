@@ -140,6 +140,9 @@ inline void Disassembler::disassemble() {
             case OpCode::RETURN:
                 simple_opcode("RETURN");
                 break;
+            case OpCode::CLOSURE:
+                constant_inst("CLOSURE");
+                break;
         }
     }
 }

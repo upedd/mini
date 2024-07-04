@@ -2,12 +2,10 @@
 
 #include <iostream>
 
-#include "Function.h"
-
 
 uint8_t VM::fetch() {
     CallFrame &frame = frames.back();
-    return frame.function->get_program().get_at(frame.instruction_pointer++);
+    return frame.closure->get_function()->get_program().get_at(frame.instruction_pointer++);
 }
 
 OpCode VM::fetch_opcode() {
@@ -23,7 +21,7 @@ void VM::jump_by_offset(int offset) {
 }
 
 Value VM::get_constant(const int idx) const {
-    return frames.back().function->get_constant(idx);
+    return frames.back().closure->get_function()->get_constant(idx);
 }
 
 Value VM::pop() {
@@ -50,14 +48,16 @@ void VM::set_in_slot(const int index, const Value &value) {
 
 
 std::optional<VM::RuntimeError> VM::call_value(const Value &value, const int arguments_count) {
-    std::optional<Function*> function = value.as<Function*>();
-    if (!function) {
+    // todo: refactor!
+    std::optional<Closure*> closure = value.as<Closure*>();
+    if (!closure) {
         return RuntimeError("Expected callable value such as function or class");
     }
-    if (arguments_count != function.value()->get_arity()) {
-        return RuntimeError(std::format("Expected {} but got {} arguments", function.value()->get_arity(), arguments_count));
+
+    if (arguments_count != closure.value()->get_function()->get_arity()) {
+        return RuntimeError(std::format("Expected {} but got {} arguments", closure.value()->get_function()->get_arity(), arguments_count));
     }
-    frames.emplace_back(*function, 0, stack.size() - arguments_count - 1);
+    frames.emplace_back(*closure, 0, stack.size() - arguments_count - 1);
     return {};
 }
 
@@ -159,6 +159,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
             case OpCode::BINARY_NOT: {
                 auto value = pop();
                 push(value.binary_not());
+                break;
             }
             case OpCode::CALL: {
                 int arguments_count = fetch();
@@ -175,12 +176,19 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 frames.pop_back();
                 push(result);
                 if (frames.empty()) return pop();
+                break;
+            }
+            case OpCode::CLOSURE: {
+                Function* function = *get_constant(fetch()).as<Function*>();
+                auto* closure = new Closure(function); // mem leak
+                push(closure);
+                break;
             }
         }
-        // for (auto &x: stack) {
-        //     std::cout << x.to_string() << ' ';
-        // }
-        // std::cout << '\n';
+        for (auto &x: stack) {
+            std::cout << x.to_string() << ' ';
+        }
+        std::cout << '\n';
     }
 #undef BINARY_OPERATION
 }

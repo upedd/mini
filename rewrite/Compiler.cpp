@@ -26,9 +26,6 @@ void Compiler::function_declaration(const FunctionStmt &stmt) {
     std::string function_name = std::string(stmt.name.get_lexeme(source));
     Function *function = new Function(function_name, stmt.params.size()); // TODO: memory leak!
 
-    int constant = current_function()->add_constant(function);
-    emit(OpCode::CONSTANT);
-    emit(static_cast<uint8_t>(constant));
     if (!current_locals().define(function_name, get_current_depth())) {
         throw Error("Variable redefinition in same scope is disallowed."); // todo: better error handling!
     }
@@ -44,7 +41,18 @@ void Compiler::function_declaration(const FunctionStmt &stmt) {
     emit(OpCode::NIL);
     emit(OpCode::RETURN);
     end_scope();
+    function->set_upvalue_count(states.back().upvalues.size());
     states.pop_back();
+
+    int constant = current_function()->add_constant(function);
+    emit(OpCode::CLOSURE);
+    emit(static_cast<uint8_t>(constant));
+
+    // todo: check!
+    for (int i = 0; i < function->get_upvalue_count(); ++i) {
+        emit(states.back().upvalues[i].is_local);
+        emit(states.back().upvalues[i].index);
+    }
 }
 
 void Compiler::expr_statement(const ExprStmt &expr) {
@@ -58,6 +66,36 @@ void Compiler::block_statement(const BlockStmt &stmt) {
         visit_stmt(*st);
     }
     end_scope();
+}
+
+int Compiler::add_upvalue(int index, bool is_local, int distance) {
+    auto& upvalues = states[states.size() - distance - 1].upvalues;
+    Upvalue upvalue {.index = index, .is_local = is_local};
+    for (int i = 0; i < upvalues.size(); ++i) {
+        if (upvalues[i] == upvalue) {
+            return i;
+        }
+    }
+
+    upvalues.push_back(upvalue);
+    return upvalues.size() - 1;
+}
+
+int Compiler::resolve_upvalue(const std::string &name, int distance) {
+    if (states.size() > distance + 2) {
+        return -1;
+    }
+    int local = states[states.size() - distance - 2].locals.get(name);
+    if (local != -1) {
+        return add_upvalue(local, true, distance);
+    }
+
+    int upvalue = resolve_upvalue(name, distance + 1);
+    if (upvalue != -1) {
+        return add_upvalue(local, false, distance);
+    }
+
+    return -1;
 }
 
 void Compiler::if_statement(const IfStmt &stmt) {
@@ -188,18 +226,34 @@ void Compiler::string_literal(const StringLiteral &expr) {
 }
 
 void Compiler::variable(const VariableExpr &expr) {
-    int idx = current_locals().get(expr.identifier.get_lexeme(source));
-    assert(idx != -1); // todo: error handling
-    emit(OpCode::GET);
-    emit(idx); // todo: handle overflow
+    std::string name = expr.identifier.get_lexeme(source);
+    int idx = current_locals().get(name);
+
+    if (idx == -1) {
+        idx = resolve_upvalue(name, TODO);
+        assert(idx != -1); // todo: error handling
+        emit(OpCode::GET_UPVALUE);
+        emit(idx);
+    } else {
+        emit(OpCode::GET);
+        emit(idx); // todo: handle overflow
+    }
+
 }
 
 void Compiler::assigment(const AssigmentExpr &expr) {
-    int idx = current_locals().get(expr.identifier.get_lexeme(source));
-    assert(idx != -1); // todo: error handling
+    std::string name = expr.identifier.get_lexeme(source);
+    int idx = current_locals().get(name);
     visit_expr(*expr.expr);
-    emit(OpCode::SET);
-    emit(static_cast<uint8_t>(idx));
+    if (idx == -1) {
+        idx = resolve_upvalue(name, TODO);
+        assert(idx != -1); // todo: error handling
+        emit(OpCode::SET_UPVALUE);
+        emit(idx);
+    } else {
+        emit(OpCode::SET);
+        emit(idx); // todo: handle overflow
+    }
 }
 
 

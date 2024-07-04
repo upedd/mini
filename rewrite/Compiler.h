@@ -14,6 +14,13 @@ public:
         }
     };
 
+    struct Upvalue {
+        int index; // should be other type
+        bool is_local;
+
+        bool operator==(const Upvalue & upvalue) const = default;
+    };
+
     class Locals {
     public:
         [[nodiscard]] int get(const std::string &name) const;
@@ -51,6 +58,7 @@ public:
         Function *function = nullptr;
         int current_depth = 0;
         Locals locals;
+        std::vector<Upvalue> upvalues;
     };
 
     explicit Compiler(std::string_view source) : parser(source), source(source), main("", 0) {
@@ -85,6 +93,10 @@ private:
     void while_statement(const WhileStmt &stmt);
 
     void block_statement(const BlockStmt &stmt);
+
+    int add_upvalue(int index, bool is_local, int distance);
+
+    int resolve_upvalue(const std::string &name, int distance);
 
     void assigment(const AssigmentExpr &expr);
 

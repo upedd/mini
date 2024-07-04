@@ -37,8 +37,9 @@ inline constexpr Nil nil_t {};
 // };
 
 struct Function;
+struct Closure;
 
-using value_variant_t = std::variant<Nil, bite_int, bite_float, bool, std::string, Function*>;
+using value_variant_t = std::variant<Nil, bite_int, bite_float, bool, std::string, Function*, Closure*>;
 
 class Value : public value_variant_t {
 public:
@@ -56,7 +57,9 @@ public:
             [](bite_float value) {return std::to_string(value);},
             [](bool value) {return std::string(value ? "True" : "False");},
             [](const std::string& string) {return std::string("string: ") + string;},
-                [](Function* func) {return std::string("func");}
+            [](Function* func) {return std::string("func");},
+            [](Closure* closure) {return std::string("closure");}
+
         }, *this);
     }
 

@@ -16,11 +16,23 @@ public:
     int add_constant(const Value & value);
     Value get_constant(int idx);
 
+    [[nodiscard]] int get_upvalue_count() const {return upvalue_count;}
+    void set_upvalue_count(const int count) {upvalue_count = count;}
+
 private:
     std::string name;
     int arity;
     Program program; // code of function
     std::vector<Value> constants;
+    int upvalue_count;
+};
+
+class Closure {
+public:
+    explicit Closure(Function* function) : function(function) {}
+    [[nodiscard]] Function* get_function() const { return function; }
+private:
+    Function* function;
 };
 
 #endif //FUNCTION_H

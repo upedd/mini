@@ -13,7 +13,8 @@ public:
     };
 
     explicit VM(Function* function) {
-        frames.emplace_back(function, 0, 0);
+        // todo: maybe start program thru call()
+        frames.emplace_back(new Closure(function), 0, 0);
     }
 
     uint8_t fetch();
