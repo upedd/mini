@@ -62,8 +62,28 @@ std::optional<VM::RuntimeError> VM::call_value(const Value &value, const int arg
 }
 
 Upvalue * VM::capture_upvalue(int index) {
-    auto* upvalue = new Upvalue(&get_from_slot(index)); // memory
+    auto* value = &get_from_slot(index);
+    Upvalue* upvalue = nullptr;
+    for (auto open : open_upvalues) {
+        if (open->location == value) {
+            upvalue = open;
+            break;
+        }
+    }
+    if (upvalue == nullptr) {
+        upvalue = new Upvalue(value);
+        open_upvalues.emplace(upvalue);
+    }
     return upvalue;
+}
+
+void VM::close_upvalues(const Value &value) {
+    for (auto open : open_upvalues) {
+        if (open->location >= &value) {
+            open->closed = *open->location;
+            open->location = &open->closed;
+        }
+    }
 }
 
 std::expected<Value, VM::RuntimeError> VM::run() {
@@ -175,6 +195,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
             }
             case OpCode::RETURN: {
                 Value result = pop();
+                close_upvalues(stack[frames.back().frame_pointer]); // TODO: check
                 while (stack_index > frames.back().frame_pointer) {
                     pop();
                 }
@@ -206,6 +227,11 @@ std::expected<Value, VM::RuntimeError> VM::run() {
             case OpCode::SET_UPVALUE: {
                 int slot = fetch();
                 *frames.back().closure->upvalues[slot]->location = peek();
+                break;
+            }
+            case OpCode::CLOSE_UPVALUE: {
+                close_upvalues(peek());
+                pop();
                 break;
             }
         }

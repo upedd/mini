@@ -94,6 +94,7 @@ int Compiler::resolve_upvalue(const std::string &name, int distance) {
     }
     int local = states[states.size() - distance - 2].locals.get(name);
     if (local != -1) {
+        states[states.size() - distance - 2].locals.close(local);
         return add_upvalue(local, true, distance);
     }
 
@@ -298,14 +299,14 @@ Compiler::JumpHandle Compiler::start_jump(OpCode op_code) {
 
 int Compiler::Locals::get(const std::string &name) const {
     for (int i = locals.size() - 1; i >= 0; --i) {
-        if (locals[i].first == name) return i;
+        if (locals[i].name == name) return i;
     }
     return -1;
 }
 
 bool Compiler::Locals::contains(const std::string &name, int depth) const {
     for (int i = locals.size() - 1; i >= 0; --i) {
-        auto& [local_name, local_depth] = locals[i];
+        auto& [local_name, local_depth, _] = locals[i];
         if (local_depth < depth) break;
 
         if (local_name == name) return true;
@@ -321,11 +322,19 @@ bool Compiler::Locals::define(const std::string &name, int depth) {
 
 int Compiler::Locals::erase_above(const int depth) {
     int cnt = 0;
-    while (!locals.empty() && locals.back().second > depth) {
+    while (!locals.empty() && locals.back().depth > depth) {
         locals.pop_back();
         ++cnt;
     }
     return cnt;
+}
+
+void Compiler::Locals::close(int local) {
+    locals[local].is_closed = true;
+}
+
+std::vector<Compiler::Local> &Compiler::Locals::get_locals() {
+    return locals;
 }
 
 void Compiler::JumpDestination::make_jump(Program &program) const {
@@ -369,10 +378,15 @@ void Compiler::begin_scope() {
 
 void Compiler::end_scope() {
     --get_current_depth();
-    int erased_cnt = current_locals().erase_above(get_current_depth());
-    // optim: maybe some pop many instruction
-    for (int i = 0; i < erased_cnt; ++i) {
-        emit(OpCode::POP);
+
+    auto& locals = current_locals().get_locals();
+    while (!locals.empty() && locals.back().depth > get_current_depth()) {
+        if (locals.back().is_closed) {
+            emit(OpCode::CLOSE_UPVALUE);
+        } else {
+            emit(OpCode::POP);
+        }
+        locals.pop_back();
     }
 }
 

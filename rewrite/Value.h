@@ -152,7 +152,8 @@ public:
 };
 
 struct Upvalue {
-    Value* location;
+    Value* location = nullptr;
+    Value closed = Value{nil_t};
 };
 
 

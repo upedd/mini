@@ -1,5 +1,6 @@
 #ifndef VM_H
 #define VM_H
+#include <set>
 #include <stdexcept>
 #include <vector>
 
@@ -33,12 +34,15 @@ public:
 
     Upvalue* capture_upvalue(int index);
 
+    void close_upvalues(const Value & peek);
+
     std::expected<Value, RuntimeError> run();
 private:
     // stack dynamic allocation breaks upvalues!
     int stack_index = 0;
     std::array<Value, 256> stack; // optim: should stack could be fixed array?
     std::vector<CallFrame> frames;
+    std::set<Upvalue*> open_upvalues;
 };
 
 

@@ -160,6 +160,10 @@ inline void Disassembler::disassemble(const std::string& name) {
                 arg_inst("SET_UPVALUE");
                 break;
             }
+            case OpCode::CLOSE_UPVALUE: {
+                simple_opcode("CLOSE_UPVALUE");
+                break;
+            }
         }
     }
 }

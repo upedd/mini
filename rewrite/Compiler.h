@@ -21,6 +21,12 @@ public:
         bool operator==(const Upvalue & upvalue) const = default;
     };
 
+    struct Local {
+        std::string name;
+        int depth;
+        bool is_closed = false;
+    };
+
     class Locals {
     public:
         [[nodiscard]] int get(const std::string &name) const;
@@ -32,8 +38,12 @@ public:
         // returns number of elements that have been erased
         int erase_above(int depth);
 
+        void close(int local);
+
+        std::vector<Compiler::Local> &get_locals();
+
     private:
-        std::vector<std::pair<std::string, int> > locals;
+        std::vector<Local> locals;
     };
 
     class JumpDestination {
