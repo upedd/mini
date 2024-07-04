@@ -23,7 +23,7 @@ public:
 
     explicit VM(Function* function) {
         // todo: maybe start program thru call()
-        frames.emplace_back(new Closure(function), 0, 0);
+        frames.emplace_back(allocate<Closure>(new Closure(function)), 0, 0);
     }
 
     uint8_t fetch();
@@ -61,8 +61,11 @@ public:
     template<class T>
     T *allocate(T *ptr);
 
+    void adopt_objects(std::vector<Object*> objects);
+
     std::vector<Object*> gray_objects;
     std::vector<Object*> objects;
+    bool gc_ready = false;
 
     std::expected<Value, RuntimeError> run();
 private:

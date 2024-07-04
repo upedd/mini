@@ -72,12 +72,13 @@ public:
     };
 
     explicit Compiler(std::string_view source) : parser(source), source(source), main("", 0) {
+        allocated_objects.push_back(&main);
         states.emplace_back(&main);
     }
 
     void compile();
 
-    [[nodiscard]] const Function &get_main() const;
+    Function &get_main() ;
 
     Function *get_function();
 
@@ -88,6 +89,8 @@ public:
     void call(const CallExpr &expr);
 
     void return_statement(const ReturnStmt &stmt);
+
+    std::vector<Object*> allocated_objects;
 
 private:
     void emit(OpCode op_code);

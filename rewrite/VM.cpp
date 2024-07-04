@@ -79,11 +79,17 @@ Upvalue *VM::capture_upvalue(int index) {
 }
 
 void VM::close_upvalues(const Value &value) {
-    for (auto open: open_upvalues) {
+    std::vector<Upvalue*> to_erase;
+
+    for (auto* open: open_upvalues) {
         if (open->location >= &value) {
             open->closed = *open->location;
             open->location = &open->closed;
+            to_erase.push_back(open);
         }
+    }
+    for (auto* open : to_erase) {
+        open_upvalues.erase(std::find(open_upvalues.begin(), open_upvalues.end(), open));
     }
 }
 
@@ -103,7 +109,7 @@ void VM::mark_value(const Value &value) {
 }
 
 void VM::mark_roots() {
-    for (int i = 0; i <= stack_index; ++i) {
+    for (int i = 0; i < stack_index; ++i) {
         mark_value(stack[i]);
     }
 
@@ -121,16 +127,16 @@ void VM::blacken_object(Object *object) {
 #ifdef DEBUG_LOG_GC
     std::cout << "Set object color to black.\n";
 #endif
-    if (auto *upvalue = reinterpret_cast<Upvalue *>(object)) {
+    if (auto *upvalue = dynamic_cast<Upvalue *>(object)) {
         mark_value(upvalue->closed);
     }
-    if (auto *function = reinterpret_cast<Function *>(object)) {
+    if (auto *function = dynamic_cast<Function *>(object)) {
         // TODO: mark function name!
         for (auto &value: function->get_constants()) {
             mark_value(value);
         }
     }
-    if (auto *closure = reinterpret_cast<Closure *>(object)) {
+    if (auto *closure = dynamic_cast<Closure *>(object)) {
         mark_object(closure->get_function());
         for (auto *upvalue: closure->upvalues) {
             mark_object(upvalue);
@@ -157,15 +163,17 @@ void VM::sweep() {
     }
     for (auto* object : to_erase) {
         objects.erase(std::find(objects.begin(), objects.end(), object));
+        std::cout << "freed " << sizeof(*object) << '\n';
         delete object;
     }
 }
 
 void VM::collect_garbage() {
+    // TODO when to collect garbage!
 #ifdef DEBUG_LOG_GC
     std::cout << "--- gc start\n";
 #endif
-
+    if (!gc_ready) return;
     mark_roots();
     trace_references();
     sweep();
@@ -173,6 +181,12 @@ void VM::collect_garbage() {
 #ifdef DEBUG_LOG_GC
     std::cout << "--- gc end\n";
 #endif
+}
+
+void VM::adopt_objects(std::vector<Object *> objects) {
+    for (auto* object : objects) {
+        allocate<Object>(object);
+    }
 }
 
 std::expected<Value, VM::RuntimeError> VM::run() {
@@ -294,7 +308,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
             }
             case OpCode::CLOSURE: {
                 Function *function = reinterpret_cast<Function*>(*get_constant(fetch()).as<Object*>());
-                auto *closure = allocate<Closure>(new Closure(function)); // mem leak
+                auto *closure = new Closure(function);
                 push(closure);
                 for (int i = 0; i < closure->get_function()->get_upvalue_count(); ++i) {
                     int is_local = fetch();
@@ -305,6 +319,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                         closure->upvalues.push_back(frames.back().closure->upvalues[index]);
                     }
                 }
+                allocate<Closure>(closure); // wait to add upvalues
                 break;
             }
             case OpCode::GET_UPVALUE: {

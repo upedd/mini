@@ -27,7 +27,7 @@ void Compiler::variable_declaration(const VarStmt &expr) {
 void Compiler::function_declaration(const FunctionStmt &stmt) {
     std::string function_name = std::string(stmt.name.get_lexeme(source));
     Function *function = new Function(function_name, stmt.params.size()); // TODO: memory leak!
-
+    allocated_objects.push_back(function);
     if (!current_locals().define(function_name, get_current_depth())) {
         throw Error("Variable redefinition in same scope is disallowed."); // todo: better error handling!
     }
@@ -359,7 +359,7 @@ void Compiler::compile() {
     emit(OpCode::RETURN);
 }
 
-const Function &Compiler::get_main() const {
+ Function &Compiler::get_main()  {
     return main;
 }
 

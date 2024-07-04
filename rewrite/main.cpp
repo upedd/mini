@@ -27,8 +27,10 @@ int main() {
         Compiler compiler(source);
         compiler.compile();
         //code_gen.generate(stmts, source);
-        auto func = compiler.get_main();
+        auto& func = compiler.get_main();
         VM vm(&func);
+        vm.adopt_objects(compiler.allocated_objects);
+        vm.gc_ready = true;
         vm.run();
     //}
     // while (true) {
