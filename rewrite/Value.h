@@ -36,12 +36,19 @@ inline constexpr Nil nil_t {};
 //
 // };
 
-struct Function;
-struct Closure;
-struct Upvalue;
+class Object {
+public:
+    bool is_marked = false;
+};
+
+class Function;
+class Closure;
+class Upvalue;
+
+//using object_variant_t = std::variant<std::string*, Function*, Closure*, Upvalue*>;
 
 
-using value_variant_t = std::variant<Nil, bite_int, bite_float, bool, std::string, Function*, Closure*, Upvalue*>;
+using value_variant_t = std::variant<Nil, bite_int, bite_float, bool, Object*>;
 
 class Value : public value_variant_t {
 public:
@@ -58,10 +65,7 @@ public:
             [](bite_int value) {return std::to_string(value);},
             [](bite_float value) {return std::to_string(value);},
             [](bool value) {return std::string(value ? "True" : "False");},
-            [](const std::string& string) {return std::string("string: ") + string;},
-            [](Function* func) {return std::string("func");},
-            [](Closure* closure) {return std::string("closure");},
-            [](Upvalue* upvalue) {return std::string("upvalue");},
+            [](Object* object) {return std::string("object");},
         }, *this);
     }
 
@@ -151,7 +155,8 @@ public:
 
 };
 
-struct Upvalue {
+class Upvalue : public Object {
+public:
     Value* location = nullptr;
     Value closed = Value{nil_t};
 };

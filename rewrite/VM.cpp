@@ -86,6 +86,60 @@ void VM::close_upvalues(const Value &value) {
     }
 }
 
+void VM::mark_object(Object* object) {
+    if (object == nullptr) return;
+    object->is_marked = true;
+    gray_objects.push_back(object);
+#ifdef DEBUG_LOG_GC
+    std::cout << "Marked object.\n"; // todo: better debug info!
+#endif
+}
+
+void VM::mark_value(const Value &value) {
+    if (value.is<Object*>()) {
+        mark_object(value.get<Object*>());
+    }
+}
+
+void VM::mark_roots() {
+    for (int i = 0; i <= stack_index; ++i) {
+        mark_value(stack[i]);
+    }
+
+    for (auto& frame : frames) {
+        mark_object(frame.closure);
+    }
+
+    for (auto& open_upvalue : open_upvalues) {
+        mark_object(open_upvalue);
+    }
+    // TODO!!! mark compiler objects
+}
+
+void VM::blacken_object(Object *object) {
+    // TODO
+}
+
+void VM::trace_references() {
+    while (!gray_objects.empty()) {
+        Object* object = gray_objects.back(); gray_objects.pop_back();
+        blacken_object(object);
+    }
+}
+
+void VM::collect_garbage() {
+#ifdef DEBUG_LOG_GC
+    std::cout << "--- gc start\n";
+#endif
+
+    mark_roots();
+    trace_references();
+
+#ifdef DEBUG_LOG_GC
+    std::cout << "--- gc end\n";
+#endif
+}
+
 std::expected<Value, VM::RuntimeError> VM::run() {
 #define BINARY_OPERATION(op) { \
     auto b = pop(); \

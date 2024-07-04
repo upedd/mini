@@ -6,7 +6,7 @@
 #include "Expr.h"
 #include "Program.h"
 
-class Function {
+class Function : public Object {
 public:
     Function(std::string name, const int arity) : name(std::move(name)), arity(arity) {}
 
@@ -27,7 +27,7 @@ private:
     int upvalue_count;
 };
 
-class Closure {
+class Closure : public Object{
 public:
     explicit Closure(Function* function) : function(function) {}
     [[nodiscard]] Function* get_function() const { return function; }

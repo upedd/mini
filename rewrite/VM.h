@@ -6,6 +6,14 @@
 
 #include "CallFrame.h"
 
+#define DEBUG_STRESS_GC
+
+#define DEBUG_LOG_GC
+
+#ifdef DEBUG_LOG_GC
+#include <iostream>
+#endif
+
 class VM {
 public:
     class RuntimeError : public std::runtime_error {
@@ -36,6 +44,24 @@ public:
 
     void close_upvalues(const Value & peek);
 
+    // Garbage collection
+    template<typename T>
+    Object allocate();
+
+    void mark_object(Object* object);
+
+    void mark_value(const Value& value);
+
+    void mark_roots();
+
+    void blacken_object(Object * object);
+
+    void trace_references();
+
+    void collect_garbage();
+
+    std::vector<Object*> gray_objects;
+
     std::expected<Value, RuntimeError> run();
 private:
     // stack dynamic allocation breaks upvalues!
@@ -45,6 +71,19 @@ private:
     std::set<Upvalue*> open_upvalues;
 };
 
+template<typename T>
+Object VM::allocate() {
+#ifdef DEBUG_STRESS_GC
+    collect_garbage();
+#endif
+    Object ptr = Object(new T());
+
+#ifdef DEBUG_LOG_GC
+    std::cout << "Allocated " << sizeof(T) << " bytes of memory.\n";
+#endif
+
+    return ptr;
+}
 
 
 #endif //VM_H
