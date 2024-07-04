@@ -69,10 +69,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
     break; \
 }
     while (true) {
-        for (auto &x: stack) {
-            std::cout << x.to_string() << ' ';
-        }
-        std::cout << '\n';
+
         switch (fetch_opcode()) {
             case OpCode::CONSTANT: {
                 uint8_t index = fetch();
@@ -172,12 +169,18 @@ std::expected<Value, VM::RuntimeError> VM::run() {
             }
             case OpCode::RETURN: {
                 Value result = pop();
-                pop(); // pop function
+                while (stack.size() > frames.back().frame_pointer) {
+                    pop();
+                }
                 frames.pop_back();
                 push(result);
                 if (frames.empty()) return pop();
             }
         }
+        // for (auto &x: stack) {
+        //     std::cout << x.to_string() << ' ';
+        // }
+        // std::cout << '\n';
     }
 #undef BINARY_OPERATION
 }

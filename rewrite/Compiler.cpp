@@ -236,7 +236,7 @@ Compiler::JumpHandle Compiler::start_jump(OpCode op_code) {
 }
 
 int Compiler::Locals::get(const std::string &name) const {
-    for (int i = locals.size(); i >= 0; --i) {
+    for (int i = locals.size() - 1; i >= 0; --i) {
         if (locals[i].first == name) return i;
     }
     return -1;

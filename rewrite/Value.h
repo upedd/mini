@@ -79,9 +79,9 @@ public:
     }
 
     [[nodiscard]] bool is_falsey() const {
-        if (is<bool>()) return get<bool>();
-        if (is<Nil>()) return false;
-        return true;
+        if (is<bool>()) return !get<bool>();
+        if (is<Nil>()) return true;
+        return false;
     }
 
     [[nodiscard]] bool is_integer() const {
