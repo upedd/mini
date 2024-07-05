@@ -5,42 +5,25 @@
 #include "Compiler.h"
 #include "VM.h"
 
-int main() {
-    // TODO better strings handling!
-
-    std::ifstream in("test.bite");
+int main(int argc, char** argv) {
+    // TODO error handling
+    if (argc != 2) {
+        std::cerr << "Usage: ./bite [path to bite file]\n";
+        return -1;
+    }
+    std::ifstream in(argv[1]);
     std::stringstream ss;
     ss << in.rdbuf();
     std::string source = ss.str();
-
-    // Lexer lexer(source);
-    // Parser parser(source);
-    // //
-    // std::vector<Stmt> stmts = parser.parse();
-    // for (auto& error : parser.get_errors()) {
-    //     std::cerr << "Error at: " << error.token.to_string(source) << " Message: " << error.message << '\n';
-    // }
-    // for (auto& stmt : stmts) {
-    //     std::cout << stmt_to_string(stmt, source) << '\n';
-    // }
-    //if (parser.get_errors().empty()) {
-        Compiler compiler(source);
-        compiler.compile();
-        //code_gen.generate(stmts, source);
-        auto& func = compiler.get_main();
-        VM vm(&func);
-        vm.adopt_objects(compiler.allocated_objects);
-        vm.gc_ready = true;
-        vm.run();
-    //}
-    // while (true) {
-    //     auto token = lexer.next_token();
-    //     if (!token) {
-    //         std::cerr << token.error().message;
-    //         break;
-    //     } else {
-    //         if (token->type == Token::Type::END) break;
-    //         std::cout << token->to_string(source) << '\n';
-    //     }
-    // }
+    Compiler compiler(source);
+    compiler.compile();
+    auto& func = compiler.get_main();
+    VM vm(&func);
+    vm.adopt_objects(compiler.allocated_objects);
+    vm.gc_ready = true;
+    if (auto result = vm.run()) {
+        std::cout << "Your bite program output: " << result->to_string() << '\n';
+    } else {
+        std::cout << "Exectuion error!\n";
+    }
 }

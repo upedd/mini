@@ -46,8 +46,8 @@ void Compiler::function_declaration(const FunctionStmt &stmt) {
     function->set_upvalue_count(states.back().upvalues.size());
     auto upvalues_copy = states.back().upvalues; // todo: elimainate this copy
 
-    Disassembler disassembler(*function);
-    disassembler.disassemble(function_name);
+    // Disassembler disassembler(*function);
+    // disassembler.disassemble(function_name);
 
     states.pop_back();
 

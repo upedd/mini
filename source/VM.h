@@ -6,9 +6,9 @@
 
 #include "CallFrame.h"
 
-#define DEBUG_STRESS_GC
+//#define DEBUG_STRESS_GC
 
-#define DEBUG_LOG_GC
+//#define DEBUG_LOG_GC
 
 #ifdef DEBUG_LOG_GC
 #include <iostream>

@@ -163,7 +163,9 @@ void VM::sweep() {
     }
     for (auto* object : to_erase) {
         objects.erase(std::find(objects.begin(), objects.end(), object));
+#ifdef DEBUG_LOG_GC
         std::cout << "freed " << sizeof(*object) << '\n';
+#endif
         delete object;
     }
 }
@@ -338,10 +340,10 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 break;
             }
         }
-        for (int i = 0; i < stack_index; ++i) {
-            std::cout << stack[i].to_string() << ' ';
-        }
-        std::cout << '\n';
+        // for (int i = 0; i < stack_index; ++i) {
+        //     std::cout << stack[i].to_string() << ' ';
+        // }
+        // std::cout << '\n';
     }
 #undef BINARY_OPERATION
 }
