@@ -116,7 +116,7 @@ Stmt Parser::var_declaration() {
     return VarStmt{.name = name, .value = make_expr_handle(std::move(expr))};
 }
 
-Stmt Parser::function_declaration() {
+FunctionStmt Parser::function_declaration() {
     consume(Token::Type::IDENTIFIER, "expected function name");
     Token name = current;
     consume(Token::Type::LEFT_PAREN, "Expected '(' after function name");
@@ -141,9 +141,14 @@ Stmt Parser::class_declaration() {
     consume(Token::Type::IDENTIFIER, "Expected class name.");
     Token name = current;
     consume(Token::Type::LEFT_BRACE, "Expected '{' before class body.");
+
+    std::vector<std::unique_ptr<FunctionStmt>> methods;
+    while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
+        methods.push_back(std::make_unique<FunctionStmt>(function_declaration()));
+    }
     consume(Token::Type::RIGHT_BRACE, "Expected '}' after class body.");
 
-    return ClassStmt {.name = name};
+    return ClassStmt {.name = name, .methods = std::move(methods)};
 }
 
 Stmt Parser::expr_statement() {

@@ -176,6 +176,10 @@ inline void Disassembler::disassemble(const std::string& name) {
                 constant_inst("SET_PROPERTY");
                 break;
             }
+            case OpCode::METHOD: {
+                constant_inst("METHOD");
+                break;
+            }
         }
     }
 }

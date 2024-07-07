@@ -67,6 +67,8 @@ public:
     std::vector<Object*> objects;
     bool gc_ready = false;
 
+    bool bind_method(Class * klass, const std::string & name);
+
     std::expected<Value, RuntimeError> run();
 private:
     // stack dynamic allocation breaks upvalues!

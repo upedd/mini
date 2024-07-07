@@ -49,6 +49,7 @@ class Class final : public Object{
 public:
     explicit Class(std::string  name) : name(std::move(name)) {}
     std::string name;
+    std::unordered_map<std::string, Value> methods;
 };
 
 class Instance final : public Object {
@@ -57,6 +58,17 @@ public:
 
     Class* klass;
     std::unordered_map<std::string, Value> fields;
+};
+
+class BoundMethod final : public Object {
+public:
+    BoundMethod(Value receiver, Closure *closure)
+        : receiver(std::move(receiver)),
+          closure(closure) {
+    }
+
+    Value receiver;
+    Closure* closure;
 };
 
 #endif //FUNCTION_H

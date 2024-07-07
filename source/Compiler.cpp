@@ -146,9 +146,41 @@ void Compiler::class_declaration(const ClassStmt& stmt) {
     std::string name = stmt.name.get_lexeme(source);
     uint8_t constant = current_function()->add_constant(name);
     current_locals().define(name, get_current_depth());
+    for (auto& method : stmt.methods) {
+        // todo: too much repetition with function declaration!!!!
+        std::string function_name = std::string(method->name.get_lexeme(source));
+        Function *function = new Function(function_name, method->params.size()); // TODO: memory leak!
+        allocated_objects.push_back(function);
 
+        states.emplace_back(function);
+        begin_scope();
+        current_locals().define(function_name, get_current_depth());
+        for (const Token &param: method->params) {
+            current_locals().define(param.get_lexeme(source), get_current_depth());
+        }
+        visit_stmt(*method->body);
+        // emit default retrun
+        emit(OpCode::NIL);
+        emit(OpCode::RETURN);
+        end_scope();
+        function->set_upvalue_count(states.back().upvalues.size());
+        auto upvalues_copy = states.back().upvalues; // todo: elimainate this copy
+        states.pop_back();
+        int constant = current_function()->add_constant(function);
+        emit(OpCode::CLOSURE);
+        emit(static_cast<uint8_t>(constant));
+        for (int i = 0; i < function->get_upvalue_count(); ++i) {
+            emit(upvalues_copy[i].is_local);
+            emit(upvalues_copy[i].index);
+        }
+
+        int idx = current_function()->add_constant(name);
+        emit(OpCode::METHOD);
+        emit(idx);
+    }
     emit(OpCode::CLASS);
     emit(constant);
+    emit(OpCode::POP);
 }
 
 void Compiler::get_property(const GetPropertyExpr &expr) {

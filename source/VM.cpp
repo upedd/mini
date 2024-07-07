@@ -60,6 +60,8 @@ std::optional<VM::RuntimeError> VM::call_value(const Value &value, const int arg
                                             closure->get_function()->get_arity(), arguments_count));
         }
         frames.emplace_back(closure, 0, stack_index - arguments_count - 1);
+    } else if (auto* bound = dynamic_cast<BoundMethod*>(object)) {
+        return call_value(bound->closure, arguments_count);
     }
     // std::optional<Closure *> closure = reinterpret_cast<Closure*>(*value.as<Object *>());
     // if (!closure) {
@@ -153,6 +155,9 @@ void VM::blacken_object(Object *object) {
 
     if (auto *klass = dynamic_cast<Class*>(object)) {
         // todo: mark name?
+        for (auto& [_, v] : klass->methods) {
+            mark_value(v);
+        }
     }
 
     if (auto *instance = dynamic_cast<Instance*>(object)) {
@@ -160,6 +165,11 @@ void VM::blacken_object(Object *object) {
         for (auto& [_, v] : instance->fields) {
             mark_value(v);
         }
+    }
+
+    if (auto *bound = dynamic_cast<BoundMethod*>(object)) {
+        mark_value(bound->receiver);
+        mark_object(bound->closure);
     }
 }
 
@@ -208,6 +218,14 @@ void VM::adopt_objects(std::vector<Object *> objects) {
     for (auto* object : objects) {
         allocate<Object>(object);
     }
+}
+
+bool VM::bind_method(Class *klass, const std::string &name) {
+    Value method = klass->methods[name]; // TODO: check
+    auto* bound = allocate<BoundMethod>(new BoundMethod(peek(), dynamic_cast<Closure*>(method.get<Object*>())));
+    pop();
+    push(bound);
+    return true;
 }
 
 std::expected<Value, VM::RuntimeError> VM::run() {
@@ -373,7 +391,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                     pop();
                     push(instance->fields[name]);
                     break;
-                } else {
+                } else if(!bind_method(instance->klass, name)) {
                     return std::unexpected(RuntimeError("Undefined property!"));
                 }
             }
@@ -385,6 +403,15 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 Value value = pop();
                 pop(); // pop instance
                 push(value);
+                break;
+            }
+            case OpCode::METHOD: {
+                int constant_idx = fetch();
+                auto name = get_constant(constant_idx).get<std::string>();
+                Value method = peek();
+                Class* klass = dynamic_cast<Class*>(peek(1).get<Object*>());
+                klass->methods[name] = method;
+                pop();
                 break;
             }
         }

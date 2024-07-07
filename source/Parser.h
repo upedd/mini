@@ -49,7 +49,8 @@ private:
     Stmt statement();
 
     Stmt var_declaration();
-    Stmt function_declaration();
+
+    FunctionStmt function_declaration();
     Stmt class_declaration();
 
     Stmt expr_statement();
