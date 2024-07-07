@@ -163,7 +163,13 @@ void Compiler::class_declaration(const ClassStmt& stmt) {
         current_locals().define("this", get_current_depth());
         visit_stmt(*method->body);
         // emit default retrun
-        emit(OpCode::NIL);
+        if (function_name == "init") {
+            emit(OpCode::GET);
+            emit(current_locals().get("this"));
+        } else {
+            emit(OpCode::NIL);
+        }
+
         emit(OpCode::RETURN);
         end_scope();
         function->set_upvalue_count(states.back().upvalues.size());
