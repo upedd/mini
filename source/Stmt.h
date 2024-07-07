@@ -14,8 +14,9 @@ struct IfStmt;
 struct WhileStmt;
 struct FunctionStmt;
 struct ReturnStmt;
+struct ClassStmt;
 
-using Stmt = std::variant<VarStmt, ExprStmt, BlockStmt, IfStmt, WhileStmt, FunctionStmt, ReturnStmt>;
+using Stmt = std::variant<VarStmt, ExprStmt, BlockStmt, IfStmt, WhileStmt, FunctionStmt, ReturnStmt, ClassStmt>;
 using StmtHandle = std::unique_ptr<Stmt>;
 
 struct BlockStmt {
@@ -50,6 +51,10 @@ struct ExprStmt {
 
 struct ReturnStmt {
     ExprHandle expr;
+};
+
+struct ClassStmt {
+    Token name;
 };
 
 inline std::string stmt_to_string(const Stmt& stmt, std::string_view source) {
@@ -103,6 +108,9 @@ inline std::string stmt_to_string(const Stmt& stmt, std::string_view source) {
             }
             return std::string("retrun");
         },
+        [source](const ClassStmt& stmt) {
+            return std::format("(class {})", stmt.name.get_lexeme(source));
+        }
 
     }, stmt);
 }

@@ -13,6 +13,7 @@ void Compiler::visit_stmt(const Stmt &statement) {
                    [this](const IfStmt &stmt) { if_statement(stmt); },
                    [this](const WhileStmt &stmt) { while_statement(stmt); },
                    [this](const ReturnStmt &stmt) { return_statement(stmt); },
+                   [this](const ClassStmt& stmt) {class_declaration(stmt);}
                }, statement);
 }
 
@@ -141,6 +142,32 @@ void Compiler::return_statement(const ReturnStmt &stmt) {
     emit(OpCode::RETURN);
 }
 
+void Compiler::class_declaration(const ClassStmt& stmt) {
+    std::string name = stmt.name.get_lexeme(source);
+    uint8_t constant = current_function()->add_constant(name);
+    current_locals().define(name, get_current_depth());
+
+    emit(OpCode::CLASS);
+    emit(constant);
+}
+
+void Compiler::get_property(const GetPropertyExpr &expr) {
+    visit_expr(*expr.left);
+    std::string name = expr.property.get_lexeme(source);
+    int constant = current_function()->add_constant(name);
+    emit(OpCode::GET_PROPERTY);
+    emit(constant);
+}
+
+void Compiler::set_property(const SetPropertyExpr &expr) {
+    visit_expr(*expr.left);
+    std::string name = expr.property.get_lexeme(source);
+    int constant = current_function()->add_constant(name);
+    visit_expr(*expr.expression);
+    emit(OpCode::SET_PROPERTY);
+    emit(constant);
+}
+
 void Compiler::visit_expr(const Expr &expression) {
     std::visit(overloaded{
                    [this](const LiteralExpr &expr) { literal(expr); },
@@ -149,7 +176,9 @@ void Compiler::visit_expr(const Expr &expression) {
                    [this](const StringLiteral &expr) { string_literal(expr); },
                    [this](const VariableExpr &expr) { variable(expr); },
                    [this](const AssigmentExpr &expr) { assigment(expr); },
-                   [this](const CallExpr &expr) { call(expr); }
+                   [this](const CallExpr &expr) { call(expr); },
+                   [this](const GetPropertyExpr &expr) { get_property(expr); },
+                   [this](const SetPropertyExpr &expr) { set_property(expr); }
                }, expression);
 }
 

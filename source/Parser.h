@@ -43,11 +43,14 @@ private:
     Token advance();
     void consume(Token::Type type, std::string_view message);
 
+
+
     Stmt declaration();
     Stmt statement();
 
     Stmt var_declaration();
     Stmt function_declaration();
+    Stmt class_declaration();
 
     Stmt expr_statement();
     Stmt block_statement();
@@ -89,6 +92,8 @@ private:
     Expr identifier();
     Expr grouping();
     Expr unary(Token::Type op);
+
+    Expr dot(Expr left);
 
     Expr infix(Expr left);
 

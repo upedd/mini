@@ -49,16 +49,24 @@ void VM::set_in_slot(const int index, const Value &value) {
 
 std::optional<VM::RuntimeError> VM::call_value(const Value &value, const int arguments_count) {
     // todo: refactor!
-    std::optional<Closure *> closure = reinterpret_cast<Closure*>(*value.as<Object *>());
-    if (!closure) {
-        return RuntimeError("Expected callable value such as function or class");
-    }
+    auto* object = value.get<Object*>();
 
-    if (arguments_count != closure.value()->get_function()->get_arity()) {
-        return RuntimeError(std::format("Expected {} but got {} arguments",
-                                        closure.value()->get_function()->get_arity(), arguments_count));
+    if (auto* klass = dynamic_cast<Class*>(object)) {
+        pop();
+        push(allocate<Instance>(new Instance(klass)));
+    } else if (auto* closure = dynamic_cast<Closure*>(object)) {
+        if (arguments_count != closure->get_function()->get_arity()) {
+            return RuntimeError(std::format("Expected {} but got {} arguments",
+                                            closure->get_function()->get_arity(), arguments_count));
+        }
+        frames.emplace_back(closure, 0, stack_index - arguments_count - 1);
     }
-    frames.emplace_back(*closure, 0, stack_index - arguments_count - 1);
+    // std::optional<Closure *> closure = reinterpret_cast<Closure*>(*value.as<Object *>());
+    // if (!closure) {
+    //     return RuntimeError("Expected callable value such as function or class");
+    // }
+
+
     return {};
 }
 
@@ -140,6 +148,17 @@ void VM::blacken_object(Object *object) {
         mark_object(closure->get_function());
         for (auto *upvalue: closure->upvalues) {
             mark_object(upvalue);
+        }
+    }
+
+    if (auto *klass = dynamic_cast<Class*>(object)) {
+        // todo: mark name?
+    }
+
+    if (auto *instance = dynamic_cast<Instance*>(object)) {
+        mark_object(instance->klass);
+        for (auto& [_, v] : instance->fields) {
+            mark_value(v);
         }
     }
 }
@@ -337,6 +356,35 @@ std::expected<Value, VM::RuntimeError> VM::run() {
             case OpCode::CLOSE_UPVALUE: {
                 close_upvalues(peek());
                 pop();
+                break;
+            }
+            case OpCode::CLASS: {
+                int constant_idx = fetch();
+                auto name = get_constant(constant_idx).get<std::string>();
+                push(allocate<Class>(new Class(name)));
+                break;
+            }
+            case OpCode::GET_PROPERTY: {
+                // TODO: handle error!!!!
+                auto* instance = dynamic_cast<Instance*>(peek().get<Object*>());
+                int constant_idx = fetch();
+                auto name = get_constant(constant_idx).get<std::string>();
+                if (instance->fields.contains(name)) {
+                    pop();
+                    push(instance->fields[name]);
+                    break;
+                } else {
+                    return std::unexpected(RuntimeError("Undefined property!"));
+                }
+            }
+            case OpCode::SET_PROPERTY: {
+                auto* instance = dynamic_cast<Instance*>(peek(1).get<Object*>());
+                int constant_idx = fetch();
+                auto name = get_constant(constant_idx).get<std::string>();
+                instance->fields[name] = peek(0);
+                Value value = pop();
+                pop(); // pop instance
+                push(value);
                 break;
             }
         }

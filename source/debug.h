@@ -164,6 +164,18 @@ inline void Disassembler::disassemble(const std::string& name) {
                 simple_opcode("CLOSE_UPVALUE");
                 break;
             }
+            case OpCode::CLASS: {
+                constant_inst("CLASS");
+                break;
+            }
+            case OpCode::GET_PROPERTY: {
+                constant_inst("GET_PROPERTY");
+                break;
+            }
+            case OpCode::SET_PROPERTY: {
+                constant_inst("SET_PROPERTY");
+                break;
+            }
         }
     }
 }

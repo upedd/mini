@@ -1,12 +1,13 @@
 #ifndef FUNCTION_H
 #define FUNCTION_H
 
+#include <unordered_map>
 #include <utility>
 
 #include "Expr.h"
 #include "Program.h"
 
-class Function : public Object {
+class Function final : public Object {
 public:
     Function(std::string name, const int arity) : name(std::move(name)),
                                                   arity(arity), upvalue_count(0) {}
@@ -31,7 +32,7 @@ private:
     int upvalue_count;
 };
 
-class Closure : public Object {
+class Closure final : public Object {
 public:
     explicit Closure(Function *function) : function(function) {
     }
@@ -42,6 +43,20 @@ public:
 
 private:
     Function *function;
+};
+
+class Class final : public Object{
+public:
+    explicit Class(std::string  name) : name(std::move(name)) {}
+    std::string name;
+};
+
+class Instance final : public Object {
+public:
+    explicit Instance(Class* klass) : klass(klass) {}
+
+    Class* klass;
+    std::unordered_map<std::string, Value> fields;
 };
 
 #endif //FUNCTION_H

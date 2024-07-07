@@ -86,6 +86,9 @@ Stmt Parser::declaration() {
     if (match(Token::Type::FUN)) {
         return function_declaration();
     }
+    if (match(Token::Type::CLASS)) {
+        return class_declaration();
+    }
     return statement();
 }
 
@@ -132,6 +135,15 @@ Stmt Parser::function_declaration() {
         .params = std::move(parameters),
         .body = std::make_unique<Stmt>(std::move(body))
     };
+}
+
+Stmt Parser::class_declaration() {
+    consume(Token::Type::IDENTIFIER, "Expected class name.");
+    Token name = current;
+    consume(Token::Type::LEFT_BRACE, "Expected '{' before class body.");
+    consume(Token::Type::RIGHT_BRACE, "Expected '}' after class body.");
+
+    return ClassStmt {.name = name};
 }
 
 Stmt Parser::expr_statement() {
@@ -219,6 +231,8 @@ Parser::Precedence Parser::get_precendece(Token::Type token) {
         case Token::Type::BAR_BAR:
             return Precedence::LOGICAL_OR;
         case Token::Type::LEFT_PAREN:
+            return Precedence::CALL;
+        case Token::Type::DOT:
             return Precedence::CALL;
         default:
             return Precedence::NONE;
@@ -315,6 +329,18 @@ Expr Parser::unary(Token::Type operator_type) {
     return UnaryExpr{.expr = make_expr_handle(expression(Precedence::UNARY)), .op = operator_type};
 }
 
+Expr Parser::dot(Expr left) {
+    consume(Token::Type::IDENTIFIER, "Expected property name after '.'");
+    Token name = current;
+    if (match(Token::Type::EQUAL)) { // TODO: you can't actually always assign
+        return SetPropertyExpr {.left = make_expr_handle(std::move(left)),
+            .property = name,
+            .expression = make_expr_handle(expression())};
+    }
+
+    return GetPropertyExpr {.left = make_expr_handle(std::move(left)), .property = name};
+}
+
 Expr Parser::infix(Expr left) {
     switch (current.type) {
         case Token::Type::STAR:
@@ -339,6 +365,8 @@ Expr Parser::infix(Expr left) {
             return binary(std::move(left));
         case Token::Type::LEFT_PAREN:
             return call(std::move(left));
+        case Token::Type::DOT:
+            return dot(std::move(left));
         default:
             return left;
     }

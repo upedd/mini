@@ -90,6 +90,12 @@ public:
 
     void return_statement(const ReturnStmt &stmt);
 
+    void class_declaration(const ClassStmt &stmt);
+
+    void get_property(const GetPropertyExpr & expr);
+
+    void set_property(const SetPropertyExpr & expr);
+
     std::vector<Object*> allocated_objects;
 
 private:

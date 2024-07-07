@@ -17,8 +17,10 @@ struct CallExpr;
 struct LiteralExpr;
 struct StringLiteral;
 struct VariableExpr;
+struct SetPropertyExpr;
+struct GetPropertyExpr;
 
-using Expr = std::variant<LiteralExpr, StringLiteral, UnaryExpr, BinaryExpr, VariableExpr, AssigmentExpr, CallExpr>;
+using Expr = std::variant<LiteralExpr, StringLiteral, UnaryExpr, BinaryExpr, VariableExpr, AssigmentExpr, CallExpr, SetPropertyExpr, GetPropertyExpr>;
 using ExprHandle = std::unique_ptr<Expr>;
 
 struct UnaryExpr {
@@ -54,6 +56,17 @@ struct VariableExpr {
     Token identifier;
 };
 
+struct GetPropertyExpr {
+    ExprHandle left; // Todo: better name?
+    Token property;
+};
+
+struct SetPropertyExpr {
+    ExprHandle left;
+    Token property;
+    ExprHandle expression;
+};
+
 inline ExprHandle make_expr_handle(Expr expr) {
     return std::make_unique<Expr>(std::move(expr));
 }
@@ -87,7 +100,15 @@ inline std::string expr_to_string(const Expr &expr, std::string_view source) {
                               }
                               return std::format("(call {}{})", expr_to_string(*expr.callee, source), arguments_string);
                           },
-
+                          [source](const GetPropertyExpr &expr) {
+                              return std::format("({}.{})", expr_to_string(*expr.left, source), expr.property.get_lexeme(source));
+                          },
+                          [source](const SetPropertyExpr &expr) {
+                              return std::format("(assign {}.{} {})",
+                                  expr_to_string(*expr.left, source),
+                                  expr.property.get_lexeme(source),
+                                  expr_to_string(*expr.expression, source));
+                          },
                       }, expr);
 }
 
