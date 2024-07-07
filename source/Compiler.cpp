@@ -160,6 +160,7 @@ void Compiler::class_declaration(const ClassStmt& stmt) {
         for (const Token &param: method->params) {
             current_locals().define(param.get_lexeme(source), get_current_depth());
         }
+        current_locals().define("this", get_current_depth());
         visit_stmt(*method->body);
         // emit default retrun
         emit(OpCode::NIL);

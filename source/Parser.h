@@ -84,6 +84,9 @@ private:
     static Precedence get_precendece(Token::Type token);
 
     Expr expression(Precedence precedence = Precedence::NONE);
+
+    Expr this_();
+
     std::optional<Expr> prefix();
 
     Expr integer();

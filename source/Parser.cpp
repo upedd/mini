@@ -259,6 +259,10 @@ Expr Parser::expression(const Precedence precedence) {
     return std::move(*left);
 }
 
+Expr Parser::this_() {
+    return VariableExpr{current};
+}
+
 std::optional<Expr> Parser::prefix() {
     switch (current.type) {
         case Token::Type::INTEGER:
@@ -279,6 +283,8 @@ std::optional<Expr> Parser::prefix() {
         case Token::Type::MINUS:
         case Token::Type::TILDE:
             return unary(current.type);
+        case Token::Type::THIS:
+            return this_();
         default: return {};
     }
 }
