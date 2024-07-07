@@ -53,16 +53,16 @@ std::optional<VM::RuntimeError> VM::call_value(const Value &value, const int arg
 
     if (auto* klass = dynamic_cast<Class*>(object)) {
         pop();
-        push(allocate<Instance>(new Instance(klass)));
         push(nil_t); // todo: temp fix!
+        push(allocate<Instance>(new Instance(klass)));
         if (klass->methods.contains("init")) {
-            call_value(klass->methods["init"], arguments_count);
+            call_value(klass->methods["init"], arguments_count + 1);
         }
     } else if (auto* closure = dynamic_cast<Closure*>(object)) {
-        if (arguments_count != closure->get_function()->get_arity()) {
-            return RuntimeError(std::format("Expected {} but got {} arguments",
-                                            closure->get_function()->get_arity(), arguments_count));
-        }
+        // if (arguments_count != closure->get_function()->get_arity()) {
+        //     return RuntimeError(std::format("Expected {} but got {} arguments",
+        //                                     closure->get_function()->get_arity(), arguments_count));
+        // }
         frames.emplace_back(closure, 0, stack_index - arguments_count - 1);
     } else if (auto* bound = dynamic_cast<BoundMethod*>(object)) {
         auto res = call_value(bound->closure, arguments_count);
