@@ -140,6 +140,13 @@ FunctionStmt Parser::function_declaration() {
 Stmt Parser::class_declaration() {
     consume(Token::Type::IDENTIFIER, "Expected class name.");
     Token name = current;
+
+
+    std::optional<Token> super_name {};
+    if (match(Token::Type::LESS)) {
+        consume(Token::Type::IDENTIFIER, "Expected superclass name.");
+        super_name = current;
+    }
     consume(Token::Type::LEFT_BRACE, "Expected '{' before class body.");
 
     std::vector<std::unique_ptr<FunctionStmt>> methods;
@@ -149,7 +156,7 @@ Stmt Parser::class_declaration() {
     }
     consume(Token::Type::RIGHT_BRACE, "Expected '}' after class body.");
 
-    return ClassStmt {.name = name, .methods = std::move(methods)};
+    return ClassStmt {.name = name, .methods = std::move(methods), .super_name = super_name};
 }
 
 Stmt Parser::expr_statement() {
@@ -263,6 +270,12 @@ Expr Parser::this_() {
     return VariableExpr{current};
 }
 
+Expr Parser::super_() {
+    consume(Token::Type::DOT, "Expected '.' after 'super'.");
+    consume(Token::Type::IDENTIFIER, "Expected superclass method name.");
+    return SuperExpr{current};
+}
+
 std::optional<Expr> Parser::prefix() {
     switch (current.type) {
         case Token::Type::INTEGER:
@@ -285,6 +298,8 @@ std::optional<Expr> Parser::prefix() {
             return unary(current.type);
         case Token::Type::THIS:
             return this_();
+        case Token::Type::SUPER:
+            return super_();
         default: return {};
     }
 }

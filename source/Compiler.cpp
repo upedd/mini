@@ -146,8 +146,21 @@ void Compiler::class_declaration(const ClassStmt& stmt) {
     std::string name = stmt.name.get_lexeme(source);
     uint8_t constant = current_function()->add_constant(name);
     current_locals().define(name, get_current_depth());
+
+
+    if (stmt.super_name) {
+        emit(OpCode::GET);
+        emit(current_locals().get(stmt.super_name->get_lexeme(source)));
+
+        begin_scope();
+        current_locals().define("super", get_current_depth());
+    }
     emit(OpCode::CLASS);
     emit(constant);
+     if (stmt.super_name) {emit(OpCode::INHERIT); }
+
+
+
     for (auto& method : stmt.methods) {
         // todo: too much repetition with function declaration!!!!
         std::string function_name = std::string(method->name.get_lexeme(source));
@@ -156,7 +169,9 @@ void Compiler::class_declaration(const ClassStmt& stmt) {
 
         states.emplace_back(function);
         begin_scope();
-        current_locals().define(function_name, get_current_depth());
+        if (function_name != "init") {
+            current_locals().define(function_name, get_current_depth());
+        }
         for (const Token &param: method->params) {
             current_locals().define(param.get_lexeme(source), get_current_depth());
         }
@@ -187,6 +202,10 @@ void Compiler::class_declaration(const ClassStmt& stmt) {
         emit(OpCode::METHOD);
         emit(idx);
     }
+
+    if (stmt.super_name) {
+        end_scope();
+    }
 }
 
 void Compiler::get_property(const GetPropertyExpr &expr) {
@@ -206,6 +225,16 @@ void Compiler::set_property(const SetPropertyExpr &expr) {
     emit(constant);
 }
 
+void Compiler::super(const SuperExpr &expr) {
+    int constant = current_function()->add_constant(expr.method.get_lexeme(source));
+    emit(OpCode::GET);
+    emit(current_locals().get("this"));
+    emit(OpCode::GET);
+    emit(current_locals().get("super"));
+    emit(OpCode::GET_SUPER);
+    emit(constant);
+}
+
 void Compiler::visit_expr(const Expr &expression) {
     std::visit(overloaded{
                    [this](const LiteralExpr &expr) { literal(expr); },
@@ -216,7 +245,8 @@ void Compiler::visit_expr(const Expr &expression) {
                    [this](const AssigmentExpr &expr) { assigment(expr); },
                    [this](const CallExpr &expr) { call(expr); },
                    [this](const GetPropertyExpr &expr) { get_property(expr); },
-                   [this](const SetPropertyExpr &expr) { set_property(expr); }
+                   [this](const SetPropertyExpr &expr) { set_property(expr); },
+                   [this](const SuperExpr& expr) {super(expr);}
                }, expression);
 }
 

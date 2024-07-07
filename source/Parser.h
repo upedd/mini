@@ -87,6 +87,8 @@ private:
 
     Expr this_();
 
+    Expr super_();
+
     std::optional<Expr> prefix();
 
     Expr integer();

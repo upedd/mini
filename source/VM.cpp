@@ -53,10 +53,9 @@ std::optional<VM::RuntimeError> VM::call_value(const Value &value, const int arg
 
     if (auto* klass = dynamic_cast<Class*>(object)) {
         pop();
-        push(nil_t); // todo: temp fix!
         push(allocate<Instance>(new Instance(klass)));
         if (klass->methods.contains("init")) {
-            call_value(klass->methods["init"], arguments_count + 1);
+            call_value(klass->methods["init"], arguments_count);
         }
     } else if (auto* closure = dynamic_cast<Closure*>(object)) {
         // if (arguments_count != closure->get_function()->get_arity()) {
@@ -418,6 +417,22 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 Class* klass = dynamic_cast<Class*>(peek(1).get<Object*>());
                 klass->methods[name] = method;
                 pop();
+                break;
+            }
+            case OpCode::INHERIT: {
+                Class* superclass = dynamic_cast<Class*>(peek(1).get<Object*>());
+                Class* subclass = dynamic_cast<Class*>(peek(0).get<Object*>());
+                for (auto& value : superclass->methods) {
+                    subclass->methods.insert(value);
+                }
+                pop();
+                break;
+            }
+            case OpCode::GET_SUPER: {
+                int constant_idx = fetch();
+                auto name = get_constant(constant_idx).get<std::string>();
+                Class* superclass = dynamic_cast<Class*>(peek().get<Object*>());
+                bind_method(superclass, name);
                 break;
             }
         }

@@ -96,6 +96,8 @@ public:
 
     void set_property(const SetPropertyExpr & expr);
 
+    void super(const SuperExpr& expr);
+
     std::vector<Object*> allocated_objects;
 
 private:

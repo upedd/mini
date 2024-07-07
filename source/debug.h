@@ -180,6 +180,14 @@ inline void Disassembler::disassemble(const std::string& name) {
                 constant_inst("METHOD");
                 break;
             }
+            case OpCode::INHERIT: {
+                simple_opcode("INHERIT");
+                break;
+            }
+            case OpCode::GET_SUPER: {
+                constant_inst("GET_SUPER");
+                break;
+            }
         }
     }
 }

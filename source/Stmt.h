@@ -56,6 +56,7 @@ struct ReturnStmt {
 struct ClassStmt {
     Token name;
     std::vector<std::unique_ptr<FunctionStmt>> methods;
+    std::optional<Token> super_name;
 };
 
 inline std::string stmt_to_string(const Stmt& stmt, std::string_view source) {

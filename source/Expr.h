@@ -19,8 +19,9 @@ struct StringLiteral;
 struct VariableExpr;
 struct SetPropertyExpr;
 struct GetPropertyExpr;
+struct SuperExpr;
 
-using Expr = std::variant<LiteralExpr, StringLiteral, UnaryExpr, BinaryExpr, VariableExpr, AssigmentExpr, CallExpr, SetPropertyExpr, GetPropertyExpr>;
+using Expr = std::variant<LiteralExpr, StringLiteral, UnaryExpr, BinaryExpr, VariableExpr, AssigmentExpr, CallExpr, SetPropertyExpr, GetPropertyExpr, SuperExpr>;
 using ExprHandle = std::unique_ptr<Expr>;
 
 struct UnaryExpr {
@@ -67,6 +68,10 @@ struct SetPropertyExpr {
     ExprHandle expression;
 };
 
+struct SuperExpr {
+    Token method;
+};
+
 inline ExprHandle make_expr_handle(Expr expr) {
     return std::make_unique<Expr>(std::move(expr));
 }
@@ -108,6 +113,9 @@ inline std::string expr_to_string(const Expr &expr, std::string_view source) {
                                   expr_to_string(*expr.left, source),
                                   expr.property.get_lexeme(source),
                                   expr_to_string(*expr.expression, source));
+                          },
+                          [source](const SuperExpr &expr) {
+                              return std::format("super.{}", expr.method.get_lexeme(source));
                           },
                       }, expr);
 }
