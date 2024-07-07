@@ -143,7 +143,8 @@ Stmt Parser::class_declaration() {
     consume(Token::Type::LEFT_BRACE, "Expected '{' before class body.");
 
     std::vector<std::unique_ptr<FunctionStmt>> methods;
-    while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
+    // todo: fix!
+    while (!check(Token::Type::RIGHT_BRACE) && current.type != Token::Type::RIGHT_BRACE && !check(Token::Type::END)) {
         methods.push_back(std::make_unique<FunctionStmt>(function_declaration()));
     }
     consume(Token::Type::RIGHT_BRACE, "Expected '}' after class body.");

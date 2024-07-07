@@ -394,6 +394,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 } else if(!bind_method(instance->klass, name)) {
                     return std::unexpected(RuntimeError("Undefined property!"));
                 }
+                break;
             }
             case OpCode::SET_PROPERTY: {
                 auto* instance = dynamic_cast<Instance*>(peek(1).get<Object*>());

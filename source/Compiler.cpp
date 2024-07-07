@@ -146,6 +146,8 @@ void Compiler::class_declaration(const ClassStmt& stmt) {
     std::string name = stmt.name.get_lexeme(source);
     uint8_t constant = current_function()->add_constant(name);
     current_locals().define(name, get_current_depth());
+    emit(OpCode::CLASS);
+    emit(constant);
     for (auto& method : stmt.methods) {
         // todo: too much repetition with function declaration!!!!
         std::string function_name = std::string(method->name.get_lexeme(source));
@@ -174,13 +176,10 @@ void Compiler::class_declaration(const ClassStmt& stmt) {
             emit(upvalues_copy[i].index);
         }
 
-        int idx = current_function()->add_constant(name);
+        int idx = current_function()->add_constant(function_name);
         emit(OpCode::METHOD);
         emit(idx);
     }
-    emit(OpCode::CLASS);
-    emit(constant);
-    emit(OpCode::POP);
 }
 
 void Compiler::get_property(const GetPropertyExpr &expr) {
