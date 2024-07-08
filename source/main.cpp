@@ -19,11 +19,9 @@ int main(int argc, char** argv) {
     compiler.compile();
     auto& func = compiler.get_main();
     VM vm(&func);
-    vm.adopt_objects(compiler.allocated_objects);
-    vm.gc_ready = true;
     if (auto result = vm.run()) {
         std::cout << "Your bite program output: " << result->to_string() << '\n';
     } else {
-        std::cout << "Exectuion error!\n";
+        std::cout << "Exectuion error: " << result.error().what() << '\n';
     }
 }

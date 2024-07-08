@@ -48,7 +48,7 @@ void GarbageCollector::sweep() {
 
 void GarbageCollector::trace_references() {
     while (!grey_objects.empty()) {
-        Object* grey = grey_objects.back(); grey_objects.pop();
+        Object* grey = grey_objects.front(); grey_objects.pop();
         GC_LOG(std::format("Tracing references for {}", grey->to_string()));
         grey->mark_references(*this);
     }

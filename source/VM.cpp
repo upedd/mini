@@ -3,6 +3,8 @@
 #include <iostream>
 #include <algorithm>
 
+// TODO: maybe add asserts
+
 uint8_t VM::fetch() {
     CallFrame &frame = frames.back();
     return frame.closure->get_function()->get_program().get_at(frame.instruction_pointer++);
@@ -49,38 +51,41 @@ void VM::set_in_slot(const int index, const Value &value) {
 
 std::optional<VM::RuntimeError> VM::call_value(const Value &value, const int arguments_count) {
     // todo: refactor!
-    auto* object = value.get<Object*>();
+    std::optional<Object *> object = value.as<Object *>();
 
-    if (auto* klass = dynamic_cast<Class*>(object)) {
+    if (!object) {
+        return RuntimeError("Expected callable value such as function or class.");
+    }
+
+    if (auto *klass = dynamic_cast<Class *>(*object)) {
         pop();
-        auto* instance = new Instance(klass);
+        auto *instance = new Instance(klass);
         push(instance);
         allocate(instance);
         if (klass->methods.contains("init")) {
-            call_value(klass->methods["init"], arguments_count);
+            return call_value(klass->methods["init"], arguments_count);
         }
-    } else if (auto* closure = dynamic_cast<Closure*>(object)) {
-        // if (arguments_count != closure->get_function()->get_arity()) {
-        //     return RuntimeError(std::format("Expected {} but got {} arguments",
-        //                                     closure->get_function()->get_arity(), arguments_count));
-        // }
-        frames.emplace_back(closure, 0, stack_index - arguments_count - 1);
-    } else if (auto* bound = dynamic_cast<BoundMethod*>(object)) {
-        stack[stack_index - arguments_count - 1] = bound->receiver;
-        auto res = call_value(bound->closure, arguments_count);
-        //push(bound->receiver);
+        return {}; // success
     }
-    // std::optional<Closure *> closure = reinterpret_cast<Closure*>(*value.as<Object *>());
-    // if (!closure) {
-    //     return RuntimeError("Expected callable value such as function or class");
-    // }
-
-
-    return {};
+    if (auto *closure = dynamic_cast<Closure *>(*object)) {
+        if (arguments_count != closure->get_function()->get_arity()) {
+            return RuntimeError(std::format("Expected {} but got {} arguments",
+                                            closure->get_function()->get_arity(), arguments_count));
+        }
+        frames.emplace_back(closure, 0, stack_index - arguments_count - 1);
+        return {}; // success
+    }
+    if (auto *bound = dynamic_cast<BoundMethod *>(*object)) {
+        // reuse closure value in stack as bound method reciver ("this")
+        stack[stack_index - arguments_count - 1] = bound->receiver;
+        return call_value(bound->closure, arguments_count);
+    }
+    return RuntimeError("Expected callable value such as function or class.");
 }
 
 Upvalue *VM::capture_upvalue(int index) {
     auto *value = &get_from_slot(index);
+    // try to reuse already open upvalue
     Upvalue *upvalue = nullptr;
     for (auto open: open_upvalues) {
         if (open->location == value) {
@@ -90,25 +95,22 @@ Upvalue *VM::capture_upvalue(int index) {
     }
     if (upvalue == nullptr) {
         upvalue = new Upvalue(value);
-        open_upvalues.emplace(upvalue);
+        open_upvalues.push_back(upvalue);
         allocate<Upvalue>(upvalue);
     }
     return upvalue;
 }
 
 void VM::close_upvalues(const Value &value) {
-    std::vector<Upvalue*> to_erase;
-
-    for (auto* open: open_upvalues) {
+    erase_if(open_upvalues, [&value](Upvalue *open) {
         if (open->location >= &value) {
+            // maybe don't use memory addresses for this? seems unsafe
             open->closed = *open->location;
             open->location = &open->closed;
-            to_erase.push_back(open);
+            return true;
         }
-    }
-    for (auto* open : to_erase) {
-        open_upvalues.erase(std::find(open_upvalues.begin(), open_upvalues.end(), open));
-    }
+        return false;
+    });
 }
 
 void VM::mark_roots_for_gc() {
@@ -120,7 +122,7 @@ void VM::mark_roots_for_gc() {
         gc.mark(frame.closure);
     }
 
-    for (auto* open_upvalue: open_upvalues) {
+    for (auto *open_upvalue: open_upvalues) {
         gc.mark(open_upvalue);
     }
 }
@@ -131,14 +133,15 @@ void VM::run_gc() {
 }
 
 void VM::adopt_objects(std::vector<Object *> objects) {
-    for (auto* object : objects) {
+    for (auto *object: objects) {
         allocate<Object>(object);
     }
 }
 
 bool VM::bind_method(Class *klass, const std::string &name) {
-    Value method = klass->methods[name]; // TODO: check
-    auto* bound = new BoundMethod(peek(), dynamic_cast<Closure*>(method.get<Object*>()));
+    if (!klass->methods.contains(name)) return false;
+    auto* method = dynamic_cast<Closure *>(klass->methods[name].get<Object*>());
+    auto* bound = new BoundMethod(peek(), method);
     pop();
     push(bound);
     allocate<BoundMethod>(bound);
@@ -200,7 +203,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
             }
             case OpCode::GET: {
                 int idx = fetch();
-                push(get_from_slot(idx)); // handle overflow?
+                push(get_from_slot(idx));
                 break;
             }
             case OpCode::SET: {
@@ -263,10 +266,9 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 break;
             }
             case OpCode::CLOSURE: {
-                Function *function = reinterpret_cast<Function*>(*get_constant(fetch()).as<Object*>());
+                Function *function = reinterpret_cast<Function *>(*get_constant(fetch()).as<Object *>());
                 auto *closure = new Closure(function);
                 push(closure);
-                adopt_objects(function->get_allocated());
                 for (int i = 0; i < closure->get_function()->get_upvalue_count(); ++i) {
                     int is_local = fetch();
                     int index = fetch();
@@ -277,6 +279,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                     }
                 }
                 allocate<Closure>(closure); // wait to add upvalues
+                adopt_objects(function->get_allocated());
                 break;
             }
             case OpCode::GET_UPVALUE: {
@@ -297,48 +300,61 @@ std::expected<Value, VM::RuntimeError> VM::run() {
             case OpCode::CLASS: {
                 int constant_idx = fetch();
                 auto name = get_constant(constant_idx).get<std::string>();
-                auto* klass = new Class(name);
+                auto *klass = new Class(name);
                 push(klass);
                 allocate(klass);
                 break;
             }
             case OpCode::GET_PROPERTY: {
-                // TODO: handle error!!!!
-                auto* instance = dynamic_cast<Instance*>(peek().get<Object*>());
-                int constant_idx = fetch();
-                auto name = get_constant(constant_idx).get<std::string>();
-                if (instance->fields.contains(name)) {
-                    pop();
-                    push(instance->fields[name]);
-                    break;
-                } else if(!bind_method(instance->klass, name)) {
-                    return std::unexpected(RuntimeError("Undefined property!"));
+                std::optional<Object*> object = peek().as<Object*>();
+                if (!object) {
+                    return std::unexpected(RuntimeError("Expected class instance value."));
                 }
+                if (auto *instance = dynamic_cast<Instance *>(*object)) {
+                    int constant_idx = fetch();
+                    auto name = get_constant(constant_idx).get<std::string>();
+                    if (instance->fields.contains(name)) {
+                        pop();
+                        push(instance->fields[name]);
+                    } else if (!bind_method(instance->klass, name)) {
+                        return std::unexpected(RuntimeError("Attempted to read undefined property."));
+                    }
+                } else {
+                    return std::unexpected(RuntimeError("Expected class instance value."));
+                }
+
                 break;
             }
             case OpCode::SET_PROPERTY: {
-                auto* instance = dynamic_cast<Instance*>(peek(1).get<Object*>());
-                int constant_idx = fetch();
-                auto name = get_constant(constant_idx).get<std::string>();
-                instance->fields[name] = peek(0);
-                Value value = pop();
-                pop(); // pop instance
-                push(value);
+                std::optional<Object*> object = peek().as<Object*>();
+                if (!object) {
+                    return std::unexpected(RuntimeError("Expected class instance value."));
+                }
+                if (auto *instance = dynamic_cast<Instance *>(*object)) {
+                    int constant_idx = fetch();
+                    auto name = get_constant(constant_idx).get<std::string>();
+                    instance->fields[name] = peek(0);
+                    Value value = pop();
+                    pop(); // pop instance
+                    push(value);
+                } else {
+                    return std::unexpected(RuntimeError("Expected class instance value."));
+                }
                 break;
             }
             case OpCode::METHOD: {
                 int constant_idx = fetch();
                 auto name = get_constant(constant_idx).get<std::string>();
                 Value method = peek();
-                Class* klass = dynamic_cast<Class*>(peek(1).get<Object*>());
+                Class *klass = dynamic_cast<Class *>(peek(1).get<Object *>());
                 klass->methods[name] = method;
                 pop();
                 break;
             }
             case OpCode::INHERIT: {
-                Class* superclass = dynamic_cast<Class*>(peek(1).get<Object*>());
-                Class* subclass = dynamic_cast<Class*>(peek(0).get<Object*>());
-                for (auto& value : superclass->methods) {
+                Class *superclass = dynamic_cast<Class *>(peek(1).get<Object *>());
+                Class *subclass = dynamic_cast<Class *>(peek(0).get<Object *>());
+                for (auto &value: superclass->methods) {
                     subclass->methods.insert(value);
                 }
                 pop();
@@ -347,15 +363,17 @@ std::expected<Value, VM::RuntimeError> VM::run() {
             case OpCode::GET_SUPER: {
                 int constant_idx = fetch();
                 auto name = get_constant(constant_idx).get<std::string>();
-                Class* superclass = dynamic_cast<Class*>(peek().get<Object*>());
-                bind_method(superclass, name);
+                Class *superclass = dynamic_cast<Class *>(peek().get<Object *>());
+                if (!bind_method(superclass, name)) {
+                    return std::unexpected(RuntimeError("Unexpected call to undefined method of super class."));
+                };
                 break;
             }
         }
-        // for (int i = 0; i < stack_index; ++i) {
-        //     std::cout << stack[i].to_string() << ' ';
-        // }
-        // std::cout << '\n';
+        for (int i = 0; i < stack_index; ++i) {
+            std::cout << '[' << stack[i].to_string() << "] ";
+        }
+        std::cout << '\n';
     }
 #undef BINARY_OPERATION
 }

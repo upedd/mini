@@ -7,7 +7,7 @@
 #include "CallFrame.h"
 #include "Object.h"
 
-#define DEBUG_STRESS_GC
+//#define DEBUG_STRESS_GC
 
 class VM {
 public:
@@ -51,11 +51,6 @@ public:
     T *allocate(T *ptr);
 
     void adopt_objects(std::vector<Object*> objects);
-
-    std::vector<Object*> gray_objects;
-    std::vector<Object*> objects;
-    bool gc_ready = false;
-
     bool bind_method(Class * klass, const std::string & name);
 
     std::expected<Value, RuntimeError> run();
@@ -65,9 +60,9 @@ private:
     static constexpr std::size_t HEAP_GROWTH_FACTOR = 2;
     // stack dynamic allocation breaks upvalues!
     int stack_index = 0;
-    std::array<Value, 256> stack; // optim: should stack could be fixed array?
+    std::array<Value, 256> stack;
     std::vector<CallFrame> frames;
-    std::set<Upvalue*> open_upvalues;
+    std::list<Upvalue*> open_upvalues;
 };
 
 template<typename T>
