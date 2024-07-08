@@ -147,26 +147,26 @@ void Compiler::class_declaration(const ClassStmt& stmt) {
     uint8_t constant = current_function()->add_constant(name);
     current_locals().define(name, get_current_depth());
 
+    emit(OpCode::CLASS);
+    emit(constant);
 
     if (stmt.super_name) {
         emit(OpCode::GET);
         emit(current_locals().get(stmt.super_name->get_lexeme(source)));
-
+        emit(OpCode::GET);
+        emit(current_locals().get(name));
+        emit(OpCode::INHERIT);
         begin_scope();
-        current_locals().define("super", get_current_depth());
+        int idx = current_locals().define("super", get_current_depth());
+        add_upvalue(idx, true, 0);
     }
-    emit(OpCode::CLASS);
-    emit(constant);
-     if (stmt.super_name) {emit(OpCode::INHERIT); }
-
-
-
+    emit(OpCode::GET);
+    emit(current_locals().get(name));
     for (auto& method : stmt.methods) {
         // todo: too much repetition with function declaration!!!!
         std::string function_name = std::string(method->name.get_lexeme(source));
         Function *function = new Function(function_name, method->params.size()); // TODO: memory leak!
         allocated_objects.push_back(function);
-
         states.emplace_back(function);
         begin_scope();
         if (function_name != "init") {
@@ -202,6 +202,7 @@ void Compiler::class_declaration(const ClassStmt& stmt) {
         emit(OpCode::METHOD);
         emit(idx);
     }
+    emit(OpCode::POP);
 
     if (stmt.super_name) {
         end_scope();
@@ -229,8 +230,8 @@ void Compiler::super(const SuperExpr &expr) {
     int constant = current_function()->add_constant(expr.method.get_lexeme(source));
     emit(OpCode::GET);
     emit(current_locals().get("this"));
-    emit(OpCode::GET);
-    emit(current_locals().get("super"));
+    emit(OpCode::GET_UPVALUE);
+    emit(resolve_upvalue("super", 0));
     emit(OpCode::GET_SUPER);
     emit(constant);
 }
