@@ -91,17 +91,17 @@ private:
     Context &current_context();
 
     int &current_depth();
-    [[nodiscard]] Function *current_function() const;
+    [[nodiscard]] Function *current_function();
     Locals &current_locals();
-    [[nodiscard]] Program &current_program() const;
-
-    JumpHandle start_jump(OpCode op_code);
-    [[nodiscard]] JumpDestination mark_destination() const;
+    [[nodiscard]] Program &current_program();
 
     void emit(bite_byte byte);
     void emit(OpCode op_code);
     void emit(OpCode op_code, bite_byte value);
     void emit_default_return();
+
+    [[nodiscard]] JumpHandle start_jump(OpCode op_code);
+    [[nodiscard]] JumpDestination mark_destination();
 
     void begin_scope();
     void end_scope();
@@ -110,52 +110,31 @@ private:
     void resolve_variable(const std::string &name);
     int resolve_upvalue(const std::string &name);
 
-    void function(const FunctionStmt &stmt, FunctionType type);
-
-    void function_declaration(const FunctionStmt &stmt);
-
-    void call(const CallExpr &expr);
-
-    void return_statement(const ReturnStmt &stmt);
-
-    void class_declaration(const ClassStmt &stmt);
-
-    void get_property(const GetPropertyExpr & expr);
-
-    void set_property(const SetPropertyExpr & expr);
-
-    void super(const SuperExpr& expr);
-
-    void while_statement(const WhileStmt &stmt);
-
-    void block_statement(const BlockStmt &stmt);
-
-
-
-    void assigment(const AssigmentExpr &expr);
-
-    void expr_statement(const ExprStmt &expr);
-
-    void if_statement(const IfStmt &stmt);
-
-    void variable(const VariableExpr &expr);
+    void visit_stmt(const Stmt &stmt);
 
     void variable_declaration(const VarStmt &expr);
-
-    void literal(const LiteralExpr &expr);
+    void function_declaration(const FunctionStmt &stmt);
+    void function(const FunctionStmt &stmt, FunctionType type);
+    void class_declaration(const ClassStmt &stmt);
+    void expr_statement(const ExprStmt &stmt);
+    void block_statement(const BlockStmt &stmt);
+    void return_statement(const ReturnStmt &stmt);
+    void while_statement(const WhileStmt &stmt);
+    void if_statement(const IfStmt &stmt);
 
     void visit_expr(const Expr &expr);
 
-    void visit_stmt(const Stmt &stmt);
-
-    void unary(const UnaryExpr &expr);
-
-    void logical(const BinaryExpr &expr);
-
-    void binary(const BinaryExpr &expr);
-
+    void literal(const LiteralExpr &expr);
     void string_literal(const StringLiteral &expr);
-
+    void unary(const UnaryExpr &expr);
+    void binary(const BinaryExpr &expr);
+    void logical(const BinaryExpr &expr);
+    void variable(const VariableExpr& expr);
+    void assigment(const AssigmentExpr &expr);
+    void call(const CallExpr &expr);
+    void get_property(const GetPropertyExpr & expr);
+    void set_property(const SetPropertyExpr & expr);
+    void super(const SuperExpr& expr);
 
     Parser parser;
     Function main;

@@ -4,6 +4,18 @@
 
 #include "Object.h"
 
+class Logger {
+    enum class Level {
+        GC,
+    };
+
+    static void log(Level level, const std::string& message);
+};
+
+inline void Logger::log(Level level, const std::string &message) {
+    std::cout << message;
+}
+
 class Disassembler {
 public:
     explicit Disassembler(Function& function) : function(function) {}
@@ -36,6 +48,8 @@ inline void Disassembler::jump_inst(const std::string& name) {
     int x = static_cast<uint16_t>(function.get_program().get_at(offset++)) << 8 | function.get_program().get_at(offset++);
     std::cout << offset - 3 << ": " << name << ' ' << x << '\n';
 }
+
+
 
 inline void Disassembler::disassemble(const std::string& name) {
     std::cout << "--- " << name << " ---\n";

@@ -29,4 +29,6 @@ add_executable(bite source/main.cpp
         source/Program.h
         source/Object.cpp
         source/debug.h
+        source/GarbageCollector.cpp
+        source/GarbageCollector.h
 )
