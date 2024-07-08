@@ -4,18 +4,6 @@
 
 #include "Object.h"
 
-class Logger {
-    enum class Level {
-        GC,
-    };
-
-    static void log(Level level, const std::string& message);
-};
-
-inline void Logger::log(Level level, const std::string &message) {
-    std::cout << message;
-}
-
 class Disassembler {
 public:
     explicit Disassembler(Function& function) : function(function) {}

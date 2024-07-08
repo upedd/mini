@@ -1,16 +1,19 @@
-//
-// Created by MiłoszK on 08.07.2024.
-//
-
 #include "GarbageCollector.h"
 
+#include "Object.h"
+#include "Value.h"
+
 void GarbageCollector::collect() {
+    GC_LOG("== GC COLLECT START ===");
     trace_references();
+    GC_LOG("Sweeping...");
     sweep();
+    GC_LOG("== GC COLLECT END ===");
 }
 
 void GarbageCollector::mark(Object *object) {
     if (object == nullptr || object->is_marked) return;
+    GC_LOG(std::format("Marked {}", object->to_string()));
     object->is_marked = true;
     grey_objects.push(object);
 }
@@ -22,51 +25,23 @@ void GarbageCollector::mark(const Value &value) {
 }
 
 void GarbageCollector::add_object(Object *object) {
+    GC_LOG(std::format("Started tracking {} size: {} bytes", object->to_string(), object->get_size()));
+    memory_used += object->get_size();
     objects.push_back(object);
 }
 
-void GarbageCollector::blacken_object(Object* object) {
-    // Todo: refactor!
-    if (auto *upvalue = dynamic_cast<Upvalue *>(object)) {
-        mark(upvalue->closed);
-    }
-    if (auto *function = dynamic_cast<Function *>(object)) {
-        for (auto &value: function->get_constants()) {
-            mark(value);
-        }
-    }
-    if (auto *closure = dynamic_cast<Closure *>(object)) {
-        mark(closure->get_function());
-        for (auto *upvalue: closure->upvalues) {
-            mark(upvalue);
-        }
-    }
-
-    if (auto *klass = dynamic_cast<Class*>(object)) {
-        for (auto& [_, v] : klass->methods) {
-            mark(v);
-        }
-    }
-
-    if (auto *instance = dynamic_cast<Instance*>(object)) {
-        mark(instance->klass);
-        for (auto& [_, v] : instance->fields) {
-            mark(v);
-        }
-    }
-
-    if (auto *bound = dynamic_cast<BoundMethod*>(object)) {
-        mark(bound->receiver);
-        mark(bound->closure);
-    }
-}
 
 void GarbageCollector::sweep() {
-    std::erase_if(objects, [](Object* object) {
+    std::erase_if(objects, [this](Object* object) {
         if (object->is_marked) {
             object->is_marked = false;
             return false;
         }
+        GC_LOG(std::format("Deleting {} size: {} bytes",
+            object->to_string(),
+            object->get_size()));
+        memory_used -= object->get_size();
+        delete object;
         return true;
     });
 }
@@ -74,6 +49,7 @@ void GarbageCollector::sweep() {
 void GarbageCollector::trace_references() {
     while (!grey_objects.empty()) {
         Object* grey = grey_objects.back(); grey_objects.pop();
-        blacken_object(grey);
+        GC_LOG(std::format("Tracing references for {}", grey->to_string()));
+        grey->mark_references(*this);
     }
 }

@@ -30,16 +30,7 @@ public:
 
     using value_variant_t::value_variant_t;
 
-    [[nodiscard]] std::string to_string() const {
-        return std::visit(overloaded {
-            [](Nil) {return std::string("Nil");},
-            [](bite_int value) {return std::to_string(value);},
-            [](bite_float value) {return std::to_string(value);},
-            [](bool value) {return std::string(value ? "True" : "False");},
-            [](Object* object) {return std::string("object");},
-                [](std::string) {return std::string("string");}
-        }, *this);
-    }
+    [[nodiscard]] std::string to_string() const;
 
     template<typename T>
     [[nodiscard]] std::optional<T> as() const {
@@ -126,6 +117,7 @@ public:
     Value binary_not() const;
 
 };
+
 
 
 inline Value Value::add(const Value &other) const {

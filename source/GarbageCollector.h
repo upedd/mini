@@ -2,8 +2,19 @@
 #define GARBAGECOLLECTOR_H
 #include <list>
 #include <queue>
-#include "Object.h"
 
+struct Object;
+struct Value;
+
+#define DEBUG_LOG_GC
+
+#ifdef DEBUG_LOG_GC
+#include <iostream>
+#define GC_LOG(msg) std::cout << "GC: " << msg << '\n'
+#else
+#define GC_LOG(msg) {}
+
+#endif
 class GarbageCollector {
 public:
     void collect();
@@ -16,7 +27,6 @@ public:
     }
 private:
     void trace_references();
-    void blacken_object(Object* object);
     void sweep();
 
     std::list<Object*> objects;

@@ -7,13 +7,7 @@
 #include "CallFrame.h"
 #include "Object.h"
 
-//#define DEBUG_STRESS_GC
-
-//#define DEBUG_LOG_GC
-
-#ifdef DEBUG_LOG_GC
-#include <iostream>
-#endif
+#define DEBUG_STRESS_GC
 
 class VM {
 public:
@@ -23,8 +17,13 @@ public:
     };
 
     explicit VM(Function* function) {
+
+        auto* closure = new Closure(function);
         // todo: maybe start program thru call()
-        frames.emplace_back(allocate<Closure>(new Closure(function)), 0, 0);
+        frames.emplace_back(closure, 0, 0);
+        allocate<Closure>(closure);
+        adopt_objects(function->get_allocated());
+
     }
 
     uint8_t fetch();
@@ -45,19 +44,8 @@ public:
 
     void close_upvalues(const Value & peek);
 
-    void mark_object(Object* object);
-
-    void mark_value(const Value& value);
-
-    void mark_roots();
-
-    void blacken_object(Object * object);
-
-    void trace_references();
-
-    void sweep();
-
-    void collect_garbage();
+    void mark_roots_for_gc();
+    void run_gc();
 
     template<class T>
     T *allocate(T *ptr);
@@ -72,6 +60,9 @@ public:
 
     std::expected<Value, RuntimeError> run();
 private:
+    GarbageCollector gc;
+    std::size_t next_gc = 1024 * 1024;
+    static constexpr std::size_t HEAP_GROWTH_FACTOR = 2;
     // stack dynamic allocation breaks upvalues!
     int stack_index = 0;
     std::array<Value, 256> stack; // optim: should stack could be fixed array?
@@ -82,12 +73,14 @@ private:
 template<typename T>
 T* VM::allocate(T* ptr) {
 #ifdef DEBUG_STRESS_GC
-    collect_garbage();
+    run_gc();
 #endif
-    objects.push_back(ptr);
-#ifdef DEBUG_LOG_GC
-    std::cout << "Allocated " << sizeof(T) << " bytes of memory.\n";
-#endif
+    gc.add_object(ptr);
+
+    if (gc.get_memory_used() > next_gc) {
+        gc.collect();
+        next_gc = gc.get_memory_used() * HEAP_GROWTH_FACTOR;
+    }
 
     return ptr;
 }

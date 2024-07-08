@@ -53,7 +53,9 @@ std::optional<VM::RuntimeError> VM::call_value(const Value &value, const int arg
 
     if (auto* klass = dynamic_cast<Class*>(object)) {
         pop();
-        push(allocate<Instance>(new Instance(klass)));
+        auto* instance = new Instance(klass);
+        push(instance);
+        allocate(instance);
         if (klass->methods.contains("init")) {
             call_value(klass->methods["init"], arguments_count);
         }
@@ -87,8 +89,9 @@ Upvalue *VM::capture_upvalue(int index) {
         }
     }
     if (upvalue == nullptr) {
-        upvalue = allocate<Upvalue>(new Upvalue(value));
+        upvalue = new Upvalue(value);
         open_upvalues.emplace(upvalue);
+        allocate<Upvalue>(upvalue);
     }
     return upvalue;
 }
@@ -108,113 +111,23 @@ void VM::close_upvalues(const Value &value) {
     }
 }
 
-void VM::mark_object(Object *object) {
-    if (object == nullptr || object->is_marked) return;
-    object->is_marked = true;
-    gray_objects.push_back(object);
-#ifdef DEBUG_LOG_GC
-    std::cout << "Marked object.\n"; // todo: better debug info!
-#endif
-}
-
-void VM::mark_value(const Value &value) {
-    if (value.is<Object *>()) {
-        mark_object(value.get<Object *>());
-    }
-}
-
-void VM::mark_roots() {
+void VM::mark_roots_for_gc() {
     for (int i = 0; i < stack_index; ++i) {
-        mark_value(stack[i]);
+        gc.mark(stack[i]);
     }
 
     for (auto &frame: frames) {
-        mark_object(frame.closure);
+        gc.mark(frame.closure);
     }
 
-    for (auto &open_upvalue: open_upvalues) {
-        mark_object(open_upvalue);
-    }
-    // TODO!!! mark compiler objects
-}
-
-void VM::blacken_object(Object *object) {
-#ifdef DEBUG_LOG_GC
-    std::cout << "Set object color to black.\n";
-#endif
-    if (auto *upvalue = dynamic_cast<Upvalue *>(object)) {
-        mark_value(upvalue->closed);
-    }
-    if (auto *function = dynamic_cast<Function *>(object)) {
-        for (auto &value: function->get_constants()) {
-            mark_value(value);
-        }
-    }
-    if (auto *closure = dynamic_cast<Closure *>(object)) {
-        mark_object(closure->get_function());
-        for (auto *upvalue: closure->upvalues) {
-            mark_object(upvalue);
-        }
-    }
-
-    if (auto *klass = dynamic_cast<Class*>(object)) {
-        for (auto& [_, v] : klass->methods) {
-            mark_value(v);
-        }
-    }
-
-    if (auto *instance = dynamic_cast<Instance*>(object)) {
-        mark_object(instance->klass);
-        for (auto& [_, v] : instance->fields) {
-            mark_value(v);
-        }
-    }
-
-    if (auto *bound = dynamic_cast<BoundMethod*>(object)) {
-        mark_value(bound->receiver);
-        mark_object(bound->closure);
+    for (auto* open_upvalue: open_upvalues) {
+        gc.mark(open_upvalue);
     }
 }
 
-void VM::trace_references() {
-    while (!gray_objects.empty()) {
-        Object *object = gray_objects.back();
-        gray_objects.pop_back();
-        blacken_object(object);
-    }
-}
-
-void VM::sweep() {
-    std::vector<Object*> to_erase; // todo do more optimally
-    for (auto* object : objects) {
-        if (!object->is_marked) {
-            to_erase.push_back(object);
-        } else {
-            object->is_marked = false;
-        }
-    }
-    for (auto* object : to_erase) {
-        objects.erase(std::find(objects.begin(), objects.end(), object));
-#ifdef DEBUG_LOG_GC
-        std::cout << "freed " << sizeof(*object) << '\n';
-#endif
-        delete object;
-    }
-}
-
-void VM::collect_garbage() {
-    // TODO when to collect garbage!
-#ifdef DEBUG_LOG_GC
-    std::cout << "--- gc start\n";
-#endif
-    if (!gc_ready) return;
-    mark_roots();
-    trace_references();
-    sweep();
-
-#ifdef DEBUG_LOG_GC
-    std::cout << "--- gc end\n";
-#endif
+void VM::run_gc() {
+    mark_roots_for_gc();
+    gc.collect();
 }
 
 void VM::adopt_objects(std::vector<Object *> objects) {
@@ -225,9 +138,10 @@ void VM::adopt_objects(std::vector<Object *> objects) {
 
 bool VM::bind_method(Class *klass, const std::string &name) {
     Value method = klass->methods[name]; // TODO: check
-    auto* bound = allocate<BoundMethod>(new BoundMethod(peek(), dynamic_cast<Closure*>(method.get<Object*>())));
+    auto* bound = new BoundMethod(peek(), dynamic_cast<Closure*>(method.get<Object*>()));
     pop();
     push(bound);
+    allocate<BoundMethod>(bound);
     return true;
 }
 
@@ -352,6 +266,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 Function *function = reinterpret_cast<Function*>(*get_constant(fetch()).as<Object*>());
                 auto *closure = new Closure(function);
                 push(closure);
+                adopt_objects(function->get_allocated());
                 for (int i = 0; i < closure->get_function()->get_upvalue_count(); ++i) {
                     int is_local = fetch();
                     int index = fetch();
@@ -382,7 +297,9 @@ std::expected<Value, VM::RuntimeError> VM::run() {
             case OpCode::CLASS: {
                 int constant_idx = fetch();
                 auto name = get_constant(constant_idx).get<std::string>();
-                push(allocate<Class>(new Class(name)));
+                auto* klass = new Class(name);
+                push(klass);
+                allocate(klass);
                 break;
             }
             case OpCode::GET_PROPERTY: {
