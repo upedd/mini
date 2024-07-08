@@ -64,8 +64,9 @@ std::optional<VM::RuntimeError> VM::call_value(const Value &value, const int arg
         // }
         frames.emplace_back(closure, 0, stack_index - arguments_count - 1);
     } else if (auto* bound = dynamic_cast<BoundMethod*>(object)) {
+        stack[stack_index - arguments_count - 1] = bound->receiver;
         auto res = call_value(bound->closure, arguments_count);
-        push(bound->receiver);
+        //push(bound->receiver);
     }
     // std::optional<Closure *> closure = reinterpret_cast<Closure*>(*value.as<Object *>());
     // if (!closure) {

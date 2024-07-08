@@ -41,7 +41,7 @@ public:
 
         void close(int local);
 
-        std::vector<Compiler::Local> &get_locals();
+        std::vector<Local> &get_locals();
 
     private:
         std::vector<Local> locals;
@@ -66,7 +66,7 @@ public:
     };
 
     enum class FunctionType {
-        FUNCITON,
+        FUNCTION,
         CONSTRUCTOR
     };
 
@@ -76,6 +76,8 @@ public:
         int current_depth = 0;
         Locals locals;
         std::vector<Upvalue> upvalues;
+
+        int add_upvalue(int index, bool is_local);
     };
 
     explicit Compiler(std::string_view source) : parser(source), source(source), main("", 0) {
@@ -91,7 +93,7 @@ public:
 
     void define_variable(const std::string &name);
 
-    void start_context(Function *function);
+    void start_context(Function *function, FunctionType type);
 
     void end_context();
 
@@ -101,7 +103,7 @@ public:
 
     Context &enclosing_context();
 
-    void function_declaration(const FunctionStmt &stmt);
+    void function_declaration(const FunctionStmt &stmt, FunctionType type);
 
     void call(const CallExpr &expr);
 
@@ -112,6 +114,8 @@ public:
     void get_property(const GetPropertyExpr & expr);
 
     void set_property(const SetPropertyExpr & expr);
+
+    void resolve_variable(const std::string &name);
 
     void super(const SuperExpr& expr);
 
@@ -136,7 +140,7 @@ private:
 
     int add_upvalue(int index, bool is_local, int distance);
 
-    int resolve_upvalue(const std::string &name, int distance);
+    int resolve_upvalue(const std::string &name);
 
     void assigment(const AssigmentExpr &expr);
 

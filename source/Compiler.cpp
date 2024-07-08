@@ -1,13 +1,15 @@
 #include "Compiler.h"
 
 #include <cassert>
+#include <ranges>
 
 #include "debug.h"
+
 
 void Compiler::visit_stmt(const Stmt &statement) {
     std::visit(overloaded{
                    [this](const VarStmt &stmt) { variable_declaration(stmt); },
-                   [this](const FunctionStmt &stmt) { function_declaration(stmt); },
+                   [this](const FunctionStmt &stmt) { function_declaration(stmt, FunctionType::FUNCTION); },
                    [this](const ExprStmt &stmt) { expr_statement(stmt); },
                    [this](const BlockStmt &stmt) { block_statement(stmt); },
                    [this](const IfStmt &stmt) { if_statement(stmt); },
@@ -20,9 +22,7 @@ void Compiler::visit_stmt(const Stmt &statement) {
 void Compiler::variable_declaration(const VarStmt &expr) {
     auto name = expr.name.get_lexeme(source);
     visit_expr(*expr.value);
-    if (!current_locals().define(name, get_current_depth())) {
-        throw Error("Variable redefinition in same scope is disallowed."); // todo: better error handling!
-    }
+    define_variable(name);
 }
 
 void Compiler::define_variable(const std::string& name) {
@@ -31,8 +31,8 @@ void Compiler::define_variable(const std::string& name) {
     }
 }
 
-void Compiler::start_context(Function* function) {
-    context_stack.emplace_back(function);
+void Compiler::start_context(Function* function, FunctionType type) {
+    context_stack.emplace_back(function, type);
 };
 
 void Compiler::end_context() {
@@ -53,15 +53,16 @@ void Compiler::emit_default_return() {
     emit(OpCode::RETURN);
 };
 
-void Compiler::function_declaration(const FunctionStmt &stmt) {
+void Compiler::function_declaration(const FunctionStmt &stmt, FunctionType type) {
     auto function_name = stmt.name.get_lexeme(source);
     auto *function = new Function(function_name, stmt.params.size());
     current_function()->add_allocated(function);
     define_variable(function_name);
 
-    start_context(function);
+    start_context(function, type);
     begin_scope();
-    define_variable(function_name); // fixme
+    if (type == FunctionType::FUNCTION) current_locals().define("", 0);
+    //define_variable(function_name); // fixme
     for (const Token &param: stmt.params) {
         define_variable(param.get_lexeme(source));
     }
@@ -71,6 +72,7 @@ void Compiler::function_declaration(const FunctionStmt &stmt) {
     end_scope();
 
     function->set_upvalue_count(current_context().upvalues.size());
+    // we need to emit those upvalues in enclosing context (context where function is called)
     std::vector<Upvalue> function_upvalues = std::move(current_context().upvalues);
     end_context();
 
@@ -96,35 +98,65 @@ void Compiler::block_statement(const BlockStmt &stmt) {
     end_scope();
 }
 
+// TODO: remove!
 int Compiler::add_upvalue(int index, bool is_local, int distance) {
     auto& upvalues = context_stack[context_stack.size() - distance - 1].upvalues;
     Upvalue upvalue {.index = index, .is_local = is_local};
-    for (int i = 0; i < upvalues.size(); ++i) {
-        if (upvalues[i] == upvalue) {
-            return i;
-        }
+    // try to reuse existing upvalue (possible optimization replace linear search)
+    auto found = std::ranges::find(upvalues, upvalue);
+    if (found != upvalues.end()) {
+        return std::distance(upvalues.begin(), found);
     }
-
     upvalues.push_back(upvalue);
     return upvalues.size() - 1;
 }
 
-int Compiler::resolve_upvalue(const std::string &name, int distance) {
-    if (context_stack.size() < distance + 2) {
-        return -1;
+int Compiler::Context::add_upvalue(int index, bool is_local) {
+    Upvalue upvalue {.index = index, .is_local = is_local};
+    // try to reuse existing upvalue (possible optimization replace linear search)
+    auto found = std::ranges::find(upvalues, upvalue);
+    if (found != upvalues.end()) {
+        return std::distance(upvalues.begin(), found);
     }
-    int local = context_stack[context_stack.size() - distance - 2].locals.get(name);
-    if (local != -1) {
-        context_stack[context_stack.size() - distance - 2].locals.close(local);
-        return add_upvalue(local, true, distance);
+    upvalues.push_back(upvalue);
+    return upvalues.size() - 1;
+}
+
+int Compiler::resolve_upvalue(const std::string &name) {
+    int resolved = -1;
+    std::vector<std::reference_wrapper<Context>> up_resolve;
+    for (Context& context : std::views::reverse(context_stack)) {
+        int local = context.locals.get(name);
+        if (local != -1) {
+            resolved = context.add_upvalue(local, true);
+        } else {
+            up_resolve.emplace_back(context);
+        }
+    }
+    if (resolved == -1) return resolved;
+
+    int last_resolved = resolved;
+    for (std::reference_wrapper<Context> context: std::views::reverse(up_resolve)) {
+        last_resolved = context.get().add_upvalue(last_resolved, false);
     }
 
-    int upvalue = resolve_upvalue(name, distance + 1);
-    if (upvalue != -1) {
-        return add_upvalue(upvalue, false, distance);
-    }
-
-    return -1;
+    return last_resolved;
+    // TODO: remove!
+    // if (context_stack.size() < distance + 2) {
+    //     return -1;
+    // }
+    // int local = context_stack[context_stack.size() - distance - 2].locals.get(name);
+    // if (local != -1) {
+    //     context_stack[context_stack.size() - distance - 2].locals.close(local);
+    //     return add_upvalue(local, true, distance);
+    // }
+    //
+    // int upvalue = resolve_upvalue(name, distance + 1);
+    // if (upvalue != -1) {
+    //     return add_upvalue(upvalue, false, distance);
+    // }
+    //
+    // return -1;
 }
 
 void Compiler::if_statement(const IfStmt &stmt) {
@@ -177,50 +209,55 @@ void Compiler::class_declaration(const ClassStmt& stmt) {
         emit(current_locals().get(name));
         emit(OpCode::INHERIT);
         begin_scope();
-        int idx = current_locals().define("super", get_current_depth());
-        add_upvalue(idx, true, 0);
+        current_locals().define("super", get_current_depth());
+        //add_upvalue(idx, true, 0);
     }
     emit(OpCode::GET);
     emit(current_locals().get(name));
     for (auto& method : stmt.methods) {
-        // todo: too much repetition with function declaration!!!!
-        std::string function_name = std::string(method->name.get_lexeme(source));
-        Function *function = new Function(function_name, method->params.size()); // TODO: memory leak!
-        current_function()->add_allocated(function);
-        context_stack.emplace_back(function);
-        begin_scope();
-        if (function_name != "init") {
-            current_locals().define(function_name, get_current_depth());
-        }
-        for (const Token &param: method->params) {
-            current_locals().define(param.get_lexeme(source), get_current_depth());
-        }
-        current_locals().define("this", get_current_depth());
-        visit_stmt(*method->body);
-        // emit default retrun
-        if (function_name == "init") {
-            emit(OpCode::GET);
-            emit(current_locals().get("this"));
-        } else {
-            emit(OpCode::NIL);
-        }
-
-        emit(OpCode::RETURN);
-        end_scope();
-        function->set_upvalue_count(context_stack.back().upvalues.size());
-        auto upvalues_copy = context_stack.back().upvalues; // todo: elimainate this copy
-        context_stack.pop_back();
-        int constant = current_function()->add_constant(function);
-        emit(OpCode::CLOSURE);
-        emit(static_cast<uint8_t>(constant));
-        for (int i = 0; i < function->get_upvalue_count(); ++i) {
-            emit(upvalues_copy[i].is_local);
-            emit(upvalues_copy[i].index);
-        }
-
-        int idx = current_function()->add_constant(function_name);
+        define_variable("this"); // implied as first argument!
+        function_declaration(*method, FunctionType::CONSTRUCTOR);
+        int idx = current_function()->add_constant(method->name.get_lexeme(source));
         emit(OpCode::METHOD);
         emit(idx);
+        // // todo: too much repetition with function declaration!!!!
+        // std::string function_name = std::string(method->name.get_lexeme(source));
+        // Function *function = new Function(function_name, method->params.size()); // TODO: memory leak!
+        // current_function()->add_allocated(function);
+        // context_stack.emplace_back(function);
+        // begin_scope();
+        // if (function_name != "init") {
+        //     current_locals().define(function_name, get_current_depth());
+        // }
+        // for (const Token &param: method->params) {
+        //     current_locals().define(param.get_lexeme(source), get_current_depth());
+        // }
+        // current_locals().define("this", get_current_depth());
+        // visit_stmt(*method->body);
+        // // emit default retrun
+        // if (function_name == "init") {
+        //     emit(OpCode::GET);
+        //     emit(current_locals().get("this"));
+        // } else {
+        //     emit(OpCode::NIL);
+        // }
+        //
+        // emit(OpCode::RETURN);
+        // end_scope();
+        // function->set_upvalue_count(context_stack.back().upvalues.size());
+        // auto upvalues_copy = context_stack.back().upvalues; // todo: elimainate this copy
+        // context_stack.pop_back();
+        // int constant = current_function()->add_constant(function);
+        // emit(OpCode::CLOSURE);
+        // emit(static_cast<uint8_t>(constant));
+        // for (int i = 0; i < function->get_upvalue_count(); ++i) {
+        //     emit(upvalues_copy[i].is_local);
+        //     emit(upvalues_copy[i].index);
+        // }
+        //
+        // int idx = current_function()->add_constant(function_name);
+        // emit(OpCode::METHOD);
+        // emit(idx);
     }
     emit(OpCode::POP);
 
@@ -233,8 +270,7 @@ void Compiler::get_property(const GetPropertyExpr &expr) {
     visit_expr(*expr.left);
     std::string name = expr.property.get_lexeme(source);
     int constant = current_function()->add_constant(name);
-    emit(OpCode::GET_PROPERTY);
-    emit(constant);
+    emit(OpCode::GET_PROPERTY, constant);
 }
 
 void Compiler::set_property(const SetPropertyExpr &expr) {
@@ -242,18 +278,28 @@ void Compiler::set_property(const SetPropertyExpr &expr) {
     std::string name = expr.property.get_lexeme(source);
     int constant = current_function()->add_constant(name);
     visit_expr(*expr.expression);
-    emit(OpCode::SET_PROPERTY);
-    emit(constant);
+    emit(OpCode::SET_PROPERTY, constant);
+}
+
+void Compiler::resolve_variable(const std::string &name) {
+    int idx = current_locals().get(name);
+
+    if (idx == -1) {
+        idx = resolve_upvalue(name);
+        assert(idx != -1); // todo: error handling
+        emit(OpCode::GET_UPVALUE);
+        emit(idx);
+    } else {
+        emit(OpCode::GET);
+        emit(idx); // todo: handle overflow
+    }
 }
 
 void Compiler::super(const SuperExpr &expr) {
     int constant = current_function()->add_constant(expr.method.get_lexeme(source));
-    emit(OpCode::GET);
-    emit(current_locals().get("this"));
-    emit(OpCode::GET_UPVALUE);
-    emit(resolve_upvalue("super", 0));
-    emit(OpCode::GET_SUPER);
-    emit(constant);
+    resolve_variable("this");
+    resolve_variable("super");
+    emit(OpCode::GET_SUPER, constant);
 }
 
 void Compiler::visit_expr(const Expr &expression) {
@@ -286,13 +332,14 @@ void Compiler::unary(const UnaryExpr &expr) {
             break;
         case Token::Type::TILDE: emit(OpCode::BINARY_NOT);
             break;
-        default: throw Error("Unexepected expression operator.");
+        default: assert("unreachable");
     }
 }
 
 void Compiler::binary(const BinaryExpr &expr) {
     visit_expr(*expr.left);
 
+    // we need handle logical expressions before we exectue right side as they can short circut
     if (expr.op == Token::Type::AND_AND || expr.op == Token::Type::BAR_BAR) {
         logical(expr);
         return;
@@ -334,7 +381,7 @@ void Compiler::binary(const BinaryExpr &expr) {
             break;
         case Token::Type::SLASH_SLASH: emit(OpCode::FLOOR_DIVISON);
             break;
-        default: throw Error("Unexepected expression operator.");
+        default: assert("unreachable");
     }
 }
 
@@ -347,24 +394,12 @@ void Compiler::logical(const BinaryExpr &expr) {
 
 void Compiler::string_literal(const StringLiteral &expr) {
     int index = current_function()->add_constant(expr.string); // memory!
-    emit(OpCode::CONSTANT);
-    emit(index); // handle overflow!!!
+    emit(OpCode::CONSTANT, index); // handle overflow!!!
 }
 
 void Compiler::variable(const VariableExpr &expr) {
     std::string name = expr.identifier.get_lexeme(source);
-    int idx = current_locals().get(name);
-
-    if (idx == -1) {
-        idx = resolve_upvalue(name, 0);
-        assert(idx != -1); // todo: error handling
-        emit(OpCode::GET_UPVALUE);
-        emit(idx);
-    } else {
-        emit(OpCode::GET);
-        emit(idx); // todo: handle overflow
-    }
-
+    resolve_variable(name);
 }
 
 void Compiler::assigment(const AssigmentExpr &expr) {
@@ -372,7 +407,7 @@ void Compiler::assigment(const AssigmentExpr &expr) {
     int idx = current_locals().get(name);
     visit_expr(*expr.expr);
     if (idx == -1) {
-        idx = resolve_upvalue(name, 0);
+        idx = resolve_upvalue(name);
         assert(idx != -1); // todo: error handling
         emit(OpCode::SET_UPVALUE);
         emit(idx);
@@ -463,7 +498,6 @@ void Compiler::JumpDestination::make_jump(Program &program) const {
 
 void Compiler::JumpHandle::mark_destination(Program &program) const {
     int offset = program.size() - instruction_position - 3;
-    // check jump
     program.patch(instruction_position + 1, static_cast<uint8_t>(offset >> 8 & 0xFF));
     program.patch(instruction_position + 2, static_cast<uint8_t>(offset & 0xFF));
 }
@@ -473,8 +507,7 @@ void Compiler::compile() {
         visit_stmt(stmt);
     }
     // default return at main
-    emit(OpCode::NIL);
-    emit(OpCode::RETURN);
+    emit_default_return();
 }
 
  Function &Compiler::get_main()  {
