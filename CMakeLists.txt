@@ -20,13 +20,13 @@ add_executable(bite source/main.cpp
         source/Value.h
         source/Value.cpp
         source/Stmt.h
-        source/Function.h
+        source/Object.h
         source/CallFrame.h
         source/types.h
         source/conversions.h
         source/conversions.cpp
         source/Program.cpp
         source/Program.h
-        source/Function.cpp
+        source/Object.cpp
         source/debug.h
 )

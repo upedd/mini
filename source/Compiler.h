@@ -36,9 +36,6 @@ public:
 
         bool define(const std::string &name, int depth);
 
-        // returns number of elements that have been erased
-        int erase_above(int depth);
-
         void close(int local);
 
         std::vector<Local> &get_locals();
@@ -67,7 +64,8 @@ public:
 
     enum class FunctionType {
         FUNCTION,
-        CONSTRUCTOR
+        CONSTRUCTOR,
+        METHOD
     };
 
     struct Context {
@@ -81,29 +79,40 @@ public:
     };
 
     explicit Compiler(std::string_view source) : parser(source), source(source), main("", 0) {
-        allocated_objects.push_back(&main);
-        context_stack.emplace_back(&main);
+        context_stack.emplace_back(&main, FunctionType::FUNCTION);
     }
 
     void compile();
 
-    Function &get_main() ;
-
-    Function *get_function();
-
-    void define_variable(const std::string &name);
-
+    Function& get_main();
+private:
     void start_context(Function *function, FunctionType type);
-
     void end_context();
-
     Context &current_context();
 
+    int &current_depth();
+    [[nodiscard]] Function *current_function() const;
+    Locals &current_locals();
+    [[nodiscard]] Program &current_program() const;
+
+    JumpHandle start_jump(OpCode op_code);
+    [[nodiscard]] JumpDestination mark_destination() const;
+
+    void emit(bite_byte byte);
+    void emit(OpCode op_code);
+    void emit(OpCode op_code, bite_byte value);
     void emit_default_return();
 
-    Context &enclosing_context();
+    void begin_scope();
+    void end_scope();
 
-    void function_declaration(const FunctionStmt &stmt, FunctionType type);
+    void define_variable(const std::string &name);
+    void resolve_variable(const std::string &name);
+    int resolve_upvalue(const std::string &name);
+
+    void function(const FunctionStmt &stmt, FunctionType type);
+
+    void function_declaration(const FunctionStmt &stmt);
 
     void call(const CallExpr &expr);
 
@@ -115,32 +124,13 @@ public:
 
     void set_property(const SetPropertyExpr & expr);
 
-    void resolve_variable(const std::string &name);
-
     void super(const SuperExpr& expr);
-
-    std::vector<Object*> allocated_objects;
-
-private:
-    void emit(OpCode op_code);
-
-    void emit(OpCode op_code, bite_byte value);
-
-    void emit(bite_byte byte);
-
-    void begin_scope();
-
-    void end_scope();
-
-    Program &current_program() const;
 
     void while_statement(const WhileStmt &stmt);
 
     void block_statement(const BlockStmt &stmt);
 
-    int add_upvalue(int index, bool is_local, int distance);
 
-    int resolve_upvalue(const std::string &name);
 
     void assigment(const AssigmentExpr &expr);
 
@@ -166,14 +156,6 @@ private:
 
     void string_literal(const StringLiteral &expr);
 
-    int &get_current_depth();
-
-    Function *current_function() const;
-
-    Locals &current_locals();
-
-    [[nodiscard]] JumpDestination mark_destination() const;
-    JumpHandle start_jump(OpCode op_code);
 
     Parser parser;
     Function main;

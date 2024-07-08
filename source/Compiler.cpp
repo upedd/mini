@@ -9,7 +9,7 @@
 void Compiler::visit_stmt(const Stmt &statement) {
     std::visit(overloaded{
                    [this](const VarStmt &stmt) { variable_declaration(stmt); },
-                   [this](const FunctionStmt &stmt) { function_declaration(stmt, FunctionType::FUNCTION); },
+                   [this](const FunctionStmt &stmt) { function_declaration(stmt); },
                    [this](const ExprStmt &stmt) { expr_statement(stmt); },
                    [this](const BlockStmt &stmt) { block_statement(stmt); },
                    [this](const IfStmt &stmt) { if_statement(stmt); },
@@ -26,7 +26,7 @@ void Compiler::variable_declaration(const VarStmt &expr) {
 }
 
 void Compiler::define_variable(const std::string& name) {
-    if (!current_locals().define(name, get_current_depth())) {
+    if (!current_locals().define(name, current_depth())) {
         throw Error("Variable redefinition in same scope is disallowed."); // todo: better error handling!
     }
 }
@@ -53,16 +53,18 @@ void Compiler::emit_default_return() {
     emit(OpCode::RETURN);
 };
 
-void Compiler::function_declaration(const FunctionStmt &stmt, FunctionType type) {
+void Compiler::function(const FunctionStmt& stmt, FunctionType type) {
     auto function_name = stmt.name.get_lexeme(source);
     auto *function = new Function(function_name, stmt.params.size());
     current_function()->add_allocated(function);
-    define_variable(function_name);
 
     start_context(function, type);
     begin_scope();
-    if (type == FunctionType::FUNCTION) current_locals().define("", 0);
-    //define_variable(function_name); // fixme
+    if (type == FunctionType::FUNCTION) {
+        current_locals().define("", current_depth());
+    } else if (type == FunctionType::METHOD || type == FunctionType::CONSTRUCTOR) {
+        current_locals().define("this", current_depth());
+    }
     for (const Token &param: stmt.params) {
         define_variable(param.get_lexeme(source));
     }
@@ -85,6 +87,11 @@ void Compiler::function_declaration(const FunctionStmt &stmt, FunctionType type)
     }
 }
 
+void Compiler::function_declaration(const FunctionStmt &stmt) {
+    define_variable(stmt.name.get_lexeme(source));
+    function(stmt, FunctionType::FUNCTION);
+}
+
 void Compiler::expr_statement(const ExprStmt &expr) {
     visit_expr(*expr.expr);
     emit(OpCode::POP);
@@ -96,19 +103,6 @@ void Compiler::block_statement(const BlockStmt &stmt) {
         visit_stmt(*st);
     }
     end_scope();
-}
-
-// TODO: remove!
-int Compiler::add_upvalue(int index, bool is_local, int distance) {
-    auto& upvalues = context_stack[context_stack.size() - distance - 1].upvalues;
-    Upvalue upvalue {.index = index, .is_local = is_local};
-    // try to reuse existing upvalue (possible optimization replace linear search)
-    auto found = std::ranges::find(upvalues, upvalue);
-    if (found != upvalues.end()) {
-        return std::distance(upvalues.begin(), found);
-    }
-    upvalues.push_back(upvalue);
-    return upvalues.size() - 1;
 }
 
 int Compiler::Context::add_upvalue(int index, bool is_local) {
@@ -124,39 +118,28 @@ int Compiler::Context::add_upvalue(int index, bool is_local) {
 
 int Compiler::resolve_upvalue(const std::string &name) {
     int resolved = -1;
-    std::vector<std::reference_wrapper<Context>> up_resolve;
-    for (Context& context : std::views::reverse(context_stack)) {
-        int local = context.locals.get(name);
-        if (local != -1) {
-            resolved = context.add_upvalue(local, true);
-        } else {
-            up_resolve.emplace_back(context);
+    // find first context that contains given name as a local variable
+    // while tracking all contexts that we needed to go through while getting to that local
+    std::vector<std::reference_wrapper<Context>> resolve_up;
+    for (Context& context : context_stack | std::views::reverse) {
+        resolved = context.locals.get(name);
+        if (resolved != -1) {
+            context.locals.close(resolved);
+            break;
         }
+        resolve_up.emplace_back(context);
     }
+    // if we didn't find any local variable with given name return -1;
     if (resolved == -1) return resolved;
-
-    int last_resolved = resolved;
-    for (std::reference_wrapper<Context> context: std::views::reverse(up_resolve)) {
-        last_resolved = context.get().add_upvalue(last_resolved, false);
+    // tracks whetever upvalue points to local value or another upvalue
+    bool is_local = true;
+    // go from context that contains local variable to context that we resolving from
+    for (std::reference_wrapper<Context> context: resolve_up | std::views::reverse) {
+        resolved = context.get().add_upvalue(resolved, is_local);
+        if (is_local) is_local = false; // only top level context points to local variable
     }
 
-    return last_resolved;
-    // TODO: remove!
-    // if (context_stack.size() < distance + 2) {
-    //     return -1;
-    // }
-    // int local = context_stack[context_stack.size() - distance - 2].locals.get(name);
-    // if (local != -1) {
-    //     context_stack[context_stack.size() - distance - 2].locals.close(local);
-    //     return add_upvalue(local, true, distance);
-    // }
-    //
-    // int upvalue = resolve_upvalue(name, distance + 1);
-    // if (upvalue != -1) {
-    //     return add_upvalue(upvalue, false, distance);
-    // }
-    //
-    // return -1;
+    return resolved;
 }
 
 void Compiler::if_statement(const IfStmt &stmt) {
@@ -197,7 +180,7 @@ void Compiler::return_statement(const ReturnStmt &stmt) {
 void Compiler::class_declaration(const ClassStmt& stmt) {
     std::string name = stmt.name.get_lexeme(source);
     uint8_t constant = current_function()->add_constant(name);
-    current_locals().define(name, get_current_depth());
+    current_locals().define(name, current_depth());
 
     emit(OpCode::CLASS);
     emit(constant);
@@ -209,55 +192,15 @@ void Compiler::class_declaration(const ClassStmt& stmt) {
         emit(current_locals().get(name));
         emit(OpCode::INHERIT);
         begin_scope();
-        current_locals().define("super", get_current_depth());
-        //add_upvalue(idx, true, 0);
+        current_locals().define("super", current_depth());
     }
     emit(OpCode::GET);
     emit(current_locals().get(name));
     for (auto& method : stmt.methods) {
-        define_variable("this"); // implied as first argument!
-        function_declaration(*method, FunctionType::CONSTRUCTOR);
+        function(*method, FunctionType::METHOD);
         int idx = current_function()->add_constant(method->name.get_lexeme(source));
         emit(OpCode::METHOD);
         emit(idx);
-        // // todo: too much repetition with function declaration!!!!
-        // std::string function_name = std::string(method->name.get_lexeme(source));
-        // Function *function = new Function(function_name, method->params.size()); // TODO: memory leak!
-        // current_function()->add_allocated(function);
-        // context_stack.emplace_back(function);
-        // begin_scope();
-        // if (function_name != "init") {
-        //     current_locals().define(function_name, get_current_depth());
-        // }
-        // for (const Token &param: method->params) {
-        //     current_locals().define(param.get_lexeme(source), get_current_depth());
-        // }
-        // current_locals().define("this", get_current_depth());
-        // visit_stmt(*method->body);
-        // // emit default retrun
-        // if (function_name == "init") {
-        //     emit(OpCode::GET);
-        //     emit(current_locals().get("this"));
-        // } else {
-        //     emit(OpCode::NIL);
-        // }
-        //
-        // emit(OpCode::RETURN);
-        // end_scope();
-        // function->set_upvalue_count(context_stack.back().upvalues.size());
-        // auto upvalues_copy = context_stack.back().upvalues; // todo: elimainate this copy
-        // context_stack.pop_back();
-        // int constant = current_function()->add_constant(function);
-        // emit(OpCode::CLOSURE);
-        // emit(static_cast<uint8_t>(constant));
-        // for (int i = 0; i < function->get_upvalue_count(); ++i) {
-        //     emit(upvalues_copy[i].is_local);
-        //     emit(upvalues_copy[i].index);
-        // }
-        //
-        // int idx = current_function()->add_constant(function_name);
-        // emit(OpCode::METHOD);
-        // emit(idx);
     }
     emit(OpCode::POP);
 
@@ -427,7 +370,7 @@ void Compiler::call(const CallExpr &expr) {
     emit(static_cast<uint8_t>(expr.arguments.size()));
 }
 
-int &Compiler::get_current_depth() {
+int &Compiler::current_depth() {
     return context_stack.back().current_depth;
 }
 
@@ -529,14 +472,14 @@ void Compiler::emit(bite_byte byte) {
 
 
 void Compiler::begin_scope() {
-    ++get_current_depth();
+    ++current_depth();
 }
 
 void Compiler::end_scope() {
-    --get_current_depth();
+    --current_depth();
 
     auto& locals = current_locals().get_locals();
-    while (!locals.empty() && locals.back().depth > get_current_depth()) {
+    while (!locals.empty() && locals.back().depth > current_depth()) {
         if (locals.back().is_closed) {
             emit(OpCode::CLOSE_UPVALUE);
         } else {
