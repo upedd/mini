@@ -25,41 +25,61 @@ void Compiler::variable_declaration(const VarStmt &expr) {
     }
 }
 
-void Compiler::function_declaration(const FunctionStmt &stmt) {
-    std::string function_name = std::string(stmt.name.get_lexeme(source));
-    Function *function = new Function(function_name, stmt.params.size()); // TODO: memory leak!
-    allocated_objects.push_back(function);
-    if (!current_locals().define(function_name, get_current_depth())) {
+void Compiler::define_variable(const std::string& name) {
+    if (!current_locals().define(name, get_current_depth())) {
         throw Error("Variable redefinition in same scope is disallowed."); // todo: better error handling!
     }
+}
 
-    states.emplace_back(function);
-    begin_scope();
-    current_locals().define(function_name, get_current_depth());
-    for (const Token &param: stmt.params) {
-        current_locals().define(param.get_lexeme(source), get_current_depth());
+void Compiler::start_context(Function* function) {
+    context_stack.emplace_back(function);
+};
+
+void Compiler::end_context() {
+    context_stack.pop_back();
+}
+
+Compiler::Context& Compiler::current_context() {
+    return context_stack.back();
+}
+
+void Compiler::emit_default_return() {
+    if (current_context().function_type == FunctionType::CONSTRUCTOR) {
+        emit(OpCode::GET);
+        emit(current_locals().get("this"));
+    } else {
+        emit(OpCode::NIL);
     }
-    visit_stmt(*stmt.body);
-    // emit default retrun
-    emit(OpCode::NIL);
     emit(OpCode::RETURN);
+};
+
+void Compiler::function_declaration(const FunctionStmt &stmt) {
+    auto function_name = stmt.name.get_lexeme(source);
+    auto *function = new Function(function_name, stmt.params.size());
+    current_function()->add_allocated(function);
+    define_variable(function_name);
+
+    start_context(function);
+    begin_scope();
+    define_variable(function_name); // fixme
+    for (const Token &param: stmt.params) {
+        define_variable(param.get_lexeme(source));
+    }
+
+    visit_stmt(*stmt.body);
+    emit_default_return();
     end_scope();
-    function->set_upvalue_count(states.back().upvalues.size());
-    auto upvalues_copy = states.back().upvalues; // todo: elimainate this copy
 
-    // Disassembler disassembler(*function);
-    // disassembler.disassemble(function_name);
-
-    states.pop_back();
+    function->set_upvalue_count(current_context().upvalues.size());
+    std::vector<Upvalue> function_upvalues = std::move(current_context().upvalues);
+    end_context();
 
     int constant = current_function()->add_constant(function);
-    emit(OpCode::CLOSURE);
-    emit(static_cast<uint8_t>(constant));
+    emit(OpCode::CLOSURE, constant);
 
-    // todo: check!
-    for (int i = 0; i < function->get_upvalue_count(); ++i) {
-        emit(upvalues_copy[i].is_local);
-        emit(upvalues_copy[i].index);
+    for (const Upvalue& upvalue : function_upvalues) {
+        emit(upvalue.is_local);
+        emit(upvalue.index);
     }
 }
 
@@ -77,7 +97,7 @@ void Compiler::block_statement(const BlockStmt &stmt) {
 }
 
 int Compiler::add_upvalue(int index, bool is_local, int distance) {
-    auto& upvalues = states[states.size() - distance - 1].upvalues;
+    auto& upvalues = context_stack[context_stack.size() - distance - 1].upvalues;
     Upvalue upvalue {.index = index, .is_local = is_local};
     for (int i = 0; i < upvalues.size(); ++i) {
         if (upvalues[i] == upvalue) {
@@ -90,12 +110,12 @@ int Compiler::add_upvalue(int index, bool is_local, int distance) {
 }
 
 int Compiler::resolve_upvalue(const std::string &name, int distance) {
-    if (states.size() < distance + 2) {
+    if (context_stack.size() < distance + 2) {
         return -1;
     }
-    int local = states[states.size() - distance - 2].locals.get(name);
+    int local = context_stack[context_stack.size() - distance - 2].locals.get(name);
     if (local != -1) {
-        states[states.size() - distance - 2].locals.close(local);
+        context_stack[context_stack.size() - distance - 2].locals.close(local);
         return add_upvalue(local, true, distance);
     }
 
@@ -166,8 +186,8 @@ void Compiler::class_declaration(const ClassStmt& stmt) {
         // todo: too much repetition with function declaration!!!!
         std::string function_name = std::string(method->name.get_lexeme(source));
         Function *function = new Function(function_name, method->params.size()); // TODO: memory leak!
-        allocated_objects.push_back(function);
-        states.emplace_back(function);
+        current_function()->add_allocated(function);
+        context_stack.emplace_back(function);
         begin_scope();
         if (function_name != "init") {
             current_locals().define(function_name, get_current_depth());
@@ -187,9 +207,9 @@ void Compiler::class_declaration(const ClassStmt& stmt) {
 
         emit(OpCode::RETURN);
         end_scope();
-        function->set_upvalue_count(states.back().upvalues.size());
-        auto upvalues_copy = states.back().upvalues; // todo: elimainate this copy
-        states.pop_back();
+        function->set_upvalue_count(context_stack.back().upvalues.size());
+        auto upvalues_copy = context_stack.back().upvalues; // todo: elimainate this copy
+        context_stack.pop_back();
         int constant = current_function()->add_constant(function);
         emit(OpCode::CLOSURE);
         emit(static_cast<uint8_t>(constant));
@@ -373,15 +393,15 @@ void Compiler::call(const CallExpr &expr) {
 }
 
 int &Compiler::get_current_depth() {
-    return states.back().current_depth;
+    return context_stack.back().current_depth;
 }
 
 Function *Compiler::current_function() const {
-    return states.back().function;
+    return context_stack.back().function;
 }
 
 Compiler::Locals& Compiler::current_locals() {
-    return states.back().locals;
+    return context_stack.back().locals;
 }
 
 Compiler::JumpDestination Compiler::mark_destination() const {
@@ -463,6 +483,11 @@ void Compiler::compile() {
 
 void Compiler::emit(OpCode op_code) {
     current_function()->get_program().write(op_code);
+}
+
+void Compiler::emit(OpCode op_code, bite_byte value) {
+    emit(op_code);
+    emit(value);
 }
 
 void Compiler::emit(bite_byte byte) {

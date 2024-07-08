@@ -17,37 +17,7 @@ struct Nil {
 
 inline constexpr Nil nil_t {};
 
-// must ensure ptr is valid!
-// struct String {
-//     std::string* data;
-//     bool operator==(const String& other) const {
-//         auto& a = *this->data;
-//         auto& b = *other.data;
-//         return a == b;
-//     }
-//     std::strong_ordering operator<=>(const String& other) const {
-//         auto& a = *this->data;
-//         auto& b = *other.data;
-//         return a <=> b;
-//     }
-// };
-
-// struct Object {
-//
-// };
-
-class Object {
-public:
-    bool is_marked = false;
-    virtual ~Object() = default;
-};
-
-class Function;
-class Closure;
-class Upvalue;
-
-//using object_variant_t = std::variant<std::string*, Function*, Closure*, Upvalue*>;
-
+class Object;
 
 using value_variant_t = std::variant<Nil, bite_int, bite_float, bool, Object*, std::string>;
 
@@ -155,13 +125,6 @@ public:
     Value binary_xor(const Value& other) const;
     Value binary_not() const;
 
-};
-
-class Upvalue : public Object {
-public:
-    explicit Upvalue(Value* location) : location(location) {}
-    Value* location = nullptr;
-    Value closed = Value{nil_t};
 };
 
 

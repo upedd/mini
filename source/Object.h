@@ -7,6 +7,13 @@
 #include "Expr.h"
 #include "Program.h"
 
+
+class Object {
+public:
+    bool is_marked = false;
+    virtual ~Object() = default;
+};
+
 class Function final : public Object {
 public:
     Function(std::string name, const int arity) : name(std::move(name)),
@@ -24,12 +31,24 @@ public:
 
     std::vector<Value>& get_constants();
 
+    void add_allocated(Object* object);
+    const std::vector<Object*> get_allocated();
 private:
+    // objects that were allocated during function compilation
+    // vm should adpot them
+    std::vector<Object*> allocated_objects;
     std::string name;
     int arity;
     Program program; // code of function
     std::vector<Value> constants;
     int upvalue_count;
+};
+
+class Upvalue : public Object {
+public:
+    explicit Upvalue(Value* location) : location(location) {}
+    Value* location = nullptr;
+    Value closed = Value{nil_t};
 };
 
 class Closure final : public Object {

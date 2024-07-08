@@ -1,6 +1,6 @@
 #ifndef CALLFRAME_H
 #define CALLFRAME_H
-#include "Function.h"
+#include "Object.h"
 
 struct CallFrame {
     Closure* closure = nullptr;

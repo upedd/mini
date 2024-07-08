@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "CallFrame.h"
+#include "Object.h"
 
 //#define DEBUG_STRESS_GC
 

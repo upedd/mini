@@ -2,7 +2,7 @@
 #define DEBUG_H
 #include <iostream>
 
-#include "Function.h"
+#include "Object.h"
 
 class Disassembler {
 public:

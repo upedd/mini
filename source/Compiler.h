@@ -1,13 +1,14 @@
 #ifndef COMPILER_H
 #define COMPILER_H
 #include "Expr.h"
-#include "Function.h"
+#include "Object.h"
 #include "Parser.h"
 #include "Stmt.h"
 
 
 class Compiler {
 public:
+
     class Error : public std::runtime_error {
     public:
         explicit Error(const std::string &message) : runtime_error(message) {
@@ -64,8 +65,14 @@ public:
         int instruction_position;
     };
 
-    struct State {
+    enum class FunctionType {
+        FUNCITON,
+        CONSTRUCTOR
+    };
+
+    struct Context {
         Function *function = nullptr;
+        FunctionType function_type;
         int current_depth = 0;
         Locals locals;
         std::vector<Upvalue> upvalues;
@@ -73,7 +80,7 @@ public:
 
     explicit Compiler(std::string_view source) : parser(source), source(source), main("", 0) {
         allocated_objects.push_back(&main);
-        states.emplace_back(&main);
+        context_stack.emplace_back(&main);
     }
 
     void compile();
@@ -83,6 +90,16 @@ public:
     Function *get_function();
 
     void define_variable(const std::string &name);
+
+    void start_context(Function *function);
+
+    void end_context();
+
+    Context &current_context();
+
+    void emit_default_return();
+
+    Context &enclosing_context();
 
     void function_declaration(const FunctionStmt &stmt);
 
@@ -102,6 +119,8 @@ public:
 
 private:
     void emit(OpCode op_code);
+
+    void emit(OpCode op_code, bite_byte value);
 
     void emit(bite_byte byte);
 
@@ -154,7 +173,7 @@ private:
 
     Parser parser;
     Function main;
-    std::vector<State> states;
+    std::vector<Context> context_stack;
     std::string_view source;
 };
 

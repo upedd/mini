@@ -145,7 +145,6 @@ void VM::blacken_object(Object *object) {
         mark_value(upvalue->closed);
     }
     if (auto *function = dynamic_cast<Function *>(object)) {
-        // TODO: mark function name!
         for (auto &value: function->get_constants()) {
             mark_value(value);
         }
@@ -158,7 +157,6 @@ void VM::blacken_object(Object *object) {
     }
 
     if (auto *klass = dynamic_cast<Class*>(object)) {
-        // todo: mark name?
         for (auto& [_, v] : klass->methods) {
             mark_value(v);
         }
