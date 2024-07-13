@@ -326,7 +326,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 break;
             }
             case OpCode::SET_PROPERTY: {
-                std::optional<Object*> object = peek().as<Object*>();
+                std::optional<Object*> object = peek(1).as<Object*>();
                 if (!object) {
                     return std::unexpected(RuntimeError("Expected class instance value."));
                 }
@@ -370,10 +370,10 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 break;
             }
         }
-        // for (int i = 0; i < stack_index; ++i) {
-        //     std::cout << '[' << stack[i].to_string() << "] ";
-        // }
-        // std::cout << '\n';
+        for (int i = 0; i < stack_index; ++i) {
+            std::cout << '[' << stack[i].to_string() << "] ";
+        }
+        std::cout << '\n';
     }
 #undef BINARY_OPERATION
 }

@@ -142,7 +142,7 @@ inline Value Value::subtract(const Value &other) const {
 }
 
 inline Value Value::divide(const Value &other) const {
-    return this->convert_to_number() + other.convert_to_number();
+    return this->convert_to_number() / other.convert_to_number();
 }
 
 inline Value Value::floor_divide(const Value &other) const {

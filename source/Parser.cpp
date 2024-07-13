@@ -238,6 +238,17 @@ Parser::Precedence Parser::get_precendece(Token::Type token) {
         case Token::Type::CARET:
             return Precedence::BITWISE_XOR;
         case Token::Type::EQUAL:
+        case Token::Type::PLUS_EQUAL:
+        case Token::Type::MINUS_EQUAL:
+        case Token::Type::STAR_EQUAL:
+        case Token::Type::SLASH_EQUAL:
+        case Token::Type::SLASH_SLASH_EQUAL:
+        case Token::Type::PERCENT_EQUAL:
+        case Token::Type::LESS_LESS_EQUAL:
+        case Token::Type::GREATER_GREATER_EQUAL:
+        case Token::Type::AND_EQUAL:
+        case Token::Type::CARET_EQUAL:
+        case Token::Type::BAR_EQUAL:
             return Precedence::ASSIGMENT;
         case Token::Type::AND_AND:
             return Precedence::LOGICAL_AND;
@@ -328,8 +339,50 @@ Expr Parser::string() const {
 
 Expr Parser::identifier() {
     Token name = current;
-    if (match(Token::Type::EQUAL)) {
-        return AssigmentExpr{.identifier = name, .expr = make_expr_handle(expression())};
+    std::optional<Token::Type> op;
+    // handle compound assigments
+    switch (next.type) {
+        case Token::Type::EQUAL:
+            op = Token::Type::NONE;
+            break;
+        case Token::Type::PLUS_EQUAL:
+            op = Token::Type::PLUS;
+            break;
+        case Token::Type::MINUS_EQUAL:
+            op = Token::Type::MINUS;
+        break;
+        case Token::Type::STAR_EQUAL:
+            op = Token::Type::STAR;
+        break;
+        case Token::Type::SLASH_EQUAL:
+            op = Token::Type::SLASH;
+        break;
+        case Token::Type::SLASH_SLASH_EQUAL:
+            op = Token::Type::SLASH_SLASH;
+        break;
+        case Token::Type::PERCENT_EQUAL:
+            op = Token::Type::PERCENT;
+        break;
+        case Token::Type::LESS_LESS_EQUAL:
+            op = Token::Type::LESS_LESS;
+        break;
+        case Token::Type::GREATER_GREATER_EQUAL:
+            op = Token::Type::GREATER_GREATER;
+        break;
+        case Token::Type::AND_EQUAL:
+            op = Token::Type::AND;
+        break;
+        case Token::Type::BAR_EQUAL:
+            op = Token::Type::BAR;
+        break;
+        case Token::Type::CARET_EQUAL:
+            op = Token::Type::CARET;
+        break;
+        default: break;
+    }
+    if (op) {
+        advance();
+        return AssigmentExpr{.identifier = name, .expr = make_expr_handle(expression()), .op = *op};
     }
     return VariableExpr{name};
 }

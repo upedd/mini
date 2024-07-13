@@ -347,7 +347,7 @@ void Compiler::visit_expr(const Expr &expression) {
                    [this](const BinaryExpr &expr) { binary(expr); },
                    [this](const StringLiteral &expr) { string_literal(expr); },
                    [this](const VariableExpr &expr) { variable(expr); },
-                   [this](const AssigmentExpr &expr) { assigment(expr); },
+                   [this](const AssigmentExpr &expr) { compound_assigment(expr); },
                    [this](const CallExpr &expr) { call(expr); },
                    [this](const GetPropertyExpr &expr) { get_property(expr); },
                    [this](const SetPropertyExpr &expr) { set_property(expr); },
@@ -379,17 +379,8 @@ void Compiler::unary(const UnaryExpr &expr) {
     }
 }
 
-void Compiler::binary(const BinaryExpr &expr) {
-    visit_expr(*expr.left);
-
-    // we need handle logical expressions before we execute right side as they can short circut
-    if (expr.op == Token::Type::AND_AND || expr.op == Token::Type::BAR_BAR) {
-        logical(expr);
-        return;
-    }
-
-    visit_expr(*expr.right);
-    switch (expr.op) {
+void Compiler::emit_binary_op(Token::Type op) {
+    switch (op) {
         case Token::Type::PLUS: emit(OpCode::ADD);
             break;
         case Token::Type::MINUS: emit(OpCode::SUBTRACT);
@@ -428,6 +419,19 @@ void Compiler::binary(const BinaryExpr &expr) {
     }
 }
 
+void Compiler::binary(const BinaryExpr &expr) {
+    visit_expr(*expr.left);
+
+    // we need handle logical expressions before we execute right side as they can short circut
+    if (expr.op == Token::Type::AND_AND || expr.op == Token::Type::BAR_BAR) {
+        logical(expr);
+        return;
+    }
+
+    visit_expr(*expr.right);
+    emit_binary_op(expr.op);
+}
+
 void Compiler::variable(const VariableExpr &expr) {
     std::string name = expr.identifier.get_lexeme(source);
     resolve_variable(name);
@@ -440,10 +444,8 @@ void Compiler::logical(const BinaryExpr &expr) {
     jump.mark_destination(current_program());
 }
 
-void Compiler::assigment(const AssigmentExpr &expr) {
-    std::string name = expr.identifier.get_lexeme(source);
+void Compiler::update_variable(const std::string& name) {
     int idx = current_locals().get(name);
-    visit_expr(*expr.expr);
     if (idx == -1) {
         idx = resolve_upvalue(name);
         assert(idx != -1); // todo: error handling
@@ -452,6 +454,20 @@ void Compiler::assigment(const AssigmentExpr &expr) {
     } else {
         emit(OpCode::SET);
         emit(idx); // todo: handle overflow
+    }
+}
+
+void Compiler::compound_assigment(const AssigmentExpr &expr) {
+    // normal assigment
+    std::string name = expr.identifier.get_lexeme(source);
+    if (expr.op == Token::Type::NONE) {
+        visit_expr(*expr.expr);
+        update_variable(name);
+    } else {
+        resolve_variable(name);
+        visit_expr(*expr.expr);
+        emit_binary_op(expr.op);
+        update_variable(name);
     }
 }
 

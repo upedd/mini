@@ -38,6 +38,7 @@ struct BinaryExpr {
 struct AssigmentExpr {
     Token identifier;
     ExprHandle expr;
+    Token::Type op;
 };
 
 struct CallExpr {

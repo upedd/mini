@@ -130,10 +130,16 @@ private:
     void literal(const LiteralExpr &expr);
     void string_literal(const StringLiteral &expr);
     void unary(const UnaryExpr &expr);
+
+    void emit_binary_op(Token::Type op);
+
     void binary(const BinaryExpr &expr);
     void logical(const BinaryExpr &expr);
+
+    void update_variable(const std::string &name);
+
     void variable(const VariableExpr& expr);
-    void assigment(const AssigmentExpr &expr);
+    void compound_assigment(const AssigmentExpr &expr);
     void call(const CallExpr &expr);
     void get_property(const GetPropertyExpr & expr);
     void set_property(const SetPropertyExpr & expr);
