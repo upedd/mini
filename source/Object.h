@@ -37,6 +37,25 @@ public:
     [[nodiscard]] int get_upvalue_count() const { return upvalue_count; }
     void set_upvalue_count(const int count) { upvalue_count = count; }
 
+    int add_empty_jump_destination() {
+        jump_table.push_back(0);
+        return jump_table.size() - 1;
+    }
+
+    void patch_jump_destination(int idx, uint32_t destination) {
+        assert(idx < jump_table.size());
+        jump_table[idx] = destination;
+    }
+
+    int add_jump_destination(uint32_t destination) {
+        jump_table.push_back(destination);
+        return jump_table.size() - 1;
+    }
+    uint32_t get_jump_destination(int idx) {
+        assert(idx < jump_table.size());
+        return jump_table[idx];
+    }
+
     std::vector<Value>& get_constants();
 
     void add_allocated(Object* object);
@@ -64,6 +83,7 @@ private:
     int arity;
     Program program; // code of function
     std::vector<Value> constants;
+    std::vector<uint32_t> jump_table;
     int upvalue_count;
 };
 

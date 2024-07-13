@@ -96,7 +96,8 @@ Stmt Parser::declaration() {
         return std::move(*stmt);
     } else {
         auto expr = std::make_unique<Expr>(expression());
-        consume(Token::Type::SEMICOLON, "Expected ';' after expression.");
+        match(Token::Type::SEMICOLON);
+        //consume(Token::Type::SEMICOLON, "Expected ';' after expression.");
         return ExprStmt(std::move(expr));
     }
 }
@@ -259,6 +260,7 @@ Parser::Precedence Parser::get_precendece(Token::Type token) {
         case Token::Type::CARET_EQUAL:
         case Token::Type::BAR_EQUAL:
         case Token::Type::IF:
+        case Token::Type::LOOP:
             return Precedence::ASSIGMENT;
         case Token::Type::AND_AND:
             return Precedence::LOGICAL_AND;
@@ -317,6 +319,18 @@ Expr Parser::block() {
     return BlockExpr{.stmts = std::move(stmts), .expr = std::move(expr_at_end)};
 }
 
+Expr Parser::loop_expression() {
+    consume(Token::Type::LEFT_BRACE, "Expected '{' after loop keyword.");
+    return LoopExpr(make_expr_handle(block()));
+}
+
+Expr Parser::break_expression() {
+    if (match(Token::Type::SEMICOLON)) {
+        return BreakExpr{};
+    }
+    return BreakExpr{make_expr_handle(expression())};
+}
+
 std::optional<Expr> Parser::prefix() {
     switch (current.type) {
         case Token::Type::INTEGER:
@@ -345,6 +359,10 @@ std::optional<Expr> Parser::prefix() {
             return super_();
         case Token::Type::IF:
             return if_expression();
+        case Token::Type::LOOP:
+            return loop_expression();
+        case Token::Type::BREAK:
+            return break_expression();
         default: return {};
     }
 }

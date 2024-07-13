@@ -94,6 +94,9 @@ private:
 
     Expr block();
 
+    Expr loop_expression();
+    Expr break_expression();
+
     std::optional<Expr> prefix();
 
     Expr integer();

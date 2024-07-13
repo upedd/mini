@@ -20,6 +20,8 @@ struct GetPropertyExpr;
 struct SuperExpr;
 struct BlockExpr;
 struct IfExpr;
+struct LoopExpr;
+struct BreakExpr;
 
 struct ExprStmt;
 struct VarStmt;
@@ -30,7 +32,7 @@ struct ClassStmt;
 struct NativeStmt;
 
 using Expr = std::variant<LiteralExpr, StringLiteral, UnaryExpr, BinaryExpr, VariableExpr, CallExpr, GetPropertyExpr,
-    SuperExpr, BlockExpr, IfExpr>;
+    SuperExpr, BlockExpr, IfExpr, LoopExpr, BreakExpr>;
 using ExprHandle = std::unique_ptr<Expr>;
 
 using Stmt = std::variant<VarStmt, ExprStmt, WhileStmt, FunctionStmt, ReturnStmt, ClassStmt, NativeStmt>;
@@ -82,6 +84,14 @@ struct IfExpr {
     ExprHandle condition;
     ExprHandle then_expr;
     ExprHandle else_expr;
+};
+
+struct LoopExpr {
+    ExprHandle body;
+};
+
+struct BreakExpr {
+    ExprHandle expr;
 };
 
 inline ExprHandle make_expr_handle(Expr expr) {
@@ -221,6 +231,9 @@ inline std::string expr_to_string(const Expr &expr, std::string_view source) {
                                                  expr_to_string(*expr.condition, source),
                                                  expr_to_string(*expr.then_expr, source));
                           },
+                          [source](const LoopExpr& expr) {
+                              return std::format("(loop {})", expr_to_string(*expr.body, source));
+                          }
                       }, expr);
 }
 

@@ -93,6 +93,8 @@ public:
 
     void block(const BlockExpr & expr);
 
+    void loop_expression(const LoopExpr & expr);
+
 private:
     void start_context(Function *function, FunctionType type);
     void end_context();

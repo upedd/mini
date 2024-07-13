@@ -250,6 +250,13 @@ void Compiler::block(const BlockExpr &expr) {
     end_scope();
 }
 
+void Compiler::loop_expression(const LoopExpr &expr) {
+    auto destination = mark_destination();
+    visit_expr(*expr.body);
+    emit(OpCode::LOOP);
+    destination.make_jump(current_program());
+}
+
 void Compiler::function(const FunctionStmt &stmt, FunctionType type) {
     auto function_name = stmt.name.get_lexeme(source);
     auto *function = new Function(function_name, stmt.params.size());
@@ -368,7 +375,8 @@ void Compiler::visit_expr(const Expr &expression) {
                    [this](const GetPropertyExpr &expr) { get_property(expr); },
                    [this](const SuperExpr &expr) { super(expr); },
                    [this](const BlockExpr& expr) {block(expr);},
-                   [this](const IfExpr& expr) {if_expression(expr);}
+                   [this](const IfExpr& expr) {if_expression(expr);},
+                   [this](const LoopExpr& expr) {loop_expression(expr);}
                }, expression);
 }
 
