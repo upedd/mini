@@ -1,7 +1,5 @@
 ### 🚧 Under Construction!!! 🚧
 Note that Bite is in heavy development and most of the features have not been yet implemented.
-
-Also note that for now the only way to print output is by using `return` keyword from top level function.
 # Bite 
 Bite (formerly mini) is a multi-paradigm dynamically typed scripting language
 made to be fun and easy to use and embed into other applications.

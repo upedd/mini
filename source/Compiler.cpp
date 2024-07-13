@@ -61,7 +61,7 @@ int Compiler::Context::add_upvalue(int index, bool is_local) {
 
 void Compiler::compile() {
     for (auto &stmt: parser.parse()) {
-        std::cout << stmt_to_string(stmt, source) << '\n';
+        //std::cout << stmt_to_string(stmt, source) << '\n';
         visit_stmt(stmt);
     }
     // default return at main

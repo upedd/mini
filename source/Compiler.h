@@ -80,6 +80,7 @@ public:
 
     explicit Compiler(std::string_view source) : parser(source), source(source), main("", 0) {
         context_stack.emplace_back(&main, FunctionType::FUNCTION);
+        functions.push_back(&main);
     }
 
     void compile();

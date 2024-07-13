@@ -69,7 +69,7 @@ private:
 
 class NativeFunction final : public Object {
 public:
-    explicit NativeFunction(std::function<void()> function) : function(std::move(function)) {}
+    explicit NativeFunction(std::function<Value(const std::vector<Value>&)> function) : function(std::move(function)) {}
 
     std::size_t get_size() override {
         return sizeof(NativeFunction);
@@ -79,7 +79,7 @@ public:
         return "<Native>";
     }
 
-    std::function<void()> function;
+    std::function<Value(const std::vector<Value>&)> function;
 };
 
 class Upvalue : public Object {

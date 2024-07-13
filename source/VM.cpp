@@ -82,7 +82,13 @@ std::optional<VM::RuntimeError> VM::call_value(const Value &value, const int arg
     }
 
     if (auto* native = dynamic_cast<NativeFunction*>(*object)) {
-        native->function();
+        std::vector<Value> args;
+        for (int i = 0; i < arguments_count + 1; ++i) {
+            args.push_back(stack[stack_index - arguments_count - 1 + i]);
+        }
+        Value result = native->function(args);
+        stack_index -= arguments_count + 1;
+        push(result);
         return {};
     }
     return RuntimeError("Expected callable value such as function or class.");
@@ -383,10 +389,10 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 push(natives[name]);
             }
         }
-        for (int i = 0; i < stack_index; ++i) {
-            std::cout << '[' << stack[i].to_string() << "] ";
-        }
-        std::cout << '\n';
+        // for (int i = 0; i < stack_index; ++i) {
+        //     std::cout << '[' << stack[i].to_string() << "] ";
+        // }
+        // std::cout << '\n';
     }
 #undef BINARY_OPERATION
 }
@@ -395,7 +401,7 @@ void VM::add_native(const std::string &name, const Value &value) {
     natives[name] = value;
 }
 
-void VM::add_native_function(const std::string &name, const std::function<void()> &fn) {
+void VM::add_native_function(const std::string &name, const std::function<Value(const std::vector<Value>&)> &fn) {
     auto* ptr = new NativeFunction(fn);
     natives[name] = ptr;
     allocate(ptr);

@@ -1,3 +1,4 @@
+#include <chrono>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -19,16 +20,20 @@ int main(int argc, char** argv) {
     Compiler compiler(source);
     compiler.compile();
     auto& func = compiler.get_main();
+    // Disassembler disassembler(func);
+    // disassembler.disassemble("main");
     auto& functions = compiler.get_functions();
     GarbageCollector gc;
     for (auto* function : functions) {
         gc.add_object(function);
     }
-    gc.add_object(&func); // should be in functions?
     VM vm(std::move(gc), &func);
-    if (auto result = vm.run()) {
-        std::cout << "Your bite program output: " << result->to_string() << '\n';
-    } else {
-        std::cout << "Exectuion error: " << result.error().what() << '\n';
+    vm.add_native_function("print", [](const std::vector<Value>& args) {
+        std::cout << args[1].to_string() << '\n';
+        return nil_t;
+    });
+    auto result = vm.run();
+    if (!result) {
+        std::cerr << result.error().what() << '\n';
     }
 }

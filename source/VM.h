@@ -53,7 +53,7 @@ public:
     std::expected<Value, RuntimeError> run();
 
     void add_native(const std::string& name, const Value &value);
-    void add_native_function(const std::string& name, const std::function<void()>& fn);
+    void add_native_function(const std::string &name, const std::function<Value(const std::vector<Value> &)> &fn);
 private:
     GarbageCollector gc;
     std::size_t next_gc = 1024 * 1024;
@@ -80,6 +80,5 @@ T* VM::allocate(T* ptr) {
 
     return ptr;
 }
-
 
 #endif //VM_H
