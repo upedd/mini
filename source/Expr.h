@@ -12,16 +12,14 @@
 
 struct UnaryExpr;
 struct BinaryExpr;
-struct AssigmentExpr;
 struct CallExpr;
 struct LiteralExpr;
 struct StringLiteral;
 struct VariableExpr;
-struct SetPropertyExpr;
 struct GetPropertyExpr;
 struct SuperExpr;
 
-using Expr = std::variant<LiteralExpr, StringLiteral, UnaryExpr, BinaryExpr, VariableExpr, AssigmentExpr, CallExpr, SetPropertyExpr, GetPropertyExpr, SuperExpr>;
+using Expr = std::variant<LiteralExpr, StringLiteral, UnaryExpr, BinaryExpr, VariableExpr, CallExpr, GetPropertyExpr, SuperExpr>;
 using ExprHandle = std::unique_ptr<Expr>;
 
 struct UnaryExpr {
@@ -32,12 +30,6 @@ struct UnaryExpr {
 struct BinaryExpr {
     ExprHandle left;
     ExprHandle right;
-    Token::Type op;
-};
-
-struct AssigmentExpr {
-    Token identifier;
-    ExprHandle expr;
     Token::Type op;
 };
 
@@ -61,12 +53,6 @@ struct VariableExpr {
 struct GetPropertyExpr {
     ExprHandle left; // Todo: better name?
     Token property;
-};
-
-struct SetPropertyExpr {
-    ExprHandle left;
-    Token property;
-    ExprHandle expression;
 };
 
 struct SuperExpr {
@@ -95,9 +81,6 @@ inline std::string expr_to_string(const Expr &expr, std::string_view source) {
                           [source](const VariableExpr &expr) {
                               return expr.identifier.get_lexeme(source);
                           },
-                          [source](const AssigmentExpr &expr) {
-                              return std::format("(assign {} {})", expr.identifier.get_lexeme(source), expr_to_string(*expr.expr, source));
-                          },
                           [source](const CallExpr &expr) {
                               std::string arguments_string;
                               for (auto& arg : expr.arguments) {
@@ -108,12 +91,6 @@ inline std::string expr_to_string(const Expr &expr, std::string_view source) {
                           },
                           [source](const GetPropertyExpr &expr) {
                               return std::format("({}.{})", expr_to_string(*expr.left, source), expr.property.get_lexeme(source));
-                          },
-                          [source](const SetPropertyExpr &expr) {
-                              return std::format("(assign {}.{} {})",
-                                  expr_to_string(*expr.left, source),
-                                  expr.property.get_lexeme(source),
-                                  expr_to_string(*expr.expression, source));
                           },
                           [source](const SuperExpr &expr) {
                               return std::format("super.{}", expr.method.get_lexeme(source));

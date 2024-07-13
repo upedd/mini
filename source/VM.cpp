@@ -326,14 +326,14 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 break;
             }
             case OpCode::SET_PROPERTY: {
-                std::optional<Object*> object = peek(1).as<Object*>();
+                std::optional<Object*> object = peek(0).as<Object*>();
                 if (!object) {
                     return std::unexpected(RuntimeError("Expected class instance value."));
                 }
                 if (auto *instance = dynamic_cast<Instance *>(*object)) {
                     int constant_idx = fetch();
                     auto name = get_constant(constant_idx).get<std::string>();
-                    instance->fields[name] = peek(0);
+                    instance->fields[name] = peek(1);
                     Value value = pop();
                     pop(); // pop instance
                     push(value);

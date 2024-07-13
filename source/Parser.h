@@ -103,7 +103,7 @@ private:
 
     Expr infix(Expr left);
 
-    Expr binary(Expr left);
+    Expr binary(Expr left, bool expect_lvalue = false);
     Expr call(Expr left);
 
     Token current;

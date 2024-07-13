@@ -6,7 +6,7 @@
 #include "CallFrame.h"
 #include "Object.h"
 
-//#define DEBUG_STRESS_GC
+#define DEBUG_STRESS_GC
 
 class VM {
 public:

@@ -255,7 +255,6 @@ Parser::Precedence Parser::get_precendece(Token::Type token) {
         case Token::Type::BAR_BAR:
             return Precedence::LOGICAL_OR;
         case Token::Type::LEFT_PAREN:
-            return Precedence::CALL;
         case Token::Type::DOT:
             return Precedence::CALL;
         default:
@@ -338,53 +337,7 @@ Expr Parser::string() const {
 }
 
 Expr Parser::identifier() {
-    Token name = current;
-    std::optional<Token::Type> op;
-    // handle compound assigments
-    switch (next.type) {
-        case Token::Type::EQUAL:
-            op = Token::Type::NONE;
-            break;
-        case Token::Type::PLUS_EQUAL:
-            op = Token::Type::PLUS;
-            break;
-        case Token::Type::MINUS_EQUAL:
-            op = Token::Type::MINUS;
-        break;
-        case Token::Type::STAR_EQUAL:
-            op = Token::Type::STAR;
-        break;
-        case Token::Type::SLASH_EQUAL:
-            op = Token::Type::SLASH;
-        break;
-        case Token::Type::SLASH_SLASH_EQUAL:
-            op = Token::Type::SLASH_SLASH;
-        break;
-        case Token::Type::PERCENT_EQUAL:
-            op = Token::Type::PERCENT;
-        break;
-        case Token::Type::LESS_LESS_EQUAL:
-            op = Token::Type::LESS_LESS;
-        break;
-        case Token::Type::GREATER_GREATER_EQUAL:
-            op = Token::Type::GREATER_GREATER;
-        break;
-        case Token::Type::AND_EQUAL:
-            op = Token::Type::AND;
-        break;
-        case Token::Type::BAR_EQUAL:
-            op = Token::Type::BAR;
-        break;
-        case Token::Type::CARET_EQUAL:
-            op = Token::Type::CARET;
-        break;
-        default: break;
-    }
-    if (op) {
-        advance();
-        return AssigmentExpr{.identifier = name, .expr = make_expr_handle(expression()), .op = *op};
-    }
-    return VariableExpr{name};
+    return VariableExpr{current};
 }
 
 Expr Parser::keyword() const {
@@ -411,14 +364,7 @@ Expr Parser::unary(Token::Type operator_type) {
 
 Expr Parser::dot(Expr left) {
     consume(Token::Type::IDENTIFIER, "Expected property name after '.'");
-    Token name = current;
-    if (match(Token::Type::EQUAL)) { // TODO: you can't actually always assign
-        return SetPropertyExpr {.left = make_expr_handle(std::move(left)),
-            .property = name,
-            .expression = make_expr_handle(expression())};
-    }
-
-    return GetPropertyExpr {.left = make_expr_handle(std::move(left)), .property = name};
+    return GetPropertyExpr {.left = make_expr_handle(std::move(left)), .property = current};
 }
 
 Expr Parser::infix(Expr left) {
@@ -443,6 +389,19 @@ Expr Parser::infix(Expr left) {
         case Token::Type::BAR_BAR:
         case Token::Type::PERCENT:
             return binary(std::move(left));
+        case Token::Type::EQUAL:
+        case Token::Type::PLUS_EQUAL:
+        case Token::Type::MINUS_EQUAL:
+        case Token::Type::STAR_EQUAL:
+        case Token::Type::SLASH_EQUAL:
+        case Token::Type::SLASH_SLASH_EQUAL:
+        case Token::Type::PERCENT_EQUAL:
+        case Token::Type::LESS_LESS_EQUAL:
+        case Token::Type::GREATER_GREATER_EQUAL:
+        case Token::Type::AND_EQUAL:
+        case Token::Type::CARET_EQUAL:
+        case Token::Type::BAR_EQUAL:
+            return binary(std::move(left), true);
         case Token::Type::LEFT_PAREN:
             return call(std::move(left));
         case Token::Type::DOT:
@@ -452,11 +411,19 @@ Expr Parser::infix(Expr left) {
     }
 }
 
-Expr Parser::binary(Expr left) {
+Expr Parser::binary(Expr left, bool expect_lvalue) {
+    if (expect_lvalue && !std::holds_alternative<VariableExpr>(left) && !std::holds_alternative<GetPropertyExpr>(left)) {
+        error(current, "Expected lvalue as left hand side of an binary expression.");
+    }
     Token::Type op = current.type;
+    Precedence precedence = get_precendece(op);
+    // handle right-associativity
+    if (precedence == Precedence::ASSIGMENT) {
+        precedence = static_cast<Precedence>(static_cast<int>(precedence) - 1);
+    }
     return BinaryExpr{
         make_expr_handle(std::move(left)),
-        make_expr_handle(expression(get_precendece(op))), op
+        make_expr_handle(expression(precedence)), op
     };
 }
 

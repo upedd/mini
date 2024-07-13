@@ -347,10 +347,8 @@ void Compiler::visit_expr(const Expr &expression) {
                    [this](const BinaryExpr &expr) { binary(expr); },
                    [this](const StringLiteral &expr) { string_literal(expr); },
                    [this](const VariableExpr &expr) { variable(expr); },
-                   [this](const AssigmentExpr &expr) { compound_assigment(expr); },
                    [this](const CallExpr &expr) { call(expr); },
                    [this](const GetPropertyExpr &expr) { get_property(expr); },
-                   [this](const SetPropertyExpr &expr) { set_property(expr); },
                    [this](const SuperExpr &expr) { super(expr); }
                }, expression);
 }
@@ -379,49 +377,15 @@ void Compiler::unary(const UnaryExpr &expr) {
     }
 }
 
-void Compiler::emit_binary_op(Token::Type op) {
-    switch (op) {
-        case Token::Type::PLUS: emit(OpCode::ADD);
-            break;
-        case Token::Type::MINUS: emit(OpCode::SUBTRACT);
-            break;
-        case Token::Type::STAR: emit(OpCode::MULTIPLY);
-            break;
-        case Token::Type::SLASH: emit(OpCode::DIVIDE);
-            break;
-        case Token::Type::EQUAL_EQUAL: emit(OpCode::EQUAL);
-            break;
-        case Token::Type::BANG_EQUAL: emit(OpCode::NOT_EQUAL);
-            break;
-        case Token::Type::LESS: emit(OpCode::LESS);
-            break;
-        case Token::Type::LESS_EQUAL: emit(OpCode::LESS_EQUAL);
-            break;
-        case Token::Type::GREATER: emit(OpCode::GREATER);
-            break;
-        case Token::Type::GREATER_EQUAL: emit(OpCode::GREATER_EQUAL);
-            break;
-        case Token::Type::GREATER_GREATER: emit(OpCode::RIGHT_SHIFT);
-            break;
-        case Token::Type::LESS_LESS: emit(OpCode::LEFT_SHIFT);
-            break;
-        case Token::Type::AND: emit(OpCode::BITWISE_AND);
-            break;
-        case Token::Type::BAR: emit(OpCode::BITWISE_OR);
-            break;
-        case Token::Type::CARET: emit(OpCode::BITWISE_XOR);
-            break;
-        case Token::Type::PERCENT: emit(OpCode::MODULO);
-            break;
-        case Token::Type::SLASH_SLASH: emit(OpCode::FLOOR_DIVISON);
-            break;
-        default: assert("unreachable");
-    }
-}
-
 void Compiler::binary(const BinaryExpr &expr) {
-    visit_expr(*expr.left);
+    // we don't need to actually visit lhs for plain assigment
+    if (expr.op == Token::Type::EQUAL) {
+        visit_expr(*expr.right);
+        update_lvalue(*expr.left);
+        return;
+    }
 
+    visit_expr(*expr.left);
     // we need handle logical expressions before we execute right side as they can short circut
     if (expr.op == Token::Type::AND_AND || expr.op == Token::Type::BAR_BAR) {
         logical(expr);
@@ -429,7 +393,112 @@ void Compiler::binary(const BinaryExpr &expr) {
     }
 
     visit_expr(*expr.right);
-    emit_binary_op(expr.op);
+    switch (expr.op) {
+        case Token::Type::PLUS: emit(OpCode::ADD);
+        break;
+        case Token::Type::MINUS: emit(OpCode::SUBTRACT);
+        break;
+        case Token::Type::STAR: emit(OpCode::MULTIPLY);
+        break;
+        case Token::Type::SLASH: emit(OpCode::DIVIDE);
+        break;
+        case Token::Type::EQUAL_EQUAL: emit(OpCode::EQUAL);
+        break;
+        case Token::Type::BANG_EQUAL: emit(OpCode::NOT_EQUAL);
+        break;
+        case Token::Type::LESS: emit(OpCode::LESS);
+        break;
+        case Token::Type::LESS_EQUAL: emit(OpCode::LESS_EQUAL);
+        break;
+        case Token::Type::GREATER: emit(OpCode::GREATER);
+        break;
+        case Token::Type::GREATER_EQUAL: emit(OpCode::GREATER_EQUAL);
+        break;
+        case Token::Type::GREATER_GREATER: emit(OpCode::RIGHT_SHIFT);
+        break;
+        case Token::Type::LESS_LESS: emit(OpCode::LEFT_SHIFT);
+        break;
+        case Token::Type::AND: emit(OpCode::BITWISE_AND);
+        break;
+        case Token::Type::BAR: emit(OpCode::BITWISE_OR);
+        break;
+        case Token::Type::CARET: emit(OpCode::BITWISE_XOR);
+        break;
+        case Token::Type::PERCENT: emit(OpCode::MODULO);
+        break;
+        case Token::Type::SLASH_SLASH: emit(OpCode::FLOOR_DIVISON);
+        break;
+        case Token::Type::PLUS_EQUAL:
+            emit(OpCode::ADD);
+            update_lvalue(*expr.left);
+        break;
+        case Token::Type::MINUS_EQUAL:
+            emit(OpCode::SUBTRACT);
+            update_lvalue(*expr.left);
+        break;
+        case Token::Type::STAR_EQUAL:
+            emit(OpCode::MULTIPLY);
+            update_lvalue(*expr.left);
+        break;
+        case Token::Type::SLASH_EQUAL:
+            emit(OpCode::DIVIDE);
+            update_lvalue(*expr.left);
+        break;
+        case Token::Type::SLASH_SLASH_EQUAL:
+            emit(OpCode::FLOOR_DIVISON);
+            update_lvalue(*expr.left);
+        break;
+        case Token::Type::PERCENT_EQUAL:
+            emit(OpCode::MODULO);
+            update_lvalue(*expr.left);
+        break;
+        case Token::Type::LESS_LESS_EQUAL:
+            emit(OpCode::LEFT_SHIFT);
+            update_lvalue(*expr.left);
+        break;
+        case Token::Type::GREATER_GREATER_EQUAL:
+            emit(OpCode::RIGHT_SHIFT);
+            update_lvalue(*expr.left);
+        break;
+        case Token::Type::AND_EQUAL:
+            emit(OpCode::BITWISE_AND);
+            update_lvalue(*expr.left);
+        break;
+        case Token::Type::CARET_EQUAL:
+            emit(OpCode::BITWISE_XOR);
+            update_lvalue(*expr.left);
+        break;
+        case Token::Type::BAR_EQUAL:
+            emit(OpCode::BITWISE_OR);
+            update_lvalue(*expr.left);
+        break;
+        default: assert("unreachable");
+    }
+}
+
+
+void Compiler::update_lvalue(const Expr& lvalue) {
+    if (std::holds_alternative<VariableExpr>(lvalue)) {
+        std::string name = std::get<VariableExpr>(lvalue).identifier.get_lexeme(source);
+        int idx = current_locals().get(name);
+        if (idx == -1) {
+            idx = resolve_upvalue(name);
+            assert(idx != -1); // todo: error handling
+            emit(OpCode::SET_UPVALUE);
+            emit(idx);
+        } else {
+            emit(OpCode::SET);
+            emit(idx); // todo: handle overflow
+        }
+    } else if (std::holds_alternative<GetPropertyExpr>(lvalue)) {
+        const auto& property_expr = std::get<GetPropertyExpr>(lvalue);
+        std::string name = property_expr.property.get_lexeme(source);
+        int constant = current_function()->add_constant(name);
+        visit_expr(*property_expr.left);
+        emit(OpCode::SET_PROPERTY, constant);
+    } else {
+        assert("Expected lvalue.");
+    }
 }
 
 void Compiler::variable(const VariableExpr &expr) {
@@ -442,33 +511,6 @@ void Compiler::logical(const BinaryExpr &expr) {
     emit(OpCode::POP);
     visit_expr(*expr.right);
     jump.mark_destination(current_program());
-}
-
-void Compiler::update_variable(const std::string& name) {
-    int idx = current_locals().get(name);
-    if (idx == -1) {
-        idx = resolve_upvalue(name);
-        assert(idx != -1); // todo: error handling
-        emit(OpCode::SET_UPVALUE);
-        emit(idx);
-    } else {
-        emit(OpCode::SET);
-        emit(idx); // todo: handle overflow
-    }
-}
-
-void Compiler::compound_assigment(const AssigmentExpr &expr) {
-    // normal assigment
-    std::string name = expr.identifier.get_lexeme(source);
-    if (expr.op == Token::Type::NONE) {
-        visit_expr(*expr.expr);
-        update_variable(name);
-    } else {
-        resolve_variable(name);
-        visit_expr(*expr.expr);
-        emit_binary_op(expr.op);
-        update_variable(name);
-    }
 }
 
 void Compiler::call(const CallExpr &expr) {
@@ -484,14 +526,6 @@ void Compiler::get_property(const GetPropertyExpr &expr) {
     std::string name = expr.property.get_lexeme(source);
     int constant = current_function()->add_constant(name);
     emit(OpCode::GET_PROPERTY, constant);
-}
-
-void Compiler::set_property(const SetPropertyExpr &expr) {
-    visit_expr(*expr.left);
-    std::string name = expr.property.get_lexeme(source);
-    int constant = current_function()->add_constant(name);
-    visit_expr(*expr.expression);
-    emit(OpCode::SET_PROPERTY, constant);
 }
 
 void Compiler::super(const SuperExpr &expr) {
