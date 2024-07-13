@@ -87,6 +87,9 @@ public:
     Function& get_main();
 
     const std::vector<Function*>& get_functions();
+    const std::vector<std::string>& get_natives();
+
+    void native_declaration(const NativeStmt& stmt);
 
 private:
     void start_context(Function *function, FunctionType type);
@@ -147,6 +150,7 @@ private:
     std::vector<Context> context_stack;
     std::string_view source;
     std::vector<Function*> functions;
+    std::vector<std::string> natives;
 };
 
 

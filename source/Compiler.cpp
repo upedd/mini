@@ -61,6 +61,7 @@ int Compiler::Context::add_upvalue(int index, bool is_local) {
 
 void Compiler::compile() {
     for (auto &stmt: parser.parse()) {
+        std::cout << stmt_to_string(stmt, source) << '\n';
         visit_stmt(stmt);
     }
     // default return at main
@@ -73,6 +74,10 @@ Function &Compiler::get_main() {
 
 const std::vector<Function *>& Compiler::get_functions() {
     return functions;
+}
+
+const std::vector<std::string> & Compiler::get_natives() {
+    return natives;
 }
 
 void Compiler::start_context(Function *function, FunctionType type) {
@@ -210,7 +215,8 @@ void Compiler::visit_stmt(const Stmt &statement) {
                    [this](const IfStmt &stmt) { if_statement(stmt); },
                    [this](const WhileStmt &stmt) { while_statement(stmt); },
                    [this](const ReturnStmt &stmt) { return_statement(stmt); },
-                   [this](const ClassStmt &stmt) { class_declaration(stmt); }
+                   [this](const ClassStmt &stmt) { class_declaration(stmt); },
+                   [this](const NativeStmt& stmt) {native_declaration(stmt); }
                }, statement);
 }
 
@@ -223,6 +229,14 @@ void Compiler::variable_declaration(const VarStmt &expr) {
 void Compiler::function_declaration(const FunctionStmt &stmt) {
     define_variable(stmt.name.get_lexeme(source));
     function(stmt, FunctionType::FUNCTION);
+}
+
+void Compiler::native_declaration(const NativeStmt &stmt) {
+    std::string name = stmt.name.get_lexeme(source);
+    natives.push_back(name);
+    int idx = current_function()->add_constant(name);
+    emit(OpCode::GET_NATIVE, idx);
+    define_variable(name);
 }
 
 void Compiler::function(const FunctionStmt &stmt, FunctionType type) {

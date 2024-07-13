@@ -190,6 +190,8 @@ Token Lexer::keyword_or_identifier() {
         return make_token(Token::Type::LET);
     } else if (current == "while") {
         return make_token(Token::Type::WHILE);
+    } else if (current == "native") {
+        return make_token(Token::Type::NATIVE);
     }
     return make_token(Token::Type::IDENTIFIER);
 }

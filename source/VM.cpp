@@ -80,6 +80,11 @@ std::optional<VM::RuntimeError> VM::call_value(const Value &value, const int arg
         stack[stack_index - arguments_count - 1] = bound->receiver;
         return call_value(bound->closure, arguments_count);
     }
+
+    if (auto* native = dynamic_cast<NativeFunction*>(*object)) {
+        native->function();
+        return {};
+    }
     return RuntimeError("Expected callable value such as function or class.");
 }
 
@@ -124,6 +129,9 @@ void VM::mark_roots_for_gc() {
 
     for (auto *open_upvalue: open_upvalues) {
         gc.mark(open_upvalue);
+    }
+    for (auto& value: std::views::values(natives)) {
+        gc.mark(value);
     }
 }
 
@@ -369,6 +377,11 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 };
                 break;
             }
+            case OpCode::GET_NATIVE: {
+                int constant_idx = fetch();
+                auto name = get_constant(constant_idx).get<std::string>();
+                push(natives[name]);
+            }
         }
         for (int i = 0; i < stack_index; ++i) {
             std::cout << '[' << stack[i].to_string() << "] ";
@@ -376,4 +389,14 @@ std::expected<Value, VM::RuntimeError> VM::run() {
         std::cout << '\n';
     }
 #undef BINARY_OPERATION
+}
+
+void VM::add_native(const std::string &name, const Value &value) {
+    natives[name] = value;
+}
+
+void VM::add_native_function(const std::string &name, const std::function<void()> &fn) {
+    auto* ptr = new NativeFunction(fn);
+    natives[name] = ptr;
+    allocate(ptr);
 }

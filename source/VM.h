@@ -51,6 +51,9 @@ public:
     bool bind_method(Class * klass, const std::string & name);
 
     std::expected<Value, RuntimeError> run();
+
+    void add_native(const std::string& name, const Value &value);
+    void add_native_function(const std::string& name, const std::function<void()>& fn);
 private:
     GarbageCollector gc;
     std::size_t next_gc = 1024 * 1024;
@@ -60,6 +63,7 @@ private:
     std::array<Value, 256> stack;
     std::vector<CallFrame> frames;
     std::list<Upvalue*> open_upvalues;
+    std::unordered_map<std::string, Value> natives;
 };
 
 template<typename T>

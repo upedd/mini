@@ -46,6 +46,9 @@ private:
 
 
     Stmt declaration();
+
+    Stmt native_declaration();
+
     Stmt statement();
 
     Stmt var_declaration();

@@ -1,6 +1,7 @@
 #ifndef FUNCTION_H
 #define FUNCTION_H
 
+#include <functional>
 #include <unordered_map>
 #include <utility>
 #include <ranges>
@@ -64,6 +65,21 @@ private:
     Program program; // code of function
     std::vector<Value> constants;
     int upvalue_count;
+};
+
+class NativeFunction final : public Object {
+public:
+    explicit NativeFunction(std::function<void()> function) : function(std::move(function)) {}
+
+    std::size_t get_size() override {
+        return sizeof(NativeFunction);
+    }
+
+    std::string to_string() override {
+        return "<Native>";
+    }
+
+    std::function<void()> function;
 };
 
 class Upvalue : public Object {

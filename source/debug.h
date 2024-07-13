@@ -190,6 +190,10 @@ inline void Disassembler::disassemble(const std::string& name) {
                 constant_inst("GET_SUPER");
                 break;
             }
+            case OpCode::GET_NATIVE: {
+                constant_inst("GET_NATIVE");
+                break;
+            }
         }
     }
 }

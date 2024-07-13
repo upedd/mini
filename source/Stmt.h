@@ -15,8 +15,9 @@ struct WhileStmt;
 struct FunctionStmt;
 struct ReturnStmt;
 struct ClassStmt;
+struct NativeStmt;
 
-using Stmt = std::variant<VarStmt, ExprStmt, BlockStmt, IfStmt, WhileStmt, FunctionStmt, ReturnStmt, ClassStmt>;
+using Stmt = std::variant<VarStmt, ExprStmt, BlockStmt, IfStmt, WhileStmt, FunctionStmt, ReturnStmt, ClassStmt, NativeStmt>;
 using StmtHandle = std::unique_ptr<Stmt>;
 
 struct BlockStmt {
@@ -57,6 +58,10 @@ struct ClassStmt {
     Token name;
     std::vector<std::unique_ptr<FunctionStmt>> methods;
     std::optional<Token> super_name;
+};
+
+struct NativeStmt {
+    Token name;
 };
 
 inline std::string stmt_to_string(const Stmt& stmt, std::string_view source) {
@@ -112,6 +117,9 @@ inline std::string stmt_to_string(const Stmt& stmt, std::string_view source) {
         },
         [source](const ClassStmt& stmt) {
             return std::format("(class {})", stmt.name.get_lexeme(source));
+        },
+        [source](const NativeStmt& stmt) {
+            return std::format("(native {})", stmt.name.get_lexeme(source));
         }
 
     }, stmt);

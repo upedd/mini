@@ -89,7 +89,17 @@ Stmt Parser::declaration() {
     if (match(Token::Type::CLASS)) {
         return class_declaration();
     }
+    if (match(Token::Type::NATIVE)) {
+        return native_declaration();
+    }
     return statement();
+}
+
+Stmt Parser::native_declaration() {
+    consume(Token::Type::IDENTIFIER, "Expected identifier after 'native' keyword.");
+    Token name = current;
+    consume(Token::Type::SEMICOLON, "Expected ';' after native declaration.");
+    return NativeStmt(name);
 }
 
 Stmt Parser::statement() {
@@ -105,6 +115,8 @@ Stmt Parser::statement() {
     if (match(Token::Type::RETURN)) {
         return return_statement();
     }
+
+
     return expr_statement();
 }
 

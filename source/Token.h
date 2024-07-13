@@ -69,8 +69,9 @@ struct Token {
         CONTINUE,
         NONE,
         MATCH,
-        RETURN, SUPER, LET, WHILE, TILDE,
+        RETURN, SUPER, LET, WHILE, TILDE, NATIVE,
         END // NOTE: Type END must always be last element in this enum.
+
     };
 
     Type type = Type::NONE;
@@ -243,6 +244,8 @@ inline std::string Token::type_to_string(Type type) {
             return "WHILE";
         case Type::TILDE:
             return "TILDE";
+        case Type::NATIVE:
+            return "NATIVE";
     }
     return "INVALID_TOKEN";
 }
