@@ -56,7 +56,9 @@ private:
     Stmt class_declaration();
 
     Stmt expr_statement();
-    Stmt if_statement();
+
+    Expr if_expression();
+
     Stmt while_statement();
     Stmt return_statement();
 

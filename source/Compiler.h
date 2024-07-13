@@ -127,7 +127,8 @@ private:
     void expr_statement(const ExprStmt &stmt);
     void return_statement(const ReturnStmt &stmt);
     void while_statement(const WhileStmt &stmt);
-    void if_statement(const IfStmt &stmt);
+
+    void if_expression(const IfExpr &stmt);
 
     void visit_expr(const Expr &expr);
 

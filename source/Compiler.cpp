@@ -211,7 +211,6 @@ void Compiler::visit_stmt(const Stmt &statement) {
                    [this](const VarStmt &stmt) { variable_declaration(stmt); },
                    [this](const FunctionStmt &stmt) { function_declaration(stmt); },
                    [this](const ExprStmt &stmt) { expr_statement(stmt); },
-                   [this](const IfStmt &stmt) { if_statement(stmt); },
                    [this](const WhileStmt &stmt) { while_statement(stmt); },
                    [this](const ReturnStmt &stmt) { return_statement(stmt); },
                    [this](const ClassStmt &stmt) { class_declaration(stmt); },
@@ -245,6 +244,8 @@ void Compiler::block(const BlockExpr &expr) {
     }
     if (expr.expr) {
         visit_expr(*expr.expr);
+    } else {
+        emit(OpCode::NIL);
     }
     end_scope();
 }
@@ -342,16 +343,16 @@ void Compiler::while_statement(const WhileStmt &stmt) {
     emit(OpCode::POP);
 }
 
-void Compiler::if_statement(const IfStmt &stmt) {
+void Compiler::if_expression(const IfExpr &stmt) {
     visit_expr(*stmt.condition);
     auto jump_to_else = start_jump(OpCode::JUMP_IF_FALSE);
     emit(OpCode::POP);
-    visit_stmt(*stmt.then_stmt);
+    visit_expr(*stmt.then_expr);
     auto jump_to_end = start_jump(OpCode::JUMP);
     jump_to_else.mark_destination(current_program());
     emit(OpCode::POP);
-    if (stmt.else_stmt) {
-        visit_stmt(*stmt.else_stmt);
+    if (stmt.else_expr) {
+        visit_expr(*stmt.else_expr);
     }
     jump_to_end.mark_destination(current_program());
 }
@@ -366,7 +367,8 @@ void Compiler::visit_expr(const Expr &expression) {
                    [this](const CallExpr &expr) { call(expr); },
                    [this](const GetPropertyExpr &expr) { get_property(expr); },
                    [this](const SuperExpr &expr) { super(expr); },
-                       [this](const BlockExpr& expr) {block(expr);}
+                   [this](const BlockExpr& expr) {block(expr);},
+                   [this](const IfExpr& expr) {if_expression(expr);}
                }, expression);
 }
 

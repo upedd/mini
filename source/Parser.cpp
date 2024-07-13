@@ -109,9 +109,6 @@ Stmt Parser::native_declaration() {
 }
 
 std::optional<Stmt> Parser::statement() {
-    if (match(Token::Type::IF)) {
-        return if_statement();
-    }
     if (match(Token::Type::WHILE)) {
         return while_statement();
     }
@@ -178,19 +175,27 @@ Stmt Parser::expr_statement() {
     return stmt;
 }
 
-Stmt Parser::if_statement() {
-    consume(Token::Type::LEFT_PAREN, "Expected '(' after 'if'");
+Expr Parser::if_expression() {
+    //consume(Token::Type::LEFT_PAREN, "Expected '(' after 'if'");
     auto condition = expression();
-    consume(Token::Type::RIGHT_PAREN, "Expected ')' after 'if' condition");
-    auto then_stmt = *statement();
-    StmtHandle else_stmt = nullptr;
-    if (match(Token::Type::ELSE)) {
-        else_stmt = std::make_unique<Stmt>(*statement());
+    //consume(Token::Type::RIGHT_PAREN, "Expected ')' after 'if' condition");
+    if (current.type != Token::Type::LEFT_BRACE) {
+        error(current, "Expected '{' after 'if' condition.");
     }
-    return IfStmt{
+    auto then_stmt = block();
+    ExprHandle else_stmt = nullptr;
+    if (match(Token::Type::ELSE)) {
+        if (match(Token::Type::IF)) {
+            else_stmt = make_expr_handle(if_expression());
+        } else {
+            consume(Token::Type::LEFT_BRACE, "Expected '{' after 'else' keyword.");
+            else_stmt = make_expr_handle(block());
+        }
+    }
+    return IfExpr{
         .condition = make_expr_handle(std::move(condition)),
-        .then_stmt = std::make_unique<Stmt>(std::move(then_stmt)),
-        .else_stmt = std::move(else_stmt)
+        .then_expr = make_expr_handle(std::move(then_stmt)),
+        .else_expr = std::move(else_stmt)
     };
 }
 
@@ -253,6 +258,7 @@ Parser::Precedence Parser::get_precendece(Token::Type token) {
         case Token::Type::AND_EQUAL:
         case Token::Type::CARET_EQUAL:
         case Token::Type::BAR_EQUAL:
+        case Token::Type::IF:
             return Precedence::ASSIGMENT;
         case Token::Type::AND_AND:
             return Precedence::LOGICAL_AND;
@@ -337,6 +343,8 @@ std::optional<Expr> Parser::prefix() {
             return this_();
         case Token::Type::SUPER:
             return super_();
+        case Token::Type::IF:
+            return if_expression();
         default: return {};
     }
 }
