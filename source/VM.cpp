@@ -18,12 +18,16 @@ uint16_t VM::fetch_short() {
     return static_cast<uint16_t>(fetch()) << 8 | fetch();
 }
 
-void VM::jump_by_offset(int offset) {
-    frames.back().instruction_pointer += offset;
+void VM::jump_to(uint32_t pos) {
+    frames.back().instruction_pointer = pos;
 }
 
 Value VM::get_constant(const int idx) const {
     return frames.back().closure->get_function()->get_constant(idx);
+}
+
+uint32_t VM::get_jump_destination(const int idx) const {
+    return frames.back().closure->get_function()->get_jump_destination(idx);
 }
 
 Value VM::pop() {
@@ -226,27 +230,22 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 break;
             }
             case OpCode::JUMP_IF_FALSE: {
-                int offset = fetch_short();
+                int idx = fetch();
                 if (peek().is_falsey()) {
-                    jump_by_offset(offset);
+                    jump_to(get_jump_destination(idx));
                 }
                 break;
             }
             case OpCode::JUMP_IF_TRUE: {
-                int offset = fetch_short();
+                int idx = fetch();
                 if (!peek().is_falsey()) {
-                    jump_by_offset(offset);
+                    jump_to(get_jump_destination(idx));
                 }
                 break;
             }
             case OpCode::JUMP: {
-                int offset = fetch_short();
-                jump_by_offset(offset);
-                break;
-            }
-            case OpCode::LOOP: {
-                int offset = fetch_short();
-                jump_by_offset(-offset);
+                int idx = fetch();
+                jump_to(get_jump_destination(idx));
                 break;
             }
             case OpCode::NOT: {

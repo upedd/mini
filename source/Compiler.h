@@ -43,24 +43,6 @@ public:
         std::vector<Local> locals;
     };
 
-    class JumpDestination {
-    public:
-        explicit JumpDestination(const int position) : position(position) {}
-
-        void make_jump(Program& program) const;
-    private:
-        int position;
-    };
-
-    class JumpHandle {
-    public:
-        explicit JumpHandle( const int instruction_position) : instruction_position(instruction_position) {}
-
-        void mark_destination(Program &program) const;
-    private:
-        int instruction_position;
-    };
-
     enum class FunctionType {
         FUNCTION,
         CONSTRUCTOR,
@@ -95,6 +77,8 @@ public:
 
     void loop_expression(const LoopExpr & expr);
 
+    void break_expr(const BreakExpr & expr);
+
 private:
     void start_context(Function *function, FunctionType type);
     void end_context();
@@ -109,9 +93,6 @@ private:
     void emit(OpCode op_code);
     void emit(OpCode op_code, bite_byte value);
     void emit_default_return();
-
-    [[nodiscard]] JumpHandle start_jump(OpCode op_code);
-    [[nodiscard]] JumpDestination mark_destination();
 
     void begin_scope();
     void end_scope();

@@ -114,16 +114,13 @@ inline void Disassembler::disassemble(const std::string& name) {
                 arg_inst("SET");
                 break;
             case OpCode::JUMP_IF_FALSE:
-                jump_inst("JUMP_IF_FALSE");
+                constant_inst("JUMP_IF_FALSE");
                 break;
             case OpCode::JUMP:
-                jump_inst("JUMP");
-                break;
-            case OpCode::LOOP:
-                jump_inst("LOOP");
+                constant_inst("JUMP");
                 break;
             case OpCode::JUMP_IF_TRUE:
-                jump_inst("JUMP_IF_TRUE");
+                constant_inst("JUMP_IF_TRUE");
                 break;
             case OpCode::NOT:
                 simple_opcode("NOT");

@@ -36,18 +36,6 @@ std::vector<Compiler::Local> &Compiler::Locals::get_locals() {
     return locals;
 }
 
-void Compiler::JumpDestination::make_jump(Program &program) const {
-    int offset = program.size() - position + 2;
-    program.write(static_cast<uint8_t>(offset >> 8 & 0xFF));
-    program.write(static_cast<uint8_t>(offset & 0xFF));
-}
-
-void Compiler::JumpHandle::mark_destination(Program &program) const {
-    int offset = program.size() - instruction_position - 3;
-    program.patch(instruction_position + 1, static_cast<uint8_t>(offset >> 8 & 0xFF));
-    program.patch(instruction_position + 2, static_cast<uint8_t>(offset & 0xFF));
-}
-
 int Compiler::Context::add_upvalue(int index, bool is_local) {
     Upvalue upvalue{.index = index, .is_local = is_local};
     // try to reuse existing upvalue (possible optimization replace linear search)
@@ -129,17 +117,6 @@ void Compiler::emit_default_return() {
         emit(OpCode::NIL);
     }
     emit(OpCode::RETURN);
-};
-
-Compiler::JumpDestination Compiler::mark_destination() {
-    return JumpDestination(current_program().size());
-}
-
-Compiler::JumpHandle Compiler::start_jump(OpCode op_code) {
-    emit(op_code);
-    emit(0xFF);
-    emit(0xFF);
-    return JumpHandle(current_program().size() - 3);
 }
 
 void Compiler::begin_scope() {
@@ -251,10 +228,13 @@ void Compiler::block(const BlockExpr &expr) {
 }
 
 void Compiler::loop_expression(const LoopExpr &expr) {
-    auto destination = mark_destination();
+    int idx = current_function()->add_jump_destination(current_program().size());
     visit_expr(*expr.body);
-    emit(OpCode::LOOP);
-    destination.make_jump(current_program());
+    emit(OpCode::JUMP, idx);
+}
+
+void Compiler::break_expr(const BreakExpr &expr) {
+    // TODO: implement!
 }
 
 void Compiler::function(const FunctionStmt &stmt, FunctionType type) {
@@ -339,29 +319,31 @@ void Compiler::return_statement(const ReturnStmt &stmt) {
 }
 
 void Compiler::while_statement(const WhileStmt &stmt) {
-    auto destination = mark_destination();
+    int destination = current_function()->add_jump_destination(current_program().size());
     visit_expr(*stmt.condition);
-    auto jump_to_end = start_jump(OpCode::JUMP_IF_FALSE);
+    int jump_to_end = current_function()->add_empty_jump_destination();
+    emit(OpCode::JUMP_IF_FALSE, jump_to_end);
     emit(OpCode::POP);
     visit_stmt(*stmt.stmt);
-    emit(OpCode::LOOP);
-    destination.make_jump(current_program());
-    jump_to_end.mark_destination(current_program());
+    emit(OpCode::JUMP, destination);
+    current_function()->patch_jump_destination(jump_to_end, current_program().size());
     emit(OpCode::POP);
 }
 
 void Compiler::if_expression(const IfExpr &stmt) {
     visit_expr(*stmt.condition);
-    auto jump_to_else = start_jump(OpCode::JUMP_IF_FALSE);
+    int jump_to_else = current_function()->add_empty_jump_destination();
+    emit(OpCode::JUMP_IF_FALSE, jump_to_else);
     emit(OpCode::POP);
     visit_expr(*stmt.then_expr);
-    auto jump_to_end = start_jump(OpCode::JUMP);
-    jump_to_else.mark_destination(current_program());
+    auto jump_to_end = current_function()->add_empty_jump_destination();
+    emit(OpCode::JUMP, jump_to_end);
+    current_function()->patch_jump_destination(jump_to_else, current_program().size());
     emit(OpCode::POP);
     if (stmt.else_expr) {
         visit_expr(*stmt.else_expr);
     }
-    jump_to_end.mark_destination(current_program());
+    current_function()->patch_jump_destination(jump_to_end, current_program().size());
 }
 
 void Compiler::visit_expr(const Expr &expression) {
@@ -376,7 +358,8 @@ void Compiler::visit_expr(const Expr &expression) {
                    [this](const SuperExpr &expr) { super(expr); },
                    [this](const BlockExpr& expr) {block(expr);},
                    [this](const IfExpr& expr) {if_expression(expr);},
-                   [this](const LoopExpr& expr) {loop_expression(expr);}
+                   [this](const LoopExpr& expr) {loop_expression(expr);},
+                   [this](const BreakExpr& expr) {break_expr(expr);},
                }, expression);
 }
 
@@ -534,10 +517,11 @@ void Compiler::variable(const VariableExpr &expr) {
 }
 
 void Compiler::logical(const BinaryExpr &expr) {
-    auto jump = start_jump(expr.op == Token::Type::AND_AND ? OpCode::JUMP_IF_FALSE : OpCode::JUMP_IF_TRUE);
+    int jump = current_function()->add_empty_jump_destination();
+    emit(expr.op == Token::Type::AND_AND ? OpCode::JUMP_IF_FALSE : OpCode::JUMP_IF_TRUE, jump);
     emit(OpCode::POP);
     visit_expr(*expr.right);
-    jump.mark_destination(current_program());
+    current_function()->patch_jump_destination(jump, current_program().size());
 }
 
 void Compiler::call(const CallExpr &expr) {

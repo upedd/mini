@@ -26,8 +26,12 @@ public:
     uint8_t fetch();
     OpCode fetch_opcode();
     uint16_t fetch_short();
-    void jump_by_offset(int offset);
+
+    void jump_to(uint32_t pos);
     [[nodiscard]] Value get_constant(int idx) const;
+
+    uint32_t get_jump_destination(int idx) const;
+
     Value pop();
     [[nodiscard]] Value peek(int n = 0) const;
     void push(const Value& value);

@@ -233,6 +233,9 @@ inline std::string expr_to_string(const Expr &expr, std::string_view source) {
                           },
                           [source](const LoopExpr& expr) {
                               return std::format("(loop {})", expr_to_string(*expr.body, source));
+                          },
+                          [](const BreakExpr& expr) {
+                              return std::string("break");
                           }
                       }, expr);
 }
