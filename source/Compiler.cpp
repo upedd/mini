@@ -71,6 +71,10 @@ Function &Compiler::get_main() {
     return main;
 }
 
+const std::vector<Function *>& Compiler::get_functions() {
+    return functions;
+}
+
 void Compiler::start_context(Function *function, FunctionType type) {
     context_stack.emplace_back(function, type);
 };
@@ -224,7 +228,8 @@ void Compiler::function_declaration(const FunctionStmt &stmt) {
 void Compiler::function(const FunctionStmt &stmt, FunctionType type) {
     auto function_name = stmt.name.get_lexeme(source);
     auto *function = new Function(function_name, stmt.params.size());
-    current_function()->add_allocated(function);
+    functions.push_back(function);
+    //current_function()->add_allocated(function);
 
     start_context(function, type);
     begin_scope();

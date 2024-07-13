@@ -1,6 +1,5 @@
 #ifndef VM_H
 #define VM_H
-#include <set>
 #include <stdexcept>
 #include <vector>
 
@@ -16,14 +15,12 @@ public:
         explicit RuntimeError(const std::string& message) : std::runtime_error(message) {};
     };
 
-    explicit VM(Function* function) {
-
+    explicit VM(GarbageCollector gc, Function* function) : gc(std::move(gc)) {
         auto* closure = new Closure(function);
         // todo: maybe start program thru call()
         frames.emplace_back(closure, 0, 0);
         allocate<Closure>(closure);
-        adopt_objects(function->get_allocated());
-
+        // adopt_objects(function->get_allocated());
     }
 
     uint8_t fetch();
@@ -67,12 +64,12 @@ private:
 
 template<typename T>
 T* VM::allocate(T* ptr) {
+    gc.add_object(ptr);
 #ifdef DEBUG_STRESS_GC
     run_gc();
 #endif
-    gc.add_object(ptr);
-
     if (gc.get_memory_used() > next_gc) {
+        mark_roots_for_gc();
         gc.collect();
         next_gc = gc.get_memory_used() * HEAP_GROWTH_FACTOR;
     }

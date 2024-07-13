@@ -3,6 +3,7 @@
 #include <sstream>
 
 #include "Compiler.h"
+#include "debug.h"
 #include "VM.h"
 
 int main(int argc, char** argv) {
@@ -18,7 +19,13 @@ int main(int argc, char** argv) {
     Compiler compiler(source);
     compiler.compile();
     auto& func = compiler.get_main();
-    VM vm(&func);
+    auto& functions = compiler.get_functions();
+    GarbageCollector gc;
+    for (auto* function : functions) {
+        gc.add_object(function);
+    }
+    gc.add_object(&func); // should be in functions?
+    VM vm(std::move(gc), &func);
     if (auto result = vm.run()) {
         std::cout << "Your bite program output: " << result->to_string() << '\n';
     } else {

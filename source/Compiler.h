@@ -85,6 +85,9 @@ public:
     void compile();
 
     Function& get_main();
+
+    const std::vector<Function*>& get_functions();
+
 private:
     void start_context(Function *function, FunctionType type);
     void end_context();
@@ -140,6 +143,7 @@ private:
     Function main;
     std::vector<Context> context_stack;
     std::string_view source;
+    std::vector<Function*> functions;
 };
 
 

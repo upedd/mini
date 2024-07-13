@@ -102,7 +102,7 @@ Upvalue *VM::capture_upvalue(int index) {
 }
 
 void VM::close_upvalues(const Value &value) {
-    erase_if(open_upvalues, [&value](Upvalue *open) {
+    std::erase_if(open_upvalues, [&value](Upvalue *open) {
         if (open->location >= &value) {
             // maybe don't use memory addresses for this? seems unsafe
             open->closed = *open->location;
@@ -279,7 +279,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                     }
                 }
                 allocate<Closure>(closure); // wait to add upvalues
-                adopt_objects(function->get_allocated());
+                // adopt_objects(function->get_allocated());
                 break;
             }
             case OpCode::GET_UPVALUE: {
@@ -370,10 +370,10 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 break;
             }
         }
-        for (int i = 0; i < stack_index; ++i) {
-            std::cout << '[' << stack[i].to_string() << "] ";
-        }
-        std::cout << '\n';
+        // for (int i = 0; i < stack_index; ++i) {
+        //     std::cout << '[' << stack[i].to_string() << "] ";
+        // }
+        // std::cout << '\n';
     }
 #undef BINARY_OPERATION
 }
