@@ -4,8 +4,7 @@
 #include <vector>
 
 #include "Lexer.h"
-#include "Expr.h"
-#include "Stmt.h"
+#include "Ast.h"
 
 /**
  * Implementation of Pratt parser
@@ -49,7 +48,7 @@ private:
 
     Stmt native_declaration();
 
-    Stmt statement();
+    std::optional<Stmt> statement();
 
     Stmt var_declaration();
 
@@ -57,7 +56,6 @@ private:
     Stmt class_declaration();
 
     Stmt expr_statement();
-    Stmt block_statement();
     Stmt if_statement();
     Stmt while_statement();
     Stmt return_statement();
@@ -91,6 +89,8 @@ private:
     Expr this_();
 
     Expr super_();
+
+    Expr block();
 
     std::optional<Expr> prefix();
 

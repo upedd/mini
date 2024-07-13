@@ -11,7 +11,7 @@ add_executable(bite source/main.cpp
         source/common.h
         source/Parser.cpp
         source/Parser.h
-        source/Expr.h
+        source/Ast.h
         source/Compiler.cpp
         source/Compiler.h
         source/OpCode.h
@@ -19,7 +19,6 @@ add_executable(bite source/main.cpp
         source/VM.h
         source/Value.h
         source/Value.cpp
-        source/Stmt.h
         source/Object.h
         source/CallFrame.h
         source/types.h

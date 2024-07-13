@@ -211,7 +211,6 @@ void Compiler::visit_stmt(const Stmt &statement) {
                    [this](const VarStmt &stmt) { variable_declaration(stmt); },
                    [this](const FunctionStmt &stmt) { function_declaration(stmt); },
                    [this](const ExprStmt &stmt) { expr_statement(stmt); },
-                   [this](const BlockStmt &stmt) { block_statement(stmt); },
                    [this](const IfStmt &stmt) { if_statement(stmt); },
                    [this](const WhileStmt &stmt) { while_statement(stmt); },
                    [this](const ReturnStmt &stmt) { return_statement(stmt); },
@@ -239,6 +238,17 @@ void Compiler::native_declaration(const NativeStmt &stmt) {
     define_variable(name);
 }
 
+void Compiler::block(const BlockExpr &expr) {
+    begin_scope();
+    for (auto& stmt : expr.stmts) {
+        visit_stmt(*stmt);
+    }
+    if (expr.expr) {
+        visit_expr(*expr.expr);
+    }
+    end_scope();
+}
+
 void Compiler::function(const FunctionStmt &stmt, FunctionType type) {
     auto function_name = stmt.name.get_lexeme(source);
     auto *function = new Function(function_name, stmt.params.size());
@@ -256,7 +266,7 @@ void Compiler::function(const FunctionStmt &stmt, FunctionType type) {
         define_variable(param.get_lexeme(source));
     }
 
-    visit_stmt(*stmt.body);
+    visit_expr(*stmt.body);
     emit_default_return();
     end_scope();
 
@@ -311,14 +321,6 @@ void Compiler::expr_statement(const ExprStmt &stmt) {
     emit(OpCode::POP);
 }
 
-void Compiler::block_statement(const BlockStmt &stmt) {
-    begin_scope();
-    for (auto &st: stmt.stmts) {
-        visit_stmt(*st);
-    }
-    end_scope();
-}
-
 void Compiler::return_statement(const ReturnStmt &stmt) {
     if (stmt.expr != nullptr) {
         visit_expr(*stmt.expr);
@@ -363,7 +365,8 @@ void Compiler::visit_expr(const Expr &expression) {
                    [this](const VariableExpr &expr) { variable(expr); },
                    [this](const CallExpr &expr) { call(expr); },
                    [this](const GetPropertyExpr &expr) { get_property(expr); },
-                   [this](const SuperExpr &expr) { super(expr); }
+                   [this](const SuperExpr &expr) { super(expr); },
+                       [this](const BlockExpr& expr) {block(expr);}
                }, expression);
 }
 

@@ -1,9 +1,8 @@
 #ifndef COMPILER_H
 #define COMPILER_H
-#include "Expr.h"
+#include "Ast.h"
 #include "Object.h"
 #include "Parser.h"
-#include "Stmt.h"
 
 
 class Compiler {
@@ -92,6 +91,8 @@ public:
 
     void native_declaration(const NativeStmt& stmt);
 
+    void block(const BlockExpr & expr);
+
 private:
     void start_context(Function *function, FunctionType type);
     void end_context();
@@ -124,7 +125,6 @@ private:
     void function(const FunctionStmt &stmt, FunctionType type);
     void class_declaration(const ClassStmt &stmt);
     void expr_statement(const ExprStmt &stmt);
-    void block_statement(const BlockStmt &stmt);
     void return_statement(const ReturnStmt &stmt);
     void while_statement(const WhileStmt &stmt);
     void if_statement(const IfStmt &stmt);

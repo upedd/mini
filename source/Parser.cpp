@@ -92,7 +92,13 @@ Stmt Parser::declaration() {
     if (match(Token::Type::NATIVE)) {
         return native_declaration();
     }
-    return statement();
+    if (auto stmt = statement()) {
+        return std::move(*stmt);
+    } else {
+        auto expr = std::make_unique<Expr>(expression());
+        consume(Token::Type::SEMICOLON, "Expected ';' after expression.");
+        return ExprStmt(std::move(expr));
+    }
 }
 
 Stmt Parser::native_declaration() {
@@ -102,10 +108,7 @@ Stmt Parser::native_declaration() {
     return NativeStmt(name);
 }
 
-Stmt Parser::statement() {
-    if (match(Token::Type::LEFT_BRACE)) {
-        return block_statement();
-    }
+std::optional<Stmt> Parser::statement() {
     if (match(Token::Type::IF)) {
         return if_statement();
     }
@@ -115,9 +118,7 @@ Stmt Parser::statement() {
     if (match(Token::Type::RETURN)) {
         return return_statement();
     }
-
-
-    return expr_statement();
+    return {};
 }
 
 Stmt Parser::var_declaration() {
@@ -141,11 +142,11 @@ FunctionStmt Parser::function_declaration() {
     }
     consume(Token::Type::RIGHT_PAREN, "Expected ')' after function parameters");
     consume(Token::Type::LEFT_BRACE, "Expected '{' before function body");
-    auto body = block_statement();
+    auto body = block();
     return FunctionStmt{
         .name = name,
         .params = std::move(parameters),
-        .body = std::make_unique<Stmt>(std::move(body))
+        .body = std::make_unique<Expr>(std::move(body))
     };
 }
 
@@ -177,23 +178,14 @@ Stmt Parser::expr_statement() {
     return stmt;
 }
 
-Stmt Parser::block_statement() {
-    std::vector<StmtHandle> stmts;
-    while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
-        stmts.push_back(std::make_unique<Stmt>(declaration()));
-    }
-    consume(Token::Type::RIGHT_BRACE, "Expected '}' after block.");
-    return BlockStmt{std::move(stmts)};
-}
-
 Stmt Parser::if_statement() {
     consume(Token::Type::LEFT_PAREN, "Expected '(' after 'if'");
     auto condition = expression();
     consume(Token::Type::RIGHT_PAREN, "Expected ')' after 'if' condition");
-    auto then_stmt = statement();
+    auto then_stmt = *statement();
     StmtHandle else_stmt = nullptr;
     if (match(Token::Type::ELSE)) {
-        else_stmt = std::make_unique<Stmt>(statement());
+        else_stmt = std::make_unique<Stmt>(*statement());
     }
     return IfStmt{
         .condition = make_expr_handle(std::move(condition)),
@@ -267,6 +259,7 @@ Parser::Precedence Parser::get_precendece(Token::Type token) {
         case Token::Type::BAR_BAR:
             return Precedence::LOGICAL_OR;
         case Token::Type::LEFT_PAREN:
+        case Token::Type::LEFT_BRACE:
         case Token::Type::DOT:
             return Precedence::CALL;
         default:
@@ -298,6 +291,26 @@ Expr Parser::super_() {
     return SuperExpr{current};
 }
 
+Expr Parser::block() {
+    std::vector<StmtHandle> stmts;
+    ExprHandle expr_at_end = nullptr;
+    while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
+        if (auto stmt = statement()) {
+            stmts.push_back(std::make_unique<Stmt>(std::move(*stmt)));
+        } else {
+            auto expr = expression();
+            if (match(Token::Type::SEMICOLON)) {
+                stmts.push_back(std::make_unique<Stmt>(ExprStmt(std::make_unique<Expr>(std::move(expr)))));
+            } else {
+                expr_at_end = std::make_unique<Expr>(std::move(expr));
+                break;
+            }
+        }
+    }
+    consume(Token::Type::RIGHT_BRACE, "Expected '}' after block.");
+    return BlockExpr{.stmts = std::move(stmts), .expr = std::move(expr_at_end)};
+}
+
 std::optional<Expr> Parser::prefix() {
     switch (current.type) {
         case Token::Type::INTEGER:
@@ -314,6 +327,8 @@ std::optional<Expr> Parser::prefix() {
             return identifier();
         case Token::Type::LEFT_PAREN:
             return grouping();
+        case Token::Type::LEFT_BRACE:
+            return block();
         case Token::Type::BANG:
         case Token::Type::MINUS:
         case Token::Type::TILDE:
