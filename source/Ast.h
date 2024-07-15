@@ -23,20 +23,20 @@ struct IfExpr;
 struct LoopExpr;
 struct BreakExpr;
 struct ContinueExpr;
+struct WhileExpr;
 
 struct ExprStmt;
 struct VarStmt;
-struct WhileStmt;
 struct FunctionStmt;
 struct ReturnStmt;
 struct ClassStmt;
 struct NativeStmt;
 
 using Expr = std::variant<LiteralExpr, StringLiteral, UnaryExpr, BinaryExpr, VariableExpr, CallExpr, GetPropertyExpr,
-    SuperExpr, BlockExpr, IfExpr, LoopExpr, BreakExpr, ContinueExpr>;
+    SuperExpr, BlockExpr, IfExpr, LoopExpr, BreakExpr, ContinueExpr, WhileExpr>;
 using ExprHandle = std::unique_ptr<Expr>;
 
-using Stmt = std::variant<VarStmt, ExprStmt, WhileStmt, FunctionStmt, ReturnStmt, ClassStmt, NativeStmt>;
+using Stmt = std::variant<VarStmt, ExprStmt, FunctionStmt, ReturnStmt, ClassStmt, NativeStmt>;
 using StmtHandle = std::unique_ptr<Stmt>;
 
 struct UnaryExpr {
@@ -91,6 +91,11 @@ struct LoopExpr {
     ExprHandle body;
 };
 
+struct WhileExpr {
+    ExprHandle condition;
+    ExprHandle body;
+};
+
 struct BreakExpr {
     ExprHandle expr;
 };
@@ -99,11 +104,6 @@ struct ContinueExpr {};
 inline ExprHandle make_expr_handle(Expr expr) {
     return std::make_unique<Expr>(std::move(expr));
 }
-
-struct WhileStmt {
-    ExprHandle condition;
-    StmtHandle stmt;
-};
 
 struct FunctionStmt {
     Token name;
@@ -144,11 +144,6 @@ inline std::string stmt_to_string(const Stmt &stmt, std::string_view source) {
                           },
                           [source](const ExprStmt &stmt) {
                               return expr_to_string(*stmt.expr, source);
-                          },
-                          [source](const WhileStmt &stmt) {
-                              return std::format("(while {} {})",
-                                                 expr_to_string(*stmt.condition, source),
-                                                 stmt_to_string(*stmt.stmt, source));
                           },
                           [source](const FunctionStmt &stmt) {
                               std::string parameters_string;
@@ -241,7 +236,12 @@ inline std::string expr_to_string(const Expr &expr, std::string_view source) {
                           },
                           [](const ContinueExpr& expr) {
                               return std::string("continue");
-                          }
+                          },
+                          [source](const WhileExpr &expr) {
+                              return std::format("(while {} {})",
+                                                 expr_to_string(*expr.condition, source),
+                                                 expr_to_string(*expr.body, source));
+                          },
                       }, expr);
 }
 

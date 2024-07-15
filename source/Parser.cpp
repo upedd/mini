@@ -97,9 +97,6 @@ Stmt Parser::native_declaration() {
 
 std::optional<Stmt> Parser::statement() {
     auto exit = scope_exit([this] { if (panic_mode) synchronize(); });
-    if (match(Token::Type::WHILE)) {
-        return while_statement();
-    }
     if (match(Token::Type::RETURN)) {
         return return_statement();
     }
@@ -121,6 +118,10 @@ std::optional<Stmt> Parser::statement() {
     }
     if (match(Token::Type::LOOP)) {
         auto expr = loop_expression();
+        return ExprStmt(std::make_unique<Expr>(std::move(expr)));
+    }
+    if (match(Token::Type::WHILE)) {
+        auto expr = while_expression();
         return ExprStmt(std::make_unique<Expr>(std::move(expr)));
     }
     return {};
@@ -184,9 +185,7 @@ Stmt Parser::expr_statement() {
 }
 
 Expr Parser::if_expression() {
-    //consume(Token::Type::LEFT_PAREN, "Expected '(' after 'if'");
     auto condition = expression();
-    //consume(Token::Type::RIGHT_PAREN, "Expected ')' after 'if' condition");
     if (current.type != Token::Type::LEFT_BRACE) {
         error(current, "Expected '{' after 'if' condition.");
     }
@@ -204,17 +203,6 @@ Expr Parser::if_expression() {
         .condition = make_expr_handle(std::move(condition)),
         .then_expr = make_expr_handle(std::move(then_stmt)),
         .else_expr = std::move(else_stmt)
-    };
-}
-
-Stmt Parser::while_statement() {
-    consume(Token::Type::LEFT_PAREN, "Expected '(' after 'while'");
-    auto condition = expression();
-    consume(Token::Type::RIGHT_PAREN, "Expected ')' after 'while' condition");
-
-    return WhileStmt{
-        .condition = make_expr_handle(std::move(condition)),
-        .stmt = std::make_unique<Stmt>(statement_or_expression())
     };
 }
 
@@ -266,8 +254,7 @@ Parser::Precedence Parser::get_precendece(Token::Type token) {
         case Token::Type::AND_EQUAL:
         case Token::Type::CARET_EQUAL:
         case Token::Type::BAR_EQUAL:
-        case Token::Type::IF:
-        case Token::Type::LOOP:
+
             return Precedence::ASSIGMENT;
         case Token::Type::AND_AND:
             return Precedence::LOGICAL_AND;
@@ -277,6 +264,9 @@ Parser::Precedence Parser::get_precendece(Token::Type token) {
         case Token::Type::LEFT_BRACE:
         case Token::Type::DOT:
             return Precedence::CALL;
+        case Token::Type::IF:
+        case Token::Type::LOOP:
+        case Token::Type::WHILE:
         default:
             return Precedence::NONE;
     }
@@ -351,6 +341,7 @@ bool has_prefix(Token::Type type) {
         case Token::Type::LOOP:
         case Token::Type::BREAK:
         case Token::Type::CONTINUE:
+        case Token::Type::WHILE:
         return true;
         default: return false;
     }
@@ -365,6 +356,15 @@ Expr Parser::break_expression() {
 
 Expr Parser::continue_expression() {
     return ContinueExpr();
+}
+
+Expr Parser::while_expression() {
+    auto condition = expression();
+    if (current.type != Token::Type::LEFT_BRACE) {
+        error(current, "Expected '{' after while loop condition");
+    }
+    auto body = block();
+    return WhileExpr(make_expr_handle(std::move(condition)), make_expr_handle(std::move(body)));
 }
 
 std::optional<Expr> Parser::prefix() {
@@ -401,6 +401,8 @@ std::optional<Expr> Parser::prefix() {
             return break_expression();
         case Token::Type::CONTINUE:
             return continue_expression();
+        case Token::Type::WHILE:
+            return while_expression();
         default: return {};
     }
 }

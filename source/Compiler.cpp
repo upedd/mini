@@ -191,7 +191,6 @@ void Compiler::visit_stmt(const Stmt &statement) {
                    [this](const VarStmt &stmt) { variable_declaration(stmt); },
                    [this](const FunctionStmt &stmt) { function_declaration(stmt); },
                    [this](const ExprStmt &stmt) { expr_statement(stmt); },
-                   [this](const WhileStmt &stmt) { while_statement(stmt); },
                    [this](const ReturnStmt &stmt) { return_statement(stmt); },
                    [this](const ClassStmt &stmt) { class_declaration(stmt); },
                    [this](const NativeStmt& stmt) {native_declaration(stmt); }
@@ -236,13 +235,34 @@ void Compiler::loop_expression(const LoopExpr &expr) {
     int loop_idx = current_function()->add_jump_destination(current_program().size());
     int break_idx = current_function()->add_empty_jump_destination();
     current_context().blocks.emplace_back(break_idx, continue_idx);
-    emit(OpCode::PUSH_BLOCK);
+    //emit(OpCode::PUSH_BLOCK);
     visit_expr(*expr.body);
     emit(OpCode::POP); // ignore expressions result
     emit(OpCode::JUMP, loop_idx);
     current_function()->patch_jump_destination(current_context().blocks.back().break_jump_idx, current_program().size());
     current_context().blocks.pop_back();
     emit(OpCode::POP_BLOCK);
+}
+
+void Compiler::while_expr(const WhileExpr &expr) {
+    int continue_idx = current_function()->add_jump_destination(current_program().size());
+    emit(OpCode::PUSH_BLOCK);
+    int loop_idx = current_function()->add_jump_destination(current_program().size());
+    int break_idx = current_function()->add_empty_jump_destination();
+    int end_idx = current_function()->add_empty_jump_destination();
+    current_context().blocks.emplace_back(break_idx, continue_idx);
+    visit_expr(*expr.condition);
+    emit(OpCode::JUMP_IF_FALSE, end_idx);
+    emit(OpCode::POP); // pop evaluation condition result
+    visit_expr(*expr.body);
+    emit(OpCode::POP); // ignore block expression result
+    emit(OpCode::JUMP, loop_idx);
+    current_function()->patch_jump_destination(end_idx, current_program().size());
+    emit(OpCode::POP); // pop evalutaion condition result
+    emit(OpCode::NIL); // default result for while expression
+    current_function()->patch_jump_destination(break_idx, current_program().size());
+    emit(OpCode::POP_BLOCK);
+    current_context().blocks.pop_back();
 }
 
 void Compiler::break_expr(const BreakExpr &expr) {
@@ -261,6 +281,8 @@ void Compiler::continue_expr(const ContinueExpr& expr) {
     emit(OpCode::POP);
     emit(OpCode::JUMP, current_context().blocks.back().continue_jump_idx);
 }
+
+
 
 void Compiler::function(const FunctionStmt &stmt, FunctionType type) {
     auto function_name = stmt.name.get_lexeme(source);
@@ -343,17 +365,7 @@ void Compiler::return_statement(const ReturnStmt &stmt) {
     emit(OpCode::RETURN);
 }
 
-void Compiler::while_statement(const WhileStmt &stmt) {
-    int destination = current_function()->add_jump_destination(current_program().size());
-    visit_expr(*stmt.condition);
-    int jump_to_end = current_function()->add_empty_jump_destination();
-    emit(OpCode::JUMP_IF_FALSE, jump_to_end);
-    emit(OpCode::POP);
-    visit_stmt(*stmt.stmt);
-    emit(OpCode::JUMP, destination);
-    current_function()->patch_jump_destination(jump_to_end, current_program().size());
-    emit(OpCode::POP);
-}
+
 
 void Compiler::if_expression(const IfExpr &stmt) {
     visit_expr(*stmt.condition);
@@ -387,7 +399,8 @@ void Compiler::visit_expr(const Expr &expression) {
                    [this](const IfExpr& expr) {if_expression(expr);},
                    [this](const LoopExpr& expr) {loop_expression(expr);},
                    [this](const BreakExpr& expr) {break_expr(expr);},
-                   [this](const ContinueExpr& expr) {continue_expr(expr);}
+                   [this](const ContinueExpr& expr) {continue_expr(expr);},
+                   [this](const WhileExpr& expr) {while_expr(expr);}
                }, expression);
 }
 

@@ -91,6 +91,8 @@ public:
 
     void continue_expr(const ContinueExpr &expr);
 
+    void while_expr(const WhileExpr & expr);
+
 private:
     void start_context(Function *function, FunctionType type);
     void end_context();
@@ -121,7 +123,6 @@ private:
     void class_declaration(const ClassStmt &stmt);
     void expr_statement(const ExprStmt &stmt);
     void return_statement(const ReturnStmt &stmt);
-    void while_statement(const WhileStmt &stmt);
 
     void if_expression(const IfExpr &stmt);
 

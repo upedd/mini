@@ -59,7 +59,6 @@ private:
 
     Expr if_expression();
 
-    Stmt while_statement();
     Stmt return_statement();
 
     // C like precedence
@@ -98,6 +97,8 @@ private:
     Expr break_expression();
 
     Expr continue_expression();
+
+    Expr while_expression();
 
     std::optional<Expr> prefix();
 
