@@ -266,6 +266,7 @@ void Compiler::while_expr(const WhileExpr &expr) {
 }
 
 void Compiler::for_expr(const ForExpr &expr) {
+    // TODO: broken continue
     begin_scope();
     visit_expr(*expr.iterable);
     int idx3 = current_function()->add_constant("iterator");
@@ -275,10 +276,10 @@ void Compiler::for_expr(const ForExpr &expr) {
     // while loop copy!!!
     int continue_idx = current_function()->add_jump_destination(current_program().size());
     emit(OpCode::PUSH_BLOCK);
-    int loop_idx = current_function()->add_jump_destination(current_program().size());
     int break_idx = current_function()->add_empty_jump_destination();
     int end_idx = current_function()->add_empty_jump_destination();
     current_context().blocks.emplace_back(break_idx, continue_idx);
+    int loop_idx = current_function()->add_jump_destination(current_program().size());
     // condition mixin
     resolve_variable("$iter");
     int idx = current_function()->add_constant("has_next");
@@ -288,23 +289,30 @@ void Compiler::for_expr(const ForExpr &expr) {
     emit(OpCode::JUMP_IF_FALSE, end_idx);
     emit(OpCode::POP); // pop evaluation condition result
     // item mixin
+
+    begin_scope();
     resolve_variable("$iter");
     int idx2 = current_function()->add_constant("next");
     emit(OpCode::GET_PROPERTY, idx2);
     emit(OpCode::CALL, 0);
     define_variable(expr.name.get_lexeme(source));
+    // end update item
     // end item mixin
     visit_expr(*expr.body);
     emit(OpCode::POP); // ignore block expression result
-    emit(OpCode::POP); // remove last iterable? // TODO: check for loops with upvalues
+    end_scope();
     emit(OpCode::JUMP, loop_idx);
     current_function()->patch_jump_destination(end_idx, current_program().size());
     emit(OpCode::POP); // pop evalutaion condition result
-    emit(OpCode::NIL); // default result for while expression
+    emit(OpCode::NIL);
     current_function()->patch_jump_destination(break_idx, current_program().size());
     emit(OpCode::POP_BLOCK);
     current_context().blocks.pop_back();
-    // end while loop copy
+    // at this point operand stack should look like this: [...] [iterator] [return value]
+    // and we need to pop the iterator
+    // TODO: find better way?
+    emit(OpCode::SWAP);
+    end_scope();
 }
 
 void Compiler::break_expr(const BreakExpr &expr) {
@@ -321,6 +329,7 @@ void Compiler::continue_expr(const ContinueExpr& expr) {
     emit(OpCode::NIL);
     emit(OpCode::POP_BLOCK);
     emit(OpCode::POP);
+    emit(OpCode::PUSH_BLOCK);
     emit(OpCode::JUMP, current_context().blocks.back().continue_jump_idx);
 }
 

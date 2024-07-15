@@ -130,18 +130,22 @@ std::optional<Stmt> Parser::statement() {
     }
     if (match(Token::Type::IF)) {
         auto expr = if_expression();
+        match(Token::Type::SEMICOLON);
         return ExprStmt(std::make_unique<Expr>(std::move(expr)));
     }
     if (match(Token::Type::LOOP)) {
         auto expr = loop_expression();
+        match(Token::Type::SEMICOLON);
         return ExprStmt(std::make_unique<Expr>(std::move(expr)));
     }
     if (match(Token::Type::WHILE)) {
         auto expr = while_expression();
+        match(Token::Type::SEMICOLON);
         return ExprStmt(std::make_unique<Expr>(std::move(expr)));
     }
     if (match(Token::Type::FOR)) {
         auto expr = for_expression();
+        match(Token::Type::SEMICOLON);
         return ExprStmt(std::make_unique<Expr>(std::move(expr)));
     }
     return {};

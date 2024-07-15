@@ -199,6 +199,10 @@ inline void Disassembler::disassemble(const std::string& name) {
                 simple_opcode("POP_BLOCK");
                 break;
             }
+            case OpCode::SWAP: {
+                simple_opcode("SWAP");
+                break;
+            }
         }
     }
 }

@@ -401,6 +401,13 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 push(val);
                 break;
             }
+            case OpCode::SWAP: {
+                auto a = pop();
+                auto b = pop();
+                push(a);
+                push(b);
+                break;
+            }
         }
         // for (int i = 0; i < stack_index; ++i) {
         //     std::cout << '[' << stack[i].to_string() << "] ";
