@@ -367,9 +367,10 @@ void Compiler::if_expression(const IfExpr &stmt) {
     emit(OpCode::POP);
     if (stmt.else_expr) {
         visit_expr(*stmt.else_expr);
+    } else {
+        emit(OpCode::NIL);
     }
     current_function()->patch_jump_destination(jump_to_end, current_program().size());
-    emit(OpCode::NIL);
 }
 
 void Compiler::visit_expr(const Expr &expression) {
