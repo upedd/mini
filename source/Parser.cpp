@@ -324,8 +324,32 @@ Expr Parser::loop_expression() {
     return LoopExpr(make_expr_handle(block()));
 }
 
+bool has_prefix(Token::Type type) {
+    switch (type) {
+        case Token::Type::INTEGER:
+        case Token::Type::NUMBER:
+        case Token::Type::STRING:
+        case Token::Type::TRUE:
+        case Token::Type::FALSE:
+        case Token::Type::NIL:
+        case Token::Type::IDENTIFIER:
+        case Token::Type::LEFT_PAREN:
+        case Token::Type::LEFT_BRACE:
+        case Token::Type::BANG:
+        case Token::Type::MINUS:
+        case Token::Type::TILDE:
+        case Token::Type::THIS:
+        case Token::Type::SUPER:
+        case Token::Type::IF:
+        case Token::Type::LOOP:
+        case Token::Type::BREAK:
+        return true;
+        default: return false;
+    }
+}
+
 Expr Parser::break_expression() {
-    if (check(Token::Type::SEMICOLON)) {
+    if (!has_prefix(next.type)) {
         return BreakExpr{};
     }
     return BreakExpr{make_expr_handle(expression())};
