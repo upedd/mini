@@ -73,31 +73,19 @@ std::vector<Stmt> Parser::parse() {
     advance(); // populate next
     std::vector<Stmt> stmts;
     while (!match(Token::Type::END)) {
-        stmts.push_back(declaration());
+        stmts.push_back(statement_or_expression());
     }
     return stmts;
 }
 
-Stmt Parser::declaration() {
-    auto exit = scope_exit([this] { if (panic_mode) synchronize(); });
-    if (match(Token::Type::LET)) {
-        return var_declaration();
-    }
-    if (match(Token::Type::FUN)) {
-        return function_declaration();
-    }
-    if (match(Token::Type::CLASS)) {
-        return class_declaration();
-    }
-    if (match(Token::Type::NATIVE)) {
-        return native_declaration();
-    }
+Stmt Parser::statement_or_expression() {
+
     if (auto stmt = statement()) {
         return std::move(*stmt);
     } else {
         auto expr = std::make_unique<Expr>(expression());
-        match(Token::Type::SEMICOLON);
-        //consume(Token::Type::SEMICOLON, "Expected ';' after expression.");
+        //match(Token::Type::SEMICOLON);
+        consume(Token::Type::SEMICOLON, "Expected ';' after expression.");
         return ExprStmt(std::move(expr));
     }
 }
@@ -110,11 +98,24 @@ Stmt Parser::native_declaration() {
 }
 
 std::optional<Stmt> Parser::statement() {
+    auto exit = scope_exit([this] { if (panic_mode) synchronize(); });
     if (match(Token::Type::WHILE)) {
         return while_statement();
     }
     if (match(Token::Type::RETURN)) {
         return return_statement();
+    }
+    if (match(Token::Type::LET)) {
+        return var_declaration();
+    }
+    if (match(Token::Type::FUN)) {
+        return function_declaration();
+    }
+    if (match(Token::Type::CLASS)) {
+        return class_declaration();
+    }
+    if (match(Token::Type::NATIVE)) {
+        return native_declaration();
     }
     return {};
 }
@@ -207,7 +208,7 @@ Stmt Parser::while_statement() {
 
     return WhileStmt{
         .condition = make_expr_handle(std::move(condition)),
-        .stmt = std::make_unique<Stmt>(declaration())
+        .stmt = std::make_unique<Stmt>(statement_or_expression())
     };
 }
 
@@ -299,6 +300,11 @@ Expr Parser::super_() {
     return SuperExpr{current};
 }
 
+bool is_control_flow(Token::Type type) {
+    return type == Token::Type::LOOP || type == Token::Type::IF;
+}
+
+
 Expr Parser::block() {
     std::vector<StmtHandle> stmts;
     ExprHandle expr_at_end = nullptr;
@@ -306,8 +312,9 @@ Expr Parser::block() {
         if (auto stmt = statement()) {
             stmts.push_back(std::make_unique<Stmt>(std::move(*stmt)));
         } else {
+            bool control_flow = is_control_flow(next.type);
             auto expr = expression();
-            if (match(Token::Type::SEMICOLON)) {
+            if (match(Token::Type::SEMICOLON) || (control_flow && !check(Token::Type::RIGHT_BRACE))) {
                 stmts.push_back(std::make_unique<Stmt>(ExprStmt(std::make_unique<Expr>(std::move(expr)))));
             } else {
                 expr_at_end = std::make_unique<Expr>(std::move(expr));
@@ -343,6 +350,7 @@ bool has_prefix(Token::Type type) {
         case Token::Type::IF:
         case Token::Type::LOOP:
         case Token::Type::BREAK:
+        case Token::Type::CONTINUE:
         return true;
         default: return false;
     }
@@ -353,6 +361,10 @@ Expr Parser::break_expression() {
         return BreakExpr{};
     }
     return BreakExpr{make_expr_handle(expression())};
+}
+
+Expr Parser::continue_expression() {
+    return ContinueExpr();
 }
 
 std::optional<Expr> Parser::prefix() {
@@ -387,6 +399,8 @@ std::optional<Expr> Parser::prefix() {
             return loop_expression();
         case Token::Type::BREAK:
             return break_expression();
+        case Token::Type::CONTINUE:
+            return continue_expression();
         default: return {};
     }
 }

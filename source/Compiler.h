@@ -49,13 +49,22 @@ public:
         METHOD
     };
 
+    /**
+     * Blocks enclosing loops or labeled blocks expressions
+     */
+    struct Block {
+        int break_jump_idx;
+        int continue_jump_idx;
+        std::string label;
+    };
+
     struct Context {
         Function *function = nullptr;
         FunctionType function_type;
         int current_depth = 0;
         Locals locals;
         std::vector<Upvalue> upvalues;
-        std::vector<int> destinations_to_break;
+        std::vector<Block> blocks;
 
         int add_upvalue(int index, bool is_local);
     };
@@ -79,6 +88,8 @@ public:
     void loop_expression(const LoopExpr & expr);
 
     void break_expr(const BreakExpr & expr);
+
+    void continue_expr(const ContinueExpr &expr);
 
 private:
     void start_context(Function *function, FunctionType type);

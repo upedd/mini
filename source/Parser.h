@@ -44,7 +44,7 @@ private:
 
 
 
-    Stmt declaration();
+    Stmt statement_or_expression();
 
     Stmt native_declaration();
 
@@ -96,6 +96,8 @@ private:
 
     Expr loop_expression();
     Expr break_expression();
+
+    Expr continue_expression();
 
     std::optional<Expr> prefix();
 
