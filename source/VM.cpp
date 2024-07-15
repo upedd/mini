@@ -386,6 +386,20 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 int constant_idx = fetch();
                 auto name = get_constant(constant_idx).get<std::string>();
                 push(natives[name]);
+                break;
+            }
+            case OpCode::PUSH_BLOCK: {
+                block_stack.push_back(stack_index);
+                break;
+            }
+            case OpCode::POP_BLOCK: {
+                // TODO: does that work with upvalues?
+                Value val = stack[stack_index - 1];
+                close_upvalues(stack[block_stack.back()]);
+                stack_index = block_stack.back();
+                block_stack.pop_back();
+                push(val);
+                break;
             }
         }
         // for (int i = 0; i < stack_index; ++i) {

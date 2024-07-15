@@ -49,7 +49,10 @@ int Compiler::Context::add_upvalue(int index, bool is_local) {
 
 void Compiler::compile() {
     for (auto &stmt: parser.parse()) {
-        //std::cout << stmt_to_string(stmt, source) << '\n';
+        for (auto& err : parser.get_errors()) {
+            std::cerr << err.message << '\n';
+        }
+        std::cout << stmt_to_string(stmt, source) << '\n';
         visit_stmt(stmt);
     }
     // default return at main
@@ -228,13 +231,27 @@ void Compiler::block(const BlockExpr &expr) {
 }
 
 void Compiler::loop_expression(const LoopExpr &expr) {
+    emit(OpCode::PUSH_BLOCK);
     int idx = current_function()->add_jump_destination(current_program().size());
+    int break_destination = current_function()->add_empty_jump_destination();
+    current_context().destinations_to_break.push_back(break_destination);
     visit_expr(*expr.body);
+    emit(OpCode::POP); // ignore expressions result
     emit(OpCode::JUMP, idx);
+    current_function()->patch_jump_destination(break_destination, current_program().size());
+    emit(OpCode::POP_BLOCK);
+    current_context().destinations_to_break.pop_back();
 }
 
 void Compiler::break_expr(const BreakExpr &expr) {
-    // TODO: implement!
+    // TODO: parser should check if break expressions actually in loop
+    if (expr.expr) {
+        visit_expr(*expr.expr);
+    } else {
+        emit(OpCode::NIL);
+    }
+    emit(OpCode::JUMP, current_context().destinations_to_break.back());
+    current_context().destinations_to_break.pop_back();
 }
 
 void Compiler::function(const FunctionStmt &stmt, FunctionType type) {
@@ -344,6 +361,7 @@ void Compiler::if_expression(const IfExpr &stmt) {
         visit_expr(*stmt.else_expr);
     }
     current_function()->patch_jump_destination(jump_to_end, current_program().size());
+    emit(OpCode::NIL);
 }
 
 void Compiler::visit_expr(const Expr &expression) {

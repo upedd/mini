@@ -325,7 +325,7 @@ Expr Parser::loop_expression() {
 }
 
 Expr Parser::break_expression() {
-    if (match(Token::Type::SEMICOLON)) {
+    if (check(Token::Type::SEMICOLON)) {
         return BreakExpr{};
     }
     return BreakExpr{make_expr_handle(expression())};

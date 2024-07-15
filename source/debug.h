@@ -33,8 +33,8 @@ inline void Disassembler::arg_inst(const std::string &name) {
 }
 
 inline void Disassembler::jump_inst(const std::string& name) {
-    int x = static_cast<uint16_t>(function.get_program().get_at(offset++)) << 8 | function.get_program().get_at(offset++);
-    std::cout << offset - 3 << ": " << name << ' ' << x << '\n';
+    int x = function.get_program().get_at(offset++);
+    std::cout << offset - 2 << ": " << name << " to: " << x << ' ' << function.get_jump_destination(x) << '\n';
 }
 
 
@@ -114,13 +114,13 @@ inline void Disassembler::disassemble(const std::string& name) {
                 arg_inst("SET");
                 break;
             case OpCode::JUMP_IF_FALSE:
-                constant_inst("JUMP_IF_FALSE");
+                jump_inst("JUMP_IF_FALSE");
                 break;
             case OpCode::JUMP:
-                constant_inst("JUMP");
+                jump_inst("JUMP");
                 break;
             case OpCode::JUMP_IF_TRUE:
-                constant_inst("JUMP_IF_TRUE");
+                jump_inst("JUMP_IF_TRUE");
                 break;
             case OpCode::NOT:
                 simple_opcode("NOT");
@@ -189,6 +189,14 @@ inline void Disassembler::disassemble(const std::string& name) {
             }
             case OpCode::GET_NATIVE: {
                 constant_inst("GET_NATIVE");
+                break;
+            }
+            case OpCode::PUSH_BLOCK: {
+                simple_opcode("PUSH_BLOCK");
+                break;
+            }
+            case OpCode::POP_BLOCK: {
+                simple_opcode("POP_BLOCK");
                 break;
             }
         }

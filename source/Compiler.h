@@ -55,6 +55,7 @@ public:
         int current_depth = 0;
         Locals locals;
         std::vector<Upvalue> upvalues;
+        std::vector<int> destinations_to_break;
 
         int add_upvalue(int index, bool is_local);
     };

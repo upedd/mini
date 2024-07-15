@@ -61,6 +61,7 @@ public:
 private:
     GarbageCollector gc;
     std::size_t next_gc = 1024 * 1024;
+    std::vector<int> block_stack;
     static constexpr std::size_t HEAP_GROWTH_FACTOR = 2;
     // stack dynamic allocation breaks upvalues!
     int stack_index = 0;
