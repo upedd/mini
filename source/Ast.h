@@ -24,6 +24,7 @@ struct LoopExpr;
 struct BreakExpr;
 struct ContinueExpr;
 struct WhileExpr;
+struct ForExpr;
 
 struct ExprStmt;
 struct VarStmt;
@@ -33,7 +34,7 @@ struct ClassStmt;
 struct NativeStmt;
 
 using Expr = std::variant<LiteralExpr, StringLiteral, UnaryExpr, BinaryExpr, VariableExpr, CallExpr, GetPropertyExpr,
-    SuperExpr, BlockExpr, IfExpr, LoopExpr, BreakExpr, ContinueExpr, WhileExpr>;
+    SuperExpr, BlockExpr, IfExpr, LoopExpr, BreakExpr, ContinueExpr, WhileExpr, ForExpr>;
 using ExprHandle = std::unique_ptr<Expr>;
 
 using Stmt = std::variant<VarStmt, ExprStmt, FunctionStmt, ReturnStmt, ClassStmt, NativeStmt>;
@@ -100,6 +101,12 @@ struct BreakExpr {
     ExprHandle expr;
 };
 struct ContinueExpr {};
+
+struct ForExpr {
+    Token name;
+    ExprHandle iterable;
+    ExprHandle body;
+};
 
 inline ExprHandle make_expr_handle(Expr expr) {
     return std::make_unique<Expr>(std::move(expr));
@@ -242,6 +249,9 @@ inline std::string expr_to_string(const Expr &expr, std::string_view source) {
                                                  expr_to_string(*expr.condition, source),
                                                  expr_to_string(*expr.body, source));
                           },
+                          [source](const ForExpr& expr) {
+                                    return std::string("for"); // TODO: implement
+                          }
                       }, expr);
 }
 

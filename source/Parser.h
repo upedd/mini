@@ -48,6 +48,8 @@ private:
 
     Stmt native_declaration();
 
+    Expr for_expression();
+
     std::optional<Stmt> statement();
 
     Stmt var_declaration();

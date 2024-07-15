@@ -1,6 +1,7 @@
 #include "Parser.h"
 
 #include <cassert>
+#include <iostream>
 
 #include "conversions.h"
 
@@ -43,6 +44,7 @@ Token Parser::advance() {
             error(current, token.error().message);
         } else {
             next = *token;
+            std::cout << token->to_string(lexer.get_source()) << '\n';
             break;
         }
     }
@@ -95,6 +97,20 @@ Stmt Parser::native_declaration() {
     return NativeStmt(name);
 }
 
+Expr Parser::for_expression() {
+    consume(Token::Type::IDENTIFIER, "Expected an identifier after 'for'.");
+    Token name = current;
+    consume(Token::Type::IN, "Expected 'in' after item name in for loop.");
+    Expr iterable = expression();
+    if (current.type != Token::Type::LEFT_BRACE) {
+        error(current, "Expected '{' before loop body.");
+    }
+    Expr body = block();
+    return ForExpr {.name = name,
+        .iterable = make_expr_handle(std::move(iterable)),
+        .body = make_expr_handle(std::move(body))};
+}
+
 std::optional<Stmt> Parser::statement() {
     auto exit = scope_exit([this] { if (panic_mode) synchronize(); });
     if (match(Token::Type::RETURN)) {
@@ -122,6 +138,10 @@ std::optional<Stmt> Parser::statement() {
     }
     if (match(Token::Type::WHILE)) {
         auto expr = while_expression();
+        return ExprStmt(std::make_unique<Expr>(std::move(expr)));
+    }
+    if (match(Token::Type::FOR)) {
+        auto expr = for_expression();
         return ExprStmt(std::make_unique<Expr>(std::move(expr)));
     }
     return {};
@@ -170,7 +190,7 @@ Stmt Parser::class_declaration() {
 
     std::vector<std::unique_ptr<FunctionStmt>> methods;
     // todo: fix!
-    while (!check(Token::Type::RIGHT_BRACE) && current.type != Token::Type::RIGHT_BRACE && !check(Token::Type::END)) {
+    while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
         methods.push_back(std::make_unique<FunctionStmt>(function_declaration()));
     }
     consume(Token::Type::RIGHT_BRACE, "Expected '}' after class body.");
@@ -267,6 +287,7 @@ Parser::Precedence Parser::get_precendece(Token::Type token) {
         case Token::Type::IF:
         case Token::Type::LOOP:
         case Token::Type::WHILE:
+        case Token::Type::FOR:
         default:
             return Precedence::NONE;
     }
@@ -342,6 +363,7 @@ bool has_prefix(Token::Type type) {
         case Token::Type::BREAK:
         case Token::Type::CONTINUE:
         case Token::Type::WHILE:
+        case Token::Type::FOR:
         return true;
         default: return false;
     }
@@ -403,6 +425,8 @@ std::optional<Expr> Parser::prefix() {
             return continue_expression();
         case Token::Type::WHILE:
             return while_expression();
+        case Token::Type::FOR:
+            return for_expression();
         default: return {};
     }
 }

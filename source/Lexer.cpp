@@ -192,6 +192,8 @@ Token Lexer::keyword_or_identifier() {
         return make_token(Token::Type::WHILE);
     } else if (current == "native") {
         return make_token(Token::Type::NATIVE);
+    } else if (current == "for") {
+        return make_token(Token::Type::FOR);
     }
     return make_token(Token::Type::IDENTIFIER);
 }

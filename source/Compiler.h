@@ -93,6 +93,8 @@ public:
 
     void while_expr(const WhileExpr & expr);
 
+    void for_expr(const ForExpr & expr);
+
 private:
     void start_context(Function *function, FunctionType type);
     void end_context();

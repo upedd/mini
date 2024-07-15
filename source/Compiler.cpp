@@ -265,6 +265,48 @@ void Compiler::while_expr(const WhileExpr &expr) {
     current_context().blocks.pop_back();
 }
 
+void Compiler::for_expr(const ForExpr &expr) {
+    begin_scope();
+    visit_expr(*expr.iterable);
+    int idx3 = current_function()->add_constant("iterator");
+    emit(OpCode::GET_PROPERTY, idx3);
+    emit(OpCode::CALL, 0);
+    define_variable("$iter");
+    // while loop copy!!!
+    int continue_idx = current_function()->add_jump_destination(current_program().size());
+    emit(OpCode::PUSH_BLOCK);
+    int loop_idx = current_function()->add_jump_destination(current_program().size());
+    int break_idx = current_function()->add_empty_jump_destination();
+    int end_idx = current_function()->add_empty_jump_destination();
+    current_context().blocks.emplace_back(break_idx, continue_idx);
+    // condition mixin
+    resolve_variable("$iter");
+    int idx = current_function()->add_constant("has_next");
+    emit(OpCode::GET_PROPERTY, idx);
+    emit(OpCode::CALL, 0);
+    // end condiiton mixin
+    emit(OpCode::JUMP_IF_FALSE, end_idx);
+    emit(OpCode::POP); // pop evaluation condition result
+    // item mixin
+    resolve_variable("$iter");
+    int idx2 = current_function()->add_constant("next");
+    emit(OpCode::GET_PROPERTY, idx2);
+    emit(OpCode::CALL, 0);
+    define_variable(expr.name.get_lexeme(source));
+    // end item mixin
+    visit_expr(*expr.body);
+    emit(OpCode::POP); // ignore block expression result
+    emit(OpCode::POP); // remove last iterable? // TODO: check for loops with upvalues
+    emit(OpCode::JUMP, loop_idx);
+    current_function()->patch_jump_destination(end_idx, current_program().size());
+    emit(OpCode::POP); // pop evalutaion condition result
+    emit(OpCode::NIL); // default result for while expression
+    current_function()->patch_jump_destination(break_idx, current_program().size());
+    emit(OpCode::POP_BLOCK);
+    current_context().blocks.pop_back();
+    // end while loop copy
+}
+
 void Compiler::break_expr(const BreakExpr &expr) {
     // TODO: parser should check if break expressions actually in loop
     if (expr.expr) {
@@ -400,7 +442,8 @@ void Compiler::visit_expr(const Expr &expression) {
                    [this](const LoopExpr& expr) {loop_expression(expr);},
                    [this](const BreakExpr& expr) {break_expr(expr);},
                    [this](const ContinueExpr& expr) {continue_expr(expr);},
-                   [this](const WhileExpr& expr) {while_expr(expr);}
+                   [this](const WhileExpr& expr) {while_expr(expr);},
+                       [this](const ForExpr& expr) {for_expr(expr);}
                }, expression);
 }
 
