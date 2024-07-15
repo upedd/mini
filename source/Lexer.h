@@ -21,6 +21,8 @@ public:
 
     explicit Lexer(const std::string_view source) : source(source) {};
 
+
+
     std::expected<Token, Error> next_token();
 
     [[nodiscard]] std::string_view get_source() const;
@@ -39,6 +41,7 @@ private:
     Token keyword_or_identifier();
     std::expected<Token, Error> string();
     Token integer_or_number();
+    Token label();
 
     int current_pos = 0;
     int start_pos = 0;

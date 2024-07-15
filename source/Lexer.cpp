@@ -29,8 +29,7 @@ std::expected<Token, Lexer::Error> Lexer::next_token() {
         case '~':
             return make_token(Token::Type::TILDE);
         case ':':
-            if (!match('=')) return make_error("Expected '=' after ':'.");
-            return make_token(Token::Type::COLON_EQUAL);
+            return make_token(Token::Type::COLON);
         case '!':
             return make_token(match('=') ? Token::Type::BANG_EQUAL : Token::Type::BANG);
         case '+':
@@ -83,6 +82,8 @@ std::expected<Token, Lexer::Error> Lexer::next_token() {
         }
         case '"':
             return string();
+        case '@':
+            return label();
         default: {
             if (is_digit(c)) { // TODO: number literals should be able to start with dot
                 return integer_or_number();
@@ -224,4 +225,10 @@ Token Lexer::integer_or_number() {
         advance();
     }
     return make_token(Token::Type::NUMBER);
+}
+
+Token Lexer::label() {
+    advance(); // skip @
+    consume_identifier();
+    return make_token(Token::Type::LABEL);
 }

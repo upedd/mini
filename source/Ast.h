@@ -80,6 +80,7 @@ struct SuperExpr {
 struct BlockExpr {
     std::vector<StmtHandle> stmts;
     ExprHandle expr;
+    std::optional<Token> label;
 };
 
 struct IfExpr {
@@ -90,22 +91,28 @@ struct IfExpr {
 
 struct LoopExpr {
     ExprHandle body;
+    std::optional<Token> label;
 };
 
 struct WhileExpr {
     ExprHandle condition;
     ExprHandle body;
+    std::optional<Token> label;
 };
 
 struct BreakExpr {
     ExprHandle expr;
+    std::optional<Token> label;
 };
-struct ContinueExpr {};
+struct ContinueExpr {
+    std::optional<Token> label;
+};
 
 struct ForExpr {
     Token name;
     ExprHandle iterable;
     ExprHandle body;
+    std::optional<Token> label;
 };
 
 inline ExprHandle make_expr_handle(Expr expr) {

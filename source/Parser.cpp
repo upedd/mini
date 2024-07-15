@@ -97,7 +97,7 @@ Stmt Parser::native_declaration() {
     return NativeStmt(name);
 }
 
-Expr Parser::for_expression() {
+Expr Parser::for_expression(std::optional<Token> label) {
     consume(Token::Type::IDENTIFIER, "Expected an identifier after 'for'.");
     Token name = current;
     consume(Token::Type::IN, "Expected 'in' after item name in for loop.");
@@ -108,7 +108,8 @@ Expr Parser::for_expression() {
     Expr body = block();
     return ForExpr {.name = name,
         .iterable = make_expr_handle(std::move(iterable)),
-        .body = make_expr_handle(std::move(body))};
+        .body = make_expr_handle(std::move(body)),
+        .label = label};
 }
 
 std::optional<Stmt> Parser::statement() {
@@ -145,6 +146,11 @@ std::optional<Stmt> Parser::statement() {
     }
     if (match(Token::Type::FOR)) {
         auto expr = for_expression();
+        match(Token::Type::SEMICOLON);
+        return ExprStmt(std::make_unique<Expr>(std::move(expr)));
+    }
+    if (match(Token::Type::LABEL)) {
+        auto expr = labeled_expression();
         match(Token::Type::SEMICOLON);
         return ExprStmt(std::make_unique<Expr>(std::move(expr)));
     }
@@ -292,6 +298,7 @@ Parser::Precedence Parser::get_precendece(Token::Type token) {
         case Token::Type::LOOP:
         case Token::Type::WHILE:
         case Token::Type::FOR:
+        case Token::Type::LABEL:
         default:
             return Precedence::NONE;
     }
@@ -321,7 +328,7 @@ Expr Parser::super_() {
     return SuperExpr{current};
 }
 
-Expr Parser::block() {
+Expr Parser::block(std::optional<Token> label) {
     std::vector<StmtHandle> stmts;
     ExprHandle expr_at_end = nullptr;
     while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
@@ -338,12 +345,12 @@ Expr Parser::block() {
         }
     }
     consume(Token::Type::RIGHT_BRACE, "Expected '}' after block.");
-    return BlockExpr{.stmts = std::move(stmts), .expr = std::move(expr_at_end)};
+    return BlockExpr{.stmts = std::move(stmts), .expr = std::move(expr_at_end), .label = label};
 }
 
-Expr Parser::loop_expression() {
+Expr Parser::loop_expression(std::optional<Token> label) {
     consume(Token::Type::LEFT_BRACE, "Expected '{' after loop keyword.");
-    return LoopExpr(make_expr_handle(block()));
+    return LoopExpr(make_expr_handle(block()), label);
 }
 
 bool has_prefix(Token::Type type) {
@@ -368,29 +375,56 @@ bool has_prefix(Token::Type type) {
         case Token::Type::CONTINUE:
         case Token::Type::WHILE:
         case Token::Type::FOR:
+        case Token::Type::LABEL:
         return true;
         default: return false;
     }
 }
 
 Expr Parser::break_expression() {
+    std::optional<Token> label;
+    if (match(Token::Type::LABEL)) {
+        label = current;
+    }
     if (!has_prefix(next.type)) {
         return BreakExpr{};
     }
-    return BreakExpr{make_expr_handle(expression())};
+    return BreakExpr{make_expr_handle(expression()), label};
 }
 
 Expr Parser::continue_expression() {
+    if (match(Token::Type::LABEL)) {
+        return ContinueExpr(current);
+    }
     return ContinueExpr();
 }
 
-Expr Parser::while_expression() {
+Expr Parser::while_expression(std::optional<Token> label) {
     auto condition = expression();
     if (current.type != Token::Type::LEFT_BRACE) {
         error(current, "Expected '{' after while loop condition");
     }
     auto body = block();
-    return WhileExpr(make_expr_handle(std::move(condition)), make_expr_handle(std::move(body)));
+    return WhileExpr(make_expr_handle(std::move(condition)), make_expr_handle(std::move(body)), label);
+}
+
+Expr Parser::labeled_expression() {
+    consume(Token::Type::COLON, "Expected ':' after label");
+    // all expressions we can break out of
+    if (match(Token::Type::LOOP)) {
+        return loop_expression(current);
+    }
+    if (match(Token::Type::WHILE)) {
+        return while_expression(current);
+    }
+    if (match(Token::Type::FOR)) {
+        return for_expression(current);
+    }
+    if (match(Token::Type::LEFT_BRACE)) {
+        return block(current);
+    }
+    error(current, "Only loops and blocks can be labeled.");
+    return {};
 }
 
 std::optional<Expr> Parser::prefix() {
@@ -431,6 +465,8 @@ std::optional<Expr> Parser::prefix() {
             return while_expression();
         case Token::Type::FOR:
             return for_expression();
+        case Token::Type::LABEL:
+            return labeled_expression();
         default: return {};
     }
 }

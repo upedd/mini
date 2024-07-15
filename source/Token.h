@@ -11,7 +11,6 @@ struct Token {
         EQUAL,
         EQUAL_EQUAL,
         BANG_EQUAL,
-        COLON_EQUAL,
         LESS_EQUAL,
         GREATER_EQUAL,
         PLUS_EQUAL,
@@ -69,8 +68,9 @@ struct Token {
         CONTINUE,
         NONE,
         MATCH,
-        RETURN, SUPER, LET, WHILE, TILDE, NATIVE ,FOR,
+        RETURN, SUPER, LET, WHILE, TILDE, NATIVE ,FOR, LABEL, COLON,
         END // NOTE: Type END must always be last element in this enum.
+
     };
 
     Type type = Type::NONE;
@@ -115,8 +115,6 @@ inline std::string Token::type_to_string(Type type) {
             return "EQUAL_EQUAL";
         case Type::BANG_EQUAL:
             return "BANG_EQUAL";
-        case Type::COLON_EQUAL:
-            return "COLON_EQUAL";
         case Type::LESS_EQUAL:
             return "LESS_EQUAL";
         case Type::GREATER_EQUAL:
@@ -247,6 +245,10 @@ inline std::string Token::type_to_string(Type type) {
             return "NATIVE";
         case Type::FOR:
             return "FOR";
+        case Type::LABEL:
+            return "LABEL";
+        case Type::COLON:
+            return "COLON";
     }
     return "INVALID_TOKEN";
 }

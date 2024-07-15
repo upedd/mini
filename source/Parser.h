@@ -48,7 +48,7 @@ private:
 
     Stmt native_declaration();
 
-    Expr for_expression();
+    Expr for_expression(std::optional<Token> label = {});
 
     std::optional<Stmt> statement();
 
@@ -93,14 +93,16 @@ private:
 
     Expr super_();
 
-    Expr block();
+    Expr block(std::optional<Token> label = {});
 
-    Expr loop_expression();
+    Expr loop_expression(std::optional<Token> label = {});
     Expr break_expression();
 
     Expr continue_expression();
 
-    Expr while_expression();
+    Expr while_expression(std::optional<Token> label = {});
+
+    Expr labeled_expression();
 
     std::optional<Expr> prefix();
 
