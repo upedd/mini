@@ -1,23 +1,19 @@
 native print;
 
 let a = 0;
-loop {
+while a <= 10 {
     a += 1;
-    if a == 10 { break; }
 }
 print(a);
 
 let b = 0;
-loop {
-    b += 1;
-    if b > 10 { break; }
+while b <= 10 {
     if b % 2 == 0 { continue; }
     print(b);
-
 }
 
 let c = 0;
-let d = loop {
+let d = while c < 10 {
     c += 1;
     if c == 5 { break 3 * 4 }
 };
@@ -26,17 +22,14 @@ print(d);
 
 
 let e = 0;
-@outer: loop {
+@outer: while true {
     e += 1;
     let f = 0;
-    @middle: loop {
+    @middle: while f <= 10 {
         f += 1;
-        if f > 10 == 0 { continue }
         let g = 0;
-        @inner: loop {
-            g += 1;
-            if g > 10 { continue@middle };
-            if g % 2 == 0 { continue@inner }
+        @inner: while g <= 10 {
+            if g % 2 == 0 { continue }
             if e + f + g == 25 {
                 print(e);
                 print(f);
@@ -49,11 +42,17 @@ let e = 0;
 print(e);
 
 let h = 0;
-let i = @outer loop {
-    loop {
+let i = @outer: while true {
+    while true {
         h += 1;
         if h == 5 { break@outer 10 }
     }
 };
 print(h);
 print(i);
+
+let j = 0;
+let k = while j < 10 {
+    j += 1;
+};
+print(k);

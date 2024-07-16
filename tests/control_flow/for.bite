@@ -1,0 +1,59 @@
+class Ten {
+    iterator() {
+        class TenIterator {
+            next() {
+                this.cnt += 1;
+                return this.cnt;
+            }
+
+            has_next() {
+                return this.cnt < 10;
+            }
+        }
+        let iter = TenIterator();
+        iter.cnt = 0;
+        return iter;
+    }
+}
+
+native print;
+
+let a = 0;
+for i in Ten() {
+    a += 1;
+}
+print(a);
+
+for i in Ten() {
+    if i % 2 == 0 { continue; }
+    print(i);
+}
+
+let d = for i in Ten() {
+    if i == 5 { break 3 * 4 }
+};
+print(d);
+
+@outer: for i in Ten() {
+    @middle: for j in Ten() {
+        @inner: for k in Ten() {
+            if k % 2 == 0 { continue }
+            if i + j + k == 25 {
+                print(i);
+                print(j);
+                print(k);
+                break@outer
+            }
+        }
+    }
+}
+
+let b = @outer: for i in Ten() {
+    for j in Ten() {
+        if j == 5 { break@outer 10 }
+    }
+};
+print(b);
+
+let k = for i in Ten() {};
+print(k);

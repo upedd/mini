@@ -1,0 +1,33 @@
+native print;
+
+let x = @label: {
+    break@label 5;
+};
+print(x);
+
+let y = @outer: {
+    let z = @inner: {
+        break@outer 10;
+    };
+};
+print(y);
+
+let a;
+@outer2: {
+    a = loop {
+        @inner2: {
+            break 15; # unlabeled should break out of loops
+        }
+    };
+};
+print(a);
+
+let b = @outer3: {
+    loop {
+        @inner3: {
+            break@outer3 20;
+        }
+    }
+};
+
+print(b);
