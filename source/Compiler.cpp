@@ -350,11 +350,28 @@ void Compiler::break_expr(const BreakExpr &expr) {
 }
 
 void Compiler::continue_expr(const ContinueExpr& expr) {
-    emit(OpCode::NIL);
-    emit(OpCode::POP_BLOCK);
-    emit(OpCode::POP);
-    emit(OpCode::PUSH_BLOCK);
-    emit(OpCode::JUMP, current_context().blocks.back().continue_jump_idx);
+    // safety: assert that contains label?
+    for (auto& [_, continue_idx, block_label, type] : std::views::reverse(current_context().blocks)) {
+        if (expr.label) {
+            emit(OpCode::NIL);
+            emit(OpCode::POP_BLOCK);
+            emit(OpCode::POP);
+            if (block_label == expr.label->get_lexeme(source)) {
+                emit(OpCode::PUSH_BLOCK);
+                emit(OpCode::JUMP, continue_idx);
+                break;
+            }
+        } else {
+            emit(OpCode::NIL);
+            emit(OpCode::POP_BLOCK);
+            emit(OpCode::POP);
+            if (type == BlockType::LOOP) { // we want unlabeled continue to continue from only loops
+                emit(OpCode::PUSH_BLOCK);
+                emit(OpCode::JUMP, continue_idx);
+                break;
+            }
+        }
+    }
 }
 
 
