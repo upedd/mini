@@ -49,6 +49,11 @@ public:
         METHOD
     };
 
+    enum class BlockType {
+        BLOCK,
+        LOOP
+    };
+
     /**
      * Blocks enclosing loops or labeled blocks expressions
      */
@@ -56,6 +61,7 @@ public:
         int break_jump_idx;
         int continue_jump_idx;
         std::string label;
+        BlockType type;
     };
 
     struct Context {

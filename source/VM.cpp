@@ -408,6 +408,14 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 push(b);
                 break;
             }
+            case OpCode::END_SCOPE: {
+                // erase locals from current stack
+                int locals_count = fetch();
+                Value top = pop();
+                stack_index -= locals_count;
+                push(top);
+                break;
+            }
         }
         // for (int i = 0; i < stack_index; ++i) {
         //     std::cout << '[' << stack[i].to_string() << "] ";

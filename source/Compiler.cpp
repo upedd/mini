@@ -128,16 +128,18 @@ void Compiler::begin_scope() {
 
 void Compiler::end_scope() {
     --current_depth();
-
+    int locals_count = 0;
     auto &locals = current_locals().get_locals();
     while (!locals.empty() && locals.back().depth > current_depth()) {
-        if (locals.back().is_closed) {
-            emit(OpCode::CLOSE_UPVALUE);
-        } else {
-            emit(OpCode::POP);
-        }
+        // if (locals.back().is_closed) {
+        //     emit(OpCode::CLOSE_UPVALUE);
+        // } else {
+        //     emit(OpCode::POP);
+        // }
+        ++locals_count;
         locals.pop_back();
     }
+    emit(OpCode::END_SCOPE, locals_count);
 }
 
 void Compiler::define_variable(const std::string &name) {
@@ -217,6 +219,11 @@ void Compiler::native_declaration(const NativeStmt &stmt) {
 }
 
 void Compiler::block(const BlockExpr &expr) {
+    int break_idx = current_function()->add_empty_jump_destination();
+    if (expr.label) {
+        emit(OpCode::PUSH_BLOCK);
+        current_context().blocks.emplace_back(break_idx, -1, expr.label->get_lexeme(source), BlockType::BLOCK);
+    }
     begin_scope();
     for (auto& stmt : expr.stmts) {
         visit_stmt(*stmt);
@@ -227,6 +234,10 @@ void Compiler::block(const BlockExpr &expr) {
         emit(OpCode::NIL);
     }
     end_scope();
+    if (expr.label) {
+        current_function()->patch_jump_destination(break_idx, current_program().size());
+        emit(OpCode::POP_BLOCK);
+    }
 }
 
 void Compiler::loop_expression(const LoopExpr &expr) {
@@ -234,7 +245,7 @@ void Compiler::loop_expression(const LoopExpr &expr) {
     emit(OpCode::PUSH_BLOCK);
     int loop_idx = current_function()->add_jump_destination(current_program().size());
     int break_idx = current_function()->add_empty_jump_destination();
-    current_context().blocks.emplace_back(break_idx, continue_idx);
+    current_context().blocks.emplace_back(break_idx, continue_idx, expr.label ? expr.label->get_lexeme(source) : "", BlockType::LOOP);
     //emit(OpCode::PUSH_BLOCK);
     visit_expr(*expr.body);
     emit(OpCode::POP); // ignore expressions result
@@ -250,7 +261,7 @@ void Compiler::while_expr(const WhileExpr &expr) {
     int loop_idx = current_function()->add_jump_destination(current_program().size());
     int break_idx = current_function()->add_empty_jump_destination();
     int end_idx = current_function()->add_empty_jump_destination();
-    current_context().blocks.emplace_back(break_idx, continue_idx);
+    current_context().blocks.emplace_back(break_idx, continue_idx, expr.label ? expr.label->get_lexeme(source) : "", BlockType::LOOP);
     visit_expr(*expr.condition);
     emit(OpCode::JUMP_IF_FALSE, end_idx);
     emit(OpCode::POP); // pop evaluation condition result
@@ -266,7 +277,6 @@ void Compiler::while_expr(const WhileExpr &expr) {
 }
 
 void Compiler::for_expr(const ForExpr &expr) {
-    // TODO: broken continue
     begin_scope();
     visit_expr(*expr.iterable);
     int idx3 = current_function()->add_constant("iterator");
@@ -278,7 +288,7 @@ void Compiler::for_expr(const ForExpr &expr) {
     emit(OpCode::PUSH_BLOCK);
     int break_idx = current_function()->add_empty_jump_destination();
     int end_idx = current_function()->add_empty_jump_destination();
-    current_context().blocks.emplace_back(break_idx, continue_idx);
+    current_context().blocks.emplace_back(break_idx, continue_idx, expr.label ? expr.label->get_lexeme(source) : "", BlockType::LOOP);
     int loop_idx = current_function()->add_jump_destination(current_program().size());
     // condition mixin
     resolve_variable("$iter");
@@ -289,7 +299,6 @@ void Compiler::for_expr(const ForExpr &expr) {
     emit(OpCode::JUMP_IF_FALSE, end_idx);
     emit(OpCode::POP); // pop evaluation condition result
     // item mixin
-
     begin_scope();
     resolve_variable("$iter");
     int idx2 = current_function()->add_constant("next");
@@ -304,7 +313,7 @@ void Compiler::for_expr(const ForExpr &expr) {
     emit(OpCode::JUMP, loop_idx);
     current_function()->patch_jump_destination(end_idx, current_program().size());
     emit(OpCode::POP); // pop evalutaion condition result
-    emit(OpCode::NIL);
+    emit(OpCode::NIL); // default return
     current_function()->patch_jump_destination(break_idx, current_program().size());
     emit(OpCode::POP_BLOCK);
     current_context().blocks.pop_back();
@@ -322,7 +331,22 @@ void Compiler::break_expr(const BreakExpr &expr) {
     } else {
         emit(OpCode::NIL);
     }
-    emit(OpCode::JUMP, current_context().blocks.back().break_jump_idx);
+    // safety: assert that contains label?
+    for (auto& [break_idx, _, block_label, type] : std::views::reverse(current_context().blocks)) {
+        if (expr.label) {
+            if (block_label == expr.label->get_lexeme(source)) {
+                emit(OpCode::JUMP, break_idx);
+                break;
+            }
+            emit(OpCode::POP_BLOCK);
+        } else {
+            if (type == BlockType::LOOP) { // we want unlabeled break to break from only loops
+                emit(OpCode::JUMP, break_idx);
+                break;
+            }
+            emit(OpCode::POP_BLOCK);
+        }
+    }
 }
 
 void Compiler::continue_expr(const ContinueExpr& expr) {

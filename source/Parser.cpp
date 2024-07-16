@@ -387,7 +387,7 @@ Expr Parser::break_expression() {
         label = current;
     }
     if (!has_prefix(next.type)) {
-        return BreakExpr{};
+        return BreakExpr{.label = label};
     }
     return BreakExpr{make_expr_handle(expression()), label};
 }
@@ -409,21 +409,22 @@ Expr Parser::while_expression(std::optional<Token> label) {
 }
 
 Expr Parser::labeled_expression() {
+    Token label = current;
     consume(Token::Type::COLON, "Expected ':' after label");
     // all expressions we can break out of
     if (match(Token::Type::LOOP)) {
-        return loop_expression(current);
+        return loop_expression(label);
     }
     if (match(Token::Type::WHILE)) {
-        return while_expression(current);
+        return while_expression(label);
     }
     if (match(Token::Type::FOR)) {
-        return for_expression(current);
+        return for_expression(label);
     }
     if (match(Token::Type::LEFT_BRACE)) {
-        return block(current);
+        return block(label);
     }
-    error(current, "Only loops and blocks can be labeled.");
+    error(label, "Only loops and blocks can be labeled.");
     return {};
 }
 

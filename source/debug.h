@@ -203,6 +203,9 @@ inline void Disassembler::disassemble(const std::string& name) {
                 simple_opcode("SWAP");
                 break;
             }
+            case OpCode::END_SCOPE: {
+                constant_inst("END_SCOPE");
+            }
         }
     }
 }
