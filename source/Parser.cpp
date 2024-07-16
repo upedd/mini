@@ -83,11 +83,40 @@ std::vector<Stmt> Parser::parse() {
 Stmt Parser::statement_or_expression() {
     if (auto stmt = statement()) {
         return std::move(*stmt);
-    } else {
-        auto expr = std::make_unique<Expr>(expression());
-        consume(Token::Type::SEMICOLON, "Expected ';' after expression.");
-        return ExprStmt(std::move(expr));
     }
+    if (match(Token::Type::IF)) {
+        auto expr = if_expression();
+        match(Token::Type::SEMICOLON);
+        return ExprStmt(std::make_unique<Expr>(std::move(expr)));
+    }
+    if (match(Token::Type::LOOP)) {
+        auto expr = loop_expression();
+        match(Token::Type::SEMICOLON);
+        return ExprStmt(std::make_unique<Expr>(std::move(expr)));
+    }
+    if (match(Token::Type::WHILE)) {
+        auto expr = while_expression();
+        match(Token::Type::SEMICOLON);
+        return ExprStmt(std::make_unique<Expr>(std::move(expr)));
+    }
+    if (match(Token::Type::FOR)) {
+        auto expr = for_expression();
+        match(Token::Type::SEMICOLON);
+        return ExprStmt(std::make_unique<Expr>(std::move(expr)));
+    }
+    if (match(Token::Type::LABEL)) {
+        auto expr = labeled_expression();
+        match(Token::Type::SEMICOLON);
+        return ExprStmt(std::make_unique<Expr>(std::move(expr)));
+    }
+    if (match(Token::Type::RETURN)) {
+        auto expr = return_expression();
+        match(Token::Type::SEMICOLON);
+        return ExprStmt(std::make_unique<Expr>(std::move(expr)));
+    }
+    auto expr = std::make_unique<Expr>(expression());
+    consume(Token::Type::SEMICOLON, "Expected ';' after expression.");
+    return ExprStmt(std::move(expr));
 }
 
 Stmt Parser::native_declaration() {
@@ -135,36 +164,6 @@ std::optional<Stmt> Parser::statement() {
     }
     if (match(Token::Type::NATIVE)) {
         return native_declaration();
-    }
-    if (match(Token::Type::IF)) {
-        auto expr = if_expression();
-        match(Token::Type::SEMICOLON);
-        return ExprStmt(std::make_unique<Expr>(std::move(expr)));
-    }
-    if (match(Token::Type::LOOP)) {
-        auto expr = loop_expression();
-        match(Token::Type::SEMICOLON);
-        return ExprStmt(std::make_unique<Expr>(std::move(expr)));
-    }
-    if (match(Token::Type::WHILE)) {
-        auto expr = while_expression();
-        match(Token::Type::SEMICOLON);
-        return ExprStmt(std::make_unique<Expr>(std::move(expr)));
-    }
-    if (match(Token::Type::FOR)) {
-        auto expr = for_expression();
-        match(Token::Type::SEMICOLON);
-        return ExprStmt(std::make_unique<Expr>(std::move(expr)));
-    }
-    if (match(Token::Type::LABEL)) {
-        auto expr = labeled_expression();
-        match(Token::Type::SEMICOLON);
-        return ExprStmt(std::make_unique<Expr>(std::move(expr)));
-    }
-    if (match(Token::Type::RETURN)) {
-        auto expr = return_expression();
-        match(Token::Type::SEMICOLON);
-        return ExprStmt(std::make_unique<Expr>(std::move(expr)));
     }
     return {};
 }
@@ -332,31 +331,6 @@ Expr Parser::super_() {
     return SuperExpr{current};
 }
 
-Expr Parser::block(std::optional<Token> label) {
-    std::vector<StmtHandle> stmts;
-    ExprHandle expr_at_end = nullptr;
-    while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
-        if (auto stmt = statement()) {
-            stmts.push_back(std::make_unique<Stmt>(std::move(*stmt)));
-        } else {
-            auto expr = expression();
-            if (match(Token::Type::SEMICOLON)) {
-                stmts.push_back(std::make_unique<Stmt>(ExprStmt(std::make_unique<Expr>(std::move(expr)))));
-            } else {
-                expr_at_end = std::make_unique<Expr>(std::move(expr));
-                break;
-            }
-        }
-    }
-    consume(Token::Type::RIGHT_BRACE, "Expected '}' after block.");
-    return BlockExpr{.stmts = std::move(stmts), .expr = std::move(expr_at_end), .label = label};
-}
-
-Expr Parser::loop_expression(std::optional<Token> label) {
-    consume(Token::Type::LEFT_BRACE, "Expected '{' after loop keyword.");
-    return LoopExpr(make_expr_handle(block()), label);
-}
-
 bool has_prefix(Token::Type type) {
     switch (type) {
         case Token::Type::INTEGER:
@@ -384,6 +358,41 @@ bool has_prefix(Token::Type type) {
         return true;
         default: return false;
     }
+}
+
+bool starts_block_expression(Token::Type type) {
+    return type == Token::Type::LABEL
+        || type == Token::Type::LEFT_BRACE
+        || type == Token::Type::LOOP
+        || type == Token::Type::WHILE
+        || type == Token::Type::FOR
+        || type == Token::Type::IF;
+}
+
+Expr Parser::block(std::optional<Token> label) {
+    std::vector<StmtHandle> stmts;
+    ExprHandle expr_at_end = nullptr;
+    while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
+        if (auto stmt = statement()) {
+            stmts.push_back(std::make_unique<Stmt>(std::move(*stmt)));
+        } else {
+            bool is_block_expression = starts_block_expression(next.type);
+            auto expr = expression();
+            if (match(Token::Type::SEMICOLON) || (is_block_expression && (!check(Token::Type::RIGHT_BRACE) || current.type == Token::Type::SEMICOLON))) {
+                stmts.push_back(std::make_unique<Stmt>(ExprStmt(std::make_unique<Expr>(std::move(expr)))));
+            } else {
+                expr_at_end = std::make_unique<Expr>(std::move(expr));
+                break;
+            }
+        }
+    }
+    consume(Token::Type::RIGHT_BRACE, "Expected '}' after block.");
+    return BlockExpr{.stmts = std::move(stmts), .expr = std::move(expr_at_end), .label = label};
+}
+
+Expr Parser::loop_expression(std::optional<Token> label) {
+    consume(Token::Type::LEFT_BRACE, "Expected '{' after loop keyword.");
+    return LoopExpr(make_expr_handle(block()), label);
 }
 
 Expr Parser::break_expression() {

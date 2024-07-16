@@ -103,10 +103,10 @@ public:
         return other < *this;
     }
     bool less_equal(const Value& other) const {
-        return !(*this < other);
+        return !(*this > other);
     }
     bool greater_equal(const Value& other) const {
-        return !(*this > other);
+        return !(*this < other);
     }
 
     Value binary_and(const Value& other) const;

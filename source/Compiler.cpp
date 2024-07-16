@@ -240,23 +240,22 @@ void Compiler::block(const BlockExpr &expr) {
 }
 
 void Compiler::loop_expression(const LoopExpr &expr) {
-    int continue_idx = current_function()->add_jump_destination(current_program().size());
     emit(OpCode::PUSH_BLOCK);
+    int continue_idx = current_function()->add_jump_destination(current_program().size());
     int loop_idx = current_function()->add_jump_destination(current_program().size());
     int break_idx = current_function()->add_empty_jump_destination();
     current_context().blocks.emplace_back(break_idx, continue_idx, expr.label ? expr.label->get_lexeme(source) : "", BlockType::LOOP);
-    //emit(OpCode::PUSH_BLOCK);
     visit_expr(*expr.body);
     emit(OpCode::POP); // ignore expressions result
     emit(OpCode::JUMP, loop_idx);
-    current_function()->patch_jump_destination(current_context().blocks.back().break_jump_idx, current_program().size());
+    current_function()->patch_jump_destination(break_idx, current_program().size());
     current_context().blocks.pop_back();
     emit(OpCode::POP_BLOCK);
 }
 
 void Compiler::while_expr(const WhileExpr &expr) {
-    int continue_idx = current_function()->add_jump_destination(current_program().size());
     emit(OpCode::PUSH_BLOCK);
+    int continue_idx = current_function()->add_jump_destination(current_program().size());
     int loop_idx = current_function()->add_jump_destination(current_program().size());
     int break_idx = current_function()->add_empty_jump_destination();
     int end_idx = current_function()->add_empty_jump_destination();
@@ -283,8 +282,8 @@ void Compiler::for_expr(const ForExpr &expr) {
     emit(OpCode::CALL, 0);
     define_variable("$iter");
     // while loop copy!!!
-    int continue_idx = current_function()->add_jump_destination(current_program().size());
     emit(OpCode::PUSH_BLOCK);
+    int continue_idx = current_function()->add_jump_destination(current_program().size());
     int break_idx = current_function()->add_empty_jump_destination();
     int end_idx = current_function()->add_empty_jump_destination();
     current_context().blocks.emplace_back(break_idx, continue_idx, expr.label ? expr.label->get_lexeme(source) : "", BlockType::LOOP);

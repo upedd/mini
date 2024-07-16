@@ -23,20 +23,18 @@ let d = loop {
 };
 print(d);
 
-
-
 let e = 0;
 @outer: loop {
     e += 1;
     let f = 0;
     @middle: loop {
         f += 1;
-        if f > 10 == 0 { continue }
+        if f > 10 { continue@outer }
         let g = 0;
         @inner: loop {
             g += 1;
             if g > 10 { continue@middle };
-            if g % 2 == 0 { continue@inner }
+            if g % 2 == 0 { continue }
             if e + f + g == 25 {
                 print(e);
                 print(f);
@@ -49,7 +47,7 @@ let e = 0;
 print(e);
 
 let h = 0;
-let i = @outer loop {
+let i = @outer: loop {
     loop {
         h += 1;
         if h == 5 { break@outer 10 }

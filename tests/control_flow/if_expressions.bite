@@ -62,3 +62,20 @@ test4(60);
 test4(43);
 test4(33);
 test4(23);
+
+fun test5(x) {
+    let y = if x > 30 {
+        if x > 40 {
+            10
+        } else {
+            20
+        }; # should be ignored because of semicolon
+    } else {
+        print(30);
+    };
+    print(y);
+}
+
+test5(35);
+test5(45);
+test5(20);

@@ -1,13 +1,14 @@
 native print;
 
 let a = 0;
-while a <= 10 {
+while a < 10 {
     a += 1;
 }
 print(a);
 
 let b = 0;
-while b <= 10 {
+while b < 10 {
+    b += 1;
     if b % 2 == 0 { continue; }
     print(b);
 }
@@ -25,10 +26,11 @@ let e = 0;
 @outer: while true {
     e += 1;
     let f = 0;
-    @middle: while f <= 10 {
+    @middle: while f < 10 {
         f += 1;
         let g = 0;
-        @inner: while g <= 10 {
+        @inner: while g < 10 {
+            g += 1;
             if g % 2 == 0 { continue }
             if e + f + g == 25 {
                 print(e);
