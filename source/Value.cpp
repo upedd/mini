@@ -8,6 +8,6 @@
                           [](bite_float value) {return std::to_string(value);},
                           [](bool value) {return std::string(value ? "True" : "False");},
                           [](Object* object) {return object->to_string();},
-                          [](std::string) {return std::string("string");}
+                          [](std::string s) {return s;}
                       }, *this);
 }

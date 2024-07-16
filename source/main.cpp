@@ -8,7 +8,6 @@
 #include "VM.h"
 
 int main(int argc, char** argv) {
-    std::cout << "Test";
     // TODO error handling
     if (argc != 2) {
         std::cerr << "Usage: ./bite [path to bite file]\n";
@@ -21,8 +20,8 @@ int main(int argc, char** argv) {
     Compiler compiler(source);
     compiler.compile();
     auto& func = compiler.get_main();
-    Disassembler disassembler(func);
-    disassembler.disassemble("main");
+    // Disassembler disassembler(func);
+    // disassembler.disassemble("main");
     auto& functions = compiler.get_functions();
     GarbageCollector gc;
     for (auto* function : functions) {

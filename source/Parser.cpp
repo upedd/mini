@@ -44,7 +44,7 @@ Token Parser::advance() {
             error(current, token.error().message);
         } else {
             next = *token;
-            std::cout << token->to_string(lexer.get_source()) << '\n';
+            //std::cout << token->to_string(lexer.get_source()) << '\n';
             break;
         }
     }

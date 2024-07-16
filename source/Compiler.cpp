@@ -52,7 +52,7 @@ void Compiler::compile() {
         for (auto& err : parser.get_errors()) {
             std::cerr << err.message << '\n';
         }
-        std::cout << stmt_to_string(stmt, source) << '\n';
+        //std::cout << stmt_to_string(stmt, source) << '\n';
         visit_stmt(stmt);
     }
     // default return at main
@@ -503,7 +503,8 @@ void Compiler::literal(const LiteralExpr &expr) {
 }
 
 void Compiler::string_literal(const StringLiteral &expr) {
-    int index = current_function()->add_constant(expr.string); // memory!
+    std::string s = expr.string.substr(1, expr.string.size() - 2);
+    int index = current_function()->add_constant(s); // memory!
     emit(OpCode::CONSTANT, index); // handle overflow!!!
 }
 
