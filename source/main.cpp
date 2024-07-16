@@ -8,6 +8,7 @@
 #include "VM.h"
 
 int main(int argc, char** argv) {
+    std::cout << "Test";
     // TODO error handling
     if (argc != 2) {
         std::cerr << "Usage: ./bite [path to bite file]\n";

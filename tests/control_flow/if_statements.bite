@@ -1,0 +1,22 @@
+native print;
+
+fun test(x) {
+    if x > 30 {
+        print(">30");
+    } else if x > 20 {
+        print(">20");
+    } else if x > 10 {
+        print(">10");
+    } else {
+        print("?");
+    }
+}
+
+test(56);
+test(25);
+test(11);
+test(10);
+test(-23123);
+test(23141);
+test(0);
+test(30);
