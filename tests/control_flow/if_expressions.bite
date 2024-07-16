@@ -1,0 +1,64 @@
+native print;
+# if statements should default to nil
+fun test1(x) {
+    let y = if x == 20 { 5 * 4 };
+    print(y);
+}
+
+test1(20);
+test1(10);
+
+# complex single level if statement
+fun test2(x) {
+    let y = if x > 30 { ">30" } else if x > 20 { ">20" } else if x > 10 { ">10" } else { "?" };
+    print(y);
+}
+
+test2(56);
+test2(25);
+test2(11);
+test2(10);
+test2(-23123);
+test2(23141);
+test2(0);
+test2(30);
+
+# multiple statements in if branches
+fun test3(x) {
+    let a = 5;
+    let y = if x > 30 {
+        let t = 5; # should be able to add locals
+        a += t;
+        ">30"
+    } else {
+        let t = 4;
+        a += t;
+        "?"
+    };
+    print(a);
+    print(y);
+}
+
+test3(40);
+test3(20);
+
+# nested if
+fun test4(x) {
+    let y = if x > 30 {
+        # should be ignored
+        if x > 50 {
+            ">50"
+        }
+        if x > 40 {
+            ">40"
+        } else {
+            ">30"
+        }
+    };
+    print(y);
+}
+
+test4(60);
+test4(43);
+test4(33);
+test4(23);

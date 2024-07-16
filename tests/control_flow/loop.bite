@@ -1,0 +1,60 @@
+native print;
+
+let a = 0;
+loop {
+    a += 1;
+    if a == 10 { break; }
+}
+print(a);
+
+let b = 0;
+loop {
+    b += 1;
+    if b > 10 { break; }
+    if b % 2 == 0 { continue; }
+    print(b);
+
+}
+
+let c = 0;
+let d = loop {
+    c += 1;
+    if c == 5 { break 3 * 4 }
+};
+print(d);
+
+
+
+let e = 0;
+@outer: loop {
+    e += 1;
+    let f = 0;
+    @middle: loop {
+        f += 1;
+        if f > 10 == 0 { continue }
+        let g = 0;
+        @inner: loop {
+            g += 1;
+            if g > 10 { continue@middle };
+            if g % 2 == 0 { continue@inner }
+            print(g);
+            if e + f + g == 25 {
+                print(e);
+                print(f);
+                print(g);
+                break@outer
+            }
+        }
+    }
+}
+print(e);
+
+let h = 0;
+let i = @outer loop {
+    loop {
+        h += 1;
+        if h == 5 { break@outer 10 }
+    }
+}
+print(h);
+print(i);
