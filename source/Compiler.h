@@ -130,7 +130,7 @@ private:
     void function(const FunctionStmt &stmt, FunctionType type);
     void class_declaration(const ClassStmt &stmt);
     void expr_statement(const ExprStmt &stmt);
-    void return_statement(const ReturnStmt &stmt);
+    void retrun_expression(const ReturnExpr &stmt);
 
     void if_expression(const IfExpr &stmt);
 

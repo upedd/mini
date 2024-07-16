@@ -112,11 +112,18 @@ Expr Parser::for_expression(std::optional<Token> label) {
         .label = label};
 }
 
+Expr Parser::return_expression() {
+    ExprHandle expr = nullptr;
+    if (!match(Token::Type::SEMICOLON)) {
+        expr = make_expr_handle(expression());
+        consume(Token::Type::SEMICOLON, "Exepected ';' after return value.");
+    }
+    return ReturnExpr{std::move(expr)};
+}
+
 std::optional<Stmt> Parser::statement() {
     auto exit = scope_exit([this] { if (panic_mode) synchronize(); });
-    if (match(Token::Type::RETURN)) {
-        return return_statement();
-    }
+
     if (match(Token::Type::LET)) {
         return var_declaration();
     }
@@ -151,6 +158,11 @@ std::optional<Stmt> Parser::statement() {
     }
     if (match(Token::Type::LABEL)) {
         auto expr = labeled_expression();
+        match(Token::Type::SEMICOLON);
+        return ExprStmt(std::make_unique<Expr>(std::move(expr)));
+    }
+    if (match(Token::Type::RETURN)) {
+        auto expr = return_expression();
         match(Token::Type::SEMICOLON);
         return ExprStmt(std::make_unique<Expr>(std::move(expr)));
     }
@@ -236,15 +248,6 @@ Expr Parser::if_expression() {
     };
 }
 
-Stmt Parser::return_statement() {
-    ExprHandle expr = nullptr;
-    if (!match(Token::Type::SEMICOLON)) {
-        expr = make_expr_handle(expression());
-        consume(Token::Type::SEMICOLON, "Exepected ';' after return value.");
-    }
-    return ReturnStmt{std::move(expr)};
-}
-
 Parser::Precedence Parser::get_precendece(Token::Type token) {
     switch (token) {
         case Token::Type::PLUS:
@@ -299,6 +302,7 @@ Parser::Precedence Parser::get_precendece(Token::Type token) {
         case Token::Type::WHILE:
         case Token::Type::FOR:
         case Token::Type::LABEL:
+        case Token::Type::RETURN:
         default:
             return Precedence::NONE;
     }
@@ -376,6 +380,7 @@ bool has_prefix(Token::Type type) {
         case Token::Type::WHILE:
         case Token::Type::FOR:
         case Token::Type::LABEL:
+        case Token::Type::RETURN:
         return true;
         default: return false;
     }
@@ -468,6 +473,8 @@ std::optional<Expr> Parser::prefix() {
             return for_expression();
         case Token::Type::LABEL:
             return labeled_expression();
+        case Token::Type::RETURN:
+            return return_expression();
         default: return {};
     }
 }

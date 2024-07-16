@@ -50,6 +50,8 @@ private:
 
     Expr for_expression(std::optional<Token> label = {});
 
+    Expr return_expression();
+
     std::optional<Stmt> statement();
 
     Stmt var_declaration();
@@ -60,8 +62,6 @@ private:
     Stmt expr_statement();
 
     Expr if_expression();
-
-    Stmt return_statement();
 
     // C like precedence
     // References:

@@ -25,19 +25,19 @@ struct BreakExpr;
 struct ContinueExpr;
 struct WhileExpr;
 struct ForExpr;
+struct ReturnExpr;
 
 struct ExprStmt;
 struct VarStmt;
 struct FunctionStmt;
-struct ReturnStmt;
 struct ClassStmt;
 struct NativeStmt;
 
 using Expr = std::variant<LiteralExpr, StringLiteral, UnaryExpr, BinaryExpr, VariableExpr, CallExpr, GetPropertyExpr,
-    SuperExpr, BlockExpr, IfExpr, LoopExpr, BreakExpr, ContinueExpr, WhileExpr, ForExpr>;
+    SuperExpr, BlockExpr, IfExpr, LoopExpr, BreakExpr, ContinueExpr, WhileExpr, ForExpr, ReturnExpr>;
 using ExprHandle = std::unique_ptr<Expr>;
 
-using Stmt = std::variant<VarStmt, ExprStmt, FunctionStmt, ReturnStmt, ClassStmt, NativeStmt>;
+using Stmt = std::variant<VarStmt, ExprStmt, FunctionStmt, ClassStmt, NativeStmt>;
 using StmtHandle = std::unique_ptr<Stmt>;
 
 struct UnaryExpr {
@@ -104,6 +104,7 @@ struct BreakExpr {
     ExprHandle expr;
     std::optional<Token> label;
 };
+
 struct ContinueExpr {
     std::optional<Token> label;
 };
@@ -113,6 +114,10 @@ struct ForExpr {
     ExprHandle iterable;
     ExprHandle body;
     std::optional<Token> label;
+};
+
+struct ReturnExpr {
+    ExprHandle value;
 };
 
 inline ExprHandle make_expr_handle(Expr expr) {
@@ -131,10 +136,6 @@ struct VarStmt {
 };
 
 struct ExprStmt {
-    ExprHandle expr;
-};
-
-struct ReturnStmt {
     ExprHandle expr;
 };
 
@@ -172,12 +173,7 @@ inline std::string stmt_to_string(const Stmt &stmt, std::string_view source) {
                                                  parameters_string,
                                                  expr_to_string(*stmt.body, source));
                           },
-                          [source](const ReturnStmt &stmt) {
-                              if (stmt.expr != nullptr) {
-                                  return std::format("(return {})", expr_to_string(*stmt.expr, source));
-                              }
-                              return std::string("retrun");
-                          },
+
                           [source](const ClassStmt &stmt) {
                               return std::format("(class {})", stmt.name.get_lexeme(source));
                           },
@@ -242,13 +238,13 @@ inline std::string expr_to_string(const Expr &expr, std::string_view source) {
                                                  expr_to_string(*expr.condition, source),
                                                  expr_to_string(*expr.then_expr, source));
                           },
-                          [source](const LoopExpr& expr) {
+                          [source](const LoopExpr &expr) {
                               return std::format("(loop {})", expr_to_string(*expr.body, source));
                           },
-                          [](const BreakExpr& expr) {
+                          [](const BreakExpr &expr) {
                               return std::string("break");
                           },
-                          [](const ContinueExpr& expr) {
+                          [](const ContinueExpr &expr) {
                               return std::string("continue");
                           },
                           [source](const WhileExpr &expr) {
@@ -256,9 +252,15 @@ inline std::string expr_to_string(const Expr &expr, std::string_view source) {
                                                  expr_to_string(*expr.condition, source),
                                                  expr_to_string(*expr.body, source));
                           },
-                          [source](const ForExpr& expr) {
-                                    return std::string("for"); // TODO: implement
-                          }
+                          [source](const ForExpr &expr) {
+                              return std::string("for"); // TODO: implement
+                          },
+                          [source](const ReturnExpr &stmt) {
+                              if (stmt.value != nullptr) {
+                                  return std::format("(return {})", expr_to_string(*stmt.value, source));
+                              }
+                              return std::string("retrun");
+                          },
                       }, expr);
 }
 

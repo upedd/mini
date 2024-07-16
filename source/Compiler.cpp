@@ -193,7 +193,6 @@ void Compiler::visit_stmt(const Stmt &statement) {
                    [this](const VarStmt &stmt) { variable_declaration(stmt); },
                    [this](const FunctionStmt &stmt) { function_declaration(stmt); },
                    [this](const ExprStmt &stmt) { expr_statement(stmt); },
-                   [this](const ReturnStmt &stmt) { return_statement(stmt); },
                    [this](const ClassStmt &stmt) { class_declaration(stmt); },
                    [this](const NativeStmt& stmt) {native_declaration(stmt); }
                }, statement);
@@ -448,16 +447,15 @@ void Compiler::expr_statement(const ExprStmt &stmt) {
     emit(OpCode::POP);
 }
 
-void Compiler::return_statement(const ReturnStmt &stmt) {
-    if (stmt.expr != nullptr) {
-        visit_expr(*stmt.expr);
+void Compiler::retrun_expression(const ReturnExpr &stmt) {
+    if (stmt.value != nullptr) {
+        visit_expr(*stmt.value);
     } else {
         emit(OpCode::NIL);
     }
     emit(OpCode::RETURN);
+    emit(OpCode::NIL);
 }
-
-
 
 void Compiler::if_expression(const IfExpr &stmt) {
     visit_expr(*stmt.condition);
@@ -493,7 +491,8 @@ void Compiler::visit_expr(const Expr &expression) {
                    [this](const BreakExpr& expr) {break_expr(expr);},
                    [this](const ContinueExpr& expr) {continue_expr(expr);},
                    [this](const WhileExpr& expr) {while_expr(expr);},
-                       [this](const ForExpr& expr) {for_expr(expr);}
+                       [this](const ForExpr& expr) {for_expr(expr);},
+                           [this](const ReturnExpr &expr) { retrun_expression(expr); },
                }, expression);
 }
 
