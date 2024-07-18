@@ -73,7 +73,8 @@ const std::vector<std::string> & Compiler::get_natives() {
 
 void Compiler::start_context(Function *function, FunctionType type) {
     context_stack.emplace_back(function, type);
-};
+    current_context().scopes.emplace_back(ScopeType::BLOCK, ""); // TODO: should be function?
+}
 
 void Compiler::end_context() {
     context_stack.pop_back();
@@ -81,6 +82,10 @@ void Compiler::end_context() {
 
 Compiler::Context &Compiler::current_context() {
     return context_stack.back();
+}
+
+Compiler::Scope& Compiler::current_scope() {
+    return current_context().current_scope();
 }
 
 int &Compiler::current_depth() {
@@ -122,8 +127,9 @@ void Compiler::emit_default_return() {
     emit(OpCode::RETURN);
 }
 
-void Compiler::begin_scope() {
+void Compiler::begin_scope(ScopeType type, const std::string& label) {
     ++current_depth();
+    current_context().scopes.emplace_back(type, label);
 }
 
 void Compiler::end_scope() {
@@ -131,15 +137,16 @@ void Compiler::end_scope() {
     int locals_count = 0;
     auto &locals = current_locals().get_locals();
     while (!locals.empty() && locals.back().depth > current_depth()) {
-        // if (locals.back().is_closed) {
-        //     emit(OpCode::CLOSE_UPVALUE);
-        // } else {
-        //     emit(OpCode::POP);
-        // }
+        if (locals.back().is_closed) {
+            emit(OpCode::CLOSE_UPVALUE);
+        } else {
+            emit(OpCode::POP);
+        }
         ++locals_count;
         locals.pop_back();
     }
-    emit(OpCode::END_SCOPE, locals_count);
+    current_context().scopes.pop_back();
+    //emit(OpCode::END_SCOPE, locals_count);
 }
 
 void Compiler::define_variable(const std::string &name) {
@@ -160,6 +167,7 @@ void Compiler::resolve_variable(const std::string &name) {
         emit(OpCode::GET);
         emit(idx); // todo: handle overflow
     }
+    current_scope().items_on_stack++;
 }
 
 int Compiler::resolve_upvalue(const std::string &name) {
@@ -219,11 +227,11 @@ void Compiler::native_declaration(const NativeStmt &stmt) {
 
 void Compiler::block(const BlockExpr &expr) {
     int break_idx = current_function()->add_empty_jump_destination();
-    if (expr.label) {
-        emit(OpCode::PUSH_BLOCK);
-        current_context().blocks.emplace_back(break_idx, -1, expr.label->get_lexeme(source), BlockType::BLOCK);
-    }
-    begin_scope();
+    // if (expr.label) {
+    //     emit(OpCode::PUSH_BLOCK);
+    //     current_context().blocks.emplace_back(break_idx, -1, expr.label->get_lexeme(source), BlockType::BLOCK);
+    // }
+    begin_scope(ScopeType::BLOCK);
     for (auto& stmt : expr.stmts) {
         visit_stmt(*stmt);
     }
@@ -233,24 +241,35 @@ void Compiler::block(const BlockExpr &expr) {
         emit(OpCode::NIL);
     }
     end_scope();
-    if (expr.label) {
-        current_function()->patch_jump_destination(break_idx, current_program().size());
-        emit(OpCode::POP_BLOCK);
-    }
+    // if (expr.label) {
+    //     current_function()->patch_jump_destination(break_idx, current_program().size());
+    //     emit(OpCode::POP_BLOCK);
+    // }
 }
 
 void Compiler::loop_expression(const LoopExpr &expr) {
-    emit(OpCode::PUSH_BLOCK);
+    //emit(OpCode::PUSH_BLOCK);
+    // maybe some special expression scope?
+    emit(OpCode::NIL);
+    define_variable("$loop");
+    std::string label = expr.label ? expr.label->get_lexeme(source) : "";
+    begin_scope(ScopeType::LOOP, label);
+    current_scope().return_slot = current_locals().get("$loop");
     int continue_idx = current_function()->add_jump_destination(current_program().size());
     int loop_idx = current_function()->add_jump_destination(current_program().size());
     int break_idx = current_function()->add_empty_jump_destination();
-    current_context().blocks.emplace_back(break_idx, continue_idx, expr.label ? expr.label->get_lexeme(source) : "", BlockType::LOOP);
+    current_scope().continue_idx = continue_idx;
+    current_scope().break_idx = break_idx;
+    //current_context().blocks.emplace_back(break_idx, continue_idx, expr.label ? expr.label->get_lexeme(source) : "", BlockType::LOOP);
     visit_expr(*expr.body);
     emit(OpCode::POP); // ignore expressions result
+    current_scope().items_on_stack--;
     emit(OpCode::JUMP, loop_idx);
+    end_scope();
     current_function()->patch_jump_destination(break_idx, current_program().size());
-    current_context().blocks.pop_back();
-    emit(OpCode::POP_BLOCK);
+    //current_context().blocks.pop_back();
+
+    //emit(OpCode::POP_BLOCK);
 }
 
 void Compiler::while_expr(const WhileExpr &expr) {
@@ -275,7 +294,7 @@ void Compiler::while_expr(const WhileExpr &expr) {
 }
 
 void Compiler::for_expr(const ForExpr &expr) {
-    begin_scope();
+    begin_scope(ScopeType::BLOCK);
     visit_expr(*expr.iterable);
     int idx3 = current_function()->add_constant("iterator");
     emit(OpCode::GET_PROPERTY, idx3);
@@ -297,7 +316,7 @@ void Compiler::for_expr(const ForExpr &expr) {
     emit(OpCode::JUMP_IF_FALSE, end_idx);
     emit(OpCode::POP); // pop evaluation condition result
     // item mixin
-    begin_scope();
+    begin_scope(ScopeType::BLOCK);
     resolve_variable("$iter");
     int idx2 = current_function()->add_constant("next");
     emit(OpCode::GET_PROPERTY, idx2);
@@ -322,29 +341,51 @@ void Compiler::for_expr(const ForExpr &expr) {
     end_scope();
 }
 
-void Compiler::break_expr(const BreakExpr &expr) {
-    // TODO: parser should check if break expressions actually in loop
-    if (expr.expr) {
-        visit_expr(*expr.expr);
-    } else {
-        emit(OpCode::NIL);
-    }
-    // safety: assert that contains label?
-    for (auto& [break_idx, _, block_label, type] : std::views::reverse(current_context().blocks)) {
-        if (expr.label) {
-            if (block_label == expr.label->get_lexeme(source)) {
-                emit(OpCode::JUMP, break_idx);
-                break;
-            }
-            emit(OpCode::POP_BLOCK);
-        } else {
-            if (type == BlockType::LOOP) { // we want unlabeled break to break from only loops
-                emit(OpCode::JUMP, break_idx);
-                break;
-            }
-            emit(OpCode::POP_BLOCK);
+void Compiler::return_to_scope(int depth) {
+    for (int i = 0; i < depth; ++i) {
+        Scope& scope = current_context().scopes[current_context().scopes.size() - i - 1];
+        for (int j = 0; j < scope.items_on_stack; ++j) {
+            emit(OpCode::POP); // todo: upvalues
         }
     }
+}
+
+void Compiler::break_expr(const BreakExpr &expr) {
+    // TODO: parser should check if break expressions actually in loop
+    // TODO: better way to write this
+    int scope_depth = 0;
+    for (auto& scope : std::views::reverse(current_context().scopes)) {
+        if (expr.label) {
+            if (scope.name == expr.label->get_lexeme(source)) {
+                break;
+            }
+        } else if (scope.type != ScopeType::BLOCK) {
+            break;
+        }
+        ++scope_depth;
+    }
+
+    if (expr.expr) {
+        visit_expr(*expr.expr);
+        emit(OpCode::SET, current_context().scopes[current_context().scopes.size() - scope_depth - 1].return_slot);
+    }
+    // safety: assert that contains label?
+    return_to_scope(scope_depth);
+    // for (auto& scope : std::views::reverse(current_context().scopes)) {
+    //     if (scope.type == ScopeType::BLOCK) {
+    //         // jump to scope
+    //         for (int i = 0; i < scope.items_on_stack; ++i) {
+    //             emit(OpCode::POP); // TODO: upvalues
+    //         }
+    //
+    //     } else {
+    //         for (int i = 0; i < scope.items_on_stack; ++i) {
+    //             emit(OpCode::POP); // TODO: upvalues
+    //         }
+    //         emit(OpCode::JUMP, scope.break_idx);
+    //         break;
+    //     }
+    // }
 }
 
 void Compiler::continue_expr(const ContinueExpr& expr) {
@@ -373,7 +414,7 @@ void Compiler::continue_expr(const ContinueExpr& expr) {
 }
 
 
-
+// TODO: add stack tracking to functions and classes
 void Compiler::function(const FunctionStmt &stmt, FunctionType type) {
     auto function_name = stmt.name.get_lexeme(source);
     auto *function = new Function(function_name, stmt.params.size());
@@ -381,7 +422,7 @@ void Compiler::function(const FunctionStmt &stmt, FunctionType type) {
     //current_function()->add_allocated(function);
 
     start_context(function, type);
-    begin_scope();
+    begin_scope(ScopeType::BLOCK);
     if (type == FunctionType::METHOD || type == FunctionType::CONSTRUCTOR) {
         current_locals().define("this", current_depth());
     } else {
@@ -423,7 +464,7 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
         emit(OpCode::GET);
         emit(current_locals().get(name));
         emit(OpCode::INHERIT);
-        begin_scope();
+        begin_scope(ScopeType::BLOCK);
         current_locals().define("super", current_depth());
     }
     emit(OpCode::GET);
@@ -444,6 +485,7 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
 void Compiler::expr_statement(const ExprStmt &stmt) {
     visit_expr(*stmt.expr);
     emit(OpCode::POP);
+    current_scope().items_on_stack--;
 }
 
 void Compiler::retrun_expression(const ReturnExpr &stmt) {
@@ -451,9 +493,11 @@ void Compiler::retrun_expression(const ReturnExpr &stmt) {
         visit_expr(*stmt.value);
     } else {
         emit(OpCode::NIL);
+        current_scope().items_on_stack++;
     }
     emit(OpCode::RETURN);
     emit(OpCode::NIL);
+    current_scope().items_on_stack++;
 }
 
 void Compiler::if_expression(const IfExpr &stmt) {
@@ -461,16 +505,19 @@ void Compiler::if_expression(const IfExpr &stmt) {
     int jump_to_else = current_function()->add_empty_jump_destination();
     emit(OpCode::JUMP_IF_FALSE, jump_to_else);
     emit(OpCode::POP);
+    current_scope().items_on_stack--;
     visit_expr(*stmt.then_expr);
     auto jump_to_end = current_function()->add_empty_jump_destination();
     emit(OpCode::JUMP, jump_to_end);
     current_function()->patch_jump_destination(jump_to_else, current_program().size());
     emit(OpCode::POP);
+    current_scope().items_on_stack--;
     if (stmt.else_expr) {
         visit_expr(*stmt.else_expr);
     } else {
         emit(OpCode::NIL);
     }
+    current_scope().items_on_stack++;
     current_function()->patch_jump_destination(jump_to_end, current_program().size());
 }
 
@@ -496,12 +543,14 @@ void Compiler::visit_expr(const Expr &expression) {
 }
 
 void Compiler::literal(const LiteralExpr &expr) {
+    current_scope().items_on_stack++;
     int index = current_function()->add_constant(expr.literal);
     emit(OpCode::CONSTANT);
     emit(index); // handle overflow!!!
 }
 
 void Compiler::string_literal(const StringLiteral &expr) {
+    current_scope().items_on_stack++;
     std::string s = expr.string.substr(1, expr.string.size() - 2);
     int index = current_function()->add_constant(s); // memory!
     emit(OpCode::CONSTANT, index); // handle overflow!!!
@@ -521,10 +570,12 @@ void Compiler::unary(const UnaryExpr &expr) {
 }
 
 void Compiler::binary(const BinaryExpr &expr) {
+
     // we don't need to actually visit lhs for plain assigment
     if (expr.op == Token::Type::EQUAL) {
         visit_expr(*expr.right);
         update_lvalue(*expr.left);
+        current_scope().items_on_stack--;
         return;
     }
 
@@ -532,6 +583,7 @@ void Compiler::binary(const BinaryExpr &expr) {
     // we need handle logical expressions before we execute right side as they can short circut
     if (expr.op == Token::Type::AND_AND || expr.op == Token::Type::BAR_BAR) {
         logical(expr);
+        current_scope().items_on_stack--;
         return;
     }
 
@@ -617,6 +669,7 @@ void Compiler::binary(const BinaryExpr &expr) {
         break;
         default: assert("unreachable");
     }
+    current_scope().items_on_stack--;
 }
 
 
@@ -662,7 +715,8 @@ void Compiler::call(const CallExpr &expr) {
     for (const ExprHandle &argument: expr.arguments) {
         visit_expr(*argument);
     }
-    emit(OpCode::CALL, expr.arguments.size());
+    current_scope().items_on_stack -= expr.arguments.size();
+    emit(OpCode::CALL, expr.arguments.size()); // TODO: check
 }
 
 void Compiler::get_property(const GetPropertyExpr &expr) {
@@ -677,4 +731,5 @@ void Compiler::super(const SuperExpr &expr) {
     resolve_variable("this");
     resolve_variable("super");
     emit(OpCode::GET_SUPER, constant);
+    current_scope().items_on_stack++;
 }

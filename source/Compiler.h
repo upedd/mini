@@ -63,6 +63,19 @@ public:
         std::string label;
         BlockType type;
     };
+    enum class ScopeType {
+        LOOP,
+        LABELED_BLOCK,
+        BLOCK
+    };
+    struct Scope {
+        ScopeType type = ScopeType::BLOCK;
+        std::string name;
+        int items_on_stack = 0;
+        int break_idx = -1;
+        int continue_idx = -1;
+        int return_slot = -1;
+    };
 
     /*
      * TODO: comments!
@@ -113,6 +126,11 @@ public:
         std::vector<Upvalue> upvalues;
         std::vector<LocalAllocator*> local_allocators_stack;
         std::vector<Block> blocks;
+        std::vector<Scope> scopes;
+
+        Scope& current_scope() {
+            return scopes.back();
+        }
 
         [[nodiscard]] LocalAllocator& current_local_allocator() const {
             return *local_allocators_stack.back();
@@ -124,6 +142,7 @@ public:
 
     explicit Compiler(std::string_view source) : parser(source), source(source), main("", 0) {
         context_stack.emplace_back(&main, FunctionType::FUNCTION);
+        current_context().scopes.emplace_back(ScopeType::BLOCK, ""); // TODO: special type?
         functions.push_back(&main);
     }
 
@@ -148,10 +167,13 @@ public:
 
     void for_expr(const ForExpr & expr);
 
+    void return_to_scope(int depth);
+
 private:
     void start_context(Function *function, FunctionType type);
     void end_context();
     Context &current_context();
+    Scope& current_scope();
 
     int &current_depth();
     [[nodiscard]] Function *current_function();
@@ -163,7 +185,7 @@ private:
     void emit(OpCode op_code, bite_byte value);
     void emit_default_return();
 
-    void begin_scope();
+    void begin_scope(ScopeType type, const std::string &label = "");
     void end_scope();
 
     void define_variable(const std::string &name);
