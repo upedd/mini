@@ -166,7 +166,7 @@ int Compiler::resolve_upvalue(const std::string &name) {
     int resolved = -1;
     // find first context that contains given name as a local variable
     // while tracking all contexts that we needed to go through while getting to that local
-    std::vector<std::reference_wrapper<Context> > resolve_up;
+    std::vector<std::reference_wrapper<Context>> resolve_up;
     for (Context &context: context_stack | std::views::reverse) {
         resolved = context.locals.get(name);
         if (resolved != -1) {

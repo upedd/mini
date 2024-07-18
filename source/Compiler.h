@@ -64,16 +64,63 @@ public:
         BlockType type;
     };
 
+    /*
+     * TODO: comments!
+     */
+    struct Context;
+    struct LocalAllocator {
+        //bool contains(const std::string& name);
+        void add_local(std::string& name) {
+            context->compiler->emit(OpCode::SET, new_register(name));
+        }
+        void get_local(std::string& name) {
+            context->compiler->emit(OpCode::GET, get_register(name));
+        }
+
+        int get_register(std::string& name) {
+            for (int i = 0; i < locals.size(); ++i) {
+                if (locals[i] == name) return start + i;
+            }
+
+        }
+        int new_register(std::string& name) {
+            locals.push_back(name);
+            return start + locals.size() - 1;
+        }
+        [[nodiscard]] int allocated_count() const {
+            return locals.size();
+        }
+        explicit LocalAllocator(Context* context) : context(context) {
+            start = context->current_local_allocator().start + context->current_local_allocator().allocated_count();
+            context->local_allocators_stack.push_back(this);
+
+        }
+
+        ~LocalAllocator() {
+            context->local_allocators_stack.pop_back();
+        }
+        std::vector<std::string> locals;
+        Context* context;
+        LocalAllocator* outer;
+        int start;
+
+    };
     struct Context {
         Function *function = nullptr;
         FunctionType function_type;
         int current_depth = 0;
         Locals locals;
         std::vector<Upvalue> upvalues;
+        std::vector<LocalAllocator*> local_allocators_stack;
         std::vector<Block> blocks;
 
+        [[nodiscard]] LocalAllocator& current_local_allocator() const {
+            return *local_allocators_stack.back();
+        }
         int add_upvalue(int index, bool is_local);
+        Compiler* compiler;
     };
+
 
     explicit Compiler(std::string_view source) : parser(source), source(source), main("", 0) {
         context_stack.emplace_back(&main, FunctionType::FUNCTION);
