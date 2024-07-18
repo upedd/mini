@@ -23,25 +23,25 @@ public:
 
     struct Local {
         std::string name;
-        int depth;
+        //int depth;
         bool is_closed = false;
     };
 
-    class Locals {
-    public:
-        [[nodiscard]] int get(const std::string &name) const;
-
-        [[nodiscard]] bool contains(const std::string &name, int depth) const;
-
-        bool define(const std::string &name, int depth);
-
-        void close(int local);
-
-        std::vector<Local> &get_locals();
-
-    private:
-        std::vector<Local> locals;
-    };
+    // class Locals {
+    // public:
+    //     [[nodiscard]] int get(const std::string &name) const;
+    //
+    //     [[nodiscard]] bool contains(const std::string &name, int depth) const;
+    //
+    //     bool define(const std::string &name, int depth);
+    //
+    //     void close(int local);
+    //
+    //     std::vector<Local> &get_locals();
+    //
+    // private:
+    //     std::vector<Local> locals;
+    // };
 
     enum class FunctionType {
         FUNCTION,
@@ -68,13 +68,42 @@ public:
         LABELED_BLOCK,
         BLOCK
     };
-    struct Scope {
-        ScopeType type = ScopeType::BLOCK;
-        std::string name;
-        int items_on_stack = 0;
+
+    class Scope {
+    public:
+        Scope(ScopeType type, int slot_start, std::string name = "") : type(type), slot_start(slot_start), name(std::move(name)) {}
+
+        void mark_temporary(int count = 1);
+
+        void pop_temporary(int count = 1);
+
+        int define(const std::string& name);
+        std::optional<int> get(const std::string& name);
+        void close(int index);
+        int next_slot();
+
+        [[nodiscard]] int get_on_stack_count() const {
+            return items_on_stack;
+        }
+
+        [[nodiscard]] const std::string& get_name() const {
+            return name;
+        }
+
+        [[nodiscard]] ScopeType get_type() const {
+            return type;
+        };
+
         int break_idx = -1;
         int continue_idx = -1;
         int return_slot = -1;
+    private:
+        ScopeType type;
+        std::string name;
+        int slot_start;
+        int items_on_stack = 0;
+
+        std::vector<Local> locals;
     };
 
 
@@ -82,15 +111,16 @@ public:
     struct Context {
         Function *function = nullptr;
         FunctionType function_type;
-        int current_depth = 0;
-        Locals locals;
+        //int current_depth = 0;
+        //Locals locals;
         std::vector<Upvalue> upvalues;
-        std::vector<Block> blocks;
         std::vector<Scope> scopes;
 
         Scope& current_scope() {
             return scopes.back();
         }
+
+        std::optional<int> resolve_variable(const std::string &name);
 
         int add_upvalue(int index, bool is_local);
     };
@@ -98,7 +128,7 @@ public:
 
     explicit Compiler(std::string_view source) : parser(source), source(source), main("", 0) {
         context_stack.emplace_back(&main, FunctionType::FUNCTION);
-        current_context().scopes.emplace_back(ScopeType::BLOCK, ""); // TODO: special type?
+        current_context().scopes.emplace_back(ScopeType::BLOCK, 0); // TODO: special type?
         functions.push_back(&main);
     }
 
@@ -130,10 +160,8 @@ private:
     void end_context();
     Context &current_context();
     Scope& current_scope();
-
-    int &current_depth();
     [[nodiscard]] Function *current_function();
-    Locals &current_locals();
+    //Locals &current_locals();
     [[nodiscard]] Program &current_program();
 
     void emit(bite_byte byte);

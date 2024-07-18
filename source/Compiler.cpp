@@ -5,35 +5,75 @@
 
 #include "debug.h"
 
-int Compiler::Locals::get(const std::string &name) const {
-    for (int i = locals.size() - 1; i >= 0; --i) {
-        if (locals[i].name == name) return i;
+// int Compiler::Locals::get(const std::string &name) const {
+//     for (int i = locals.size() - 1; i >= 0; --i) {
+//         if (locals[i].name == name) return i;
+//     }
+//     return -1;
+// }
+//
+// bool Compiler::Locals::contains(const std::string &name, int depth) const {
+//     for (int i = locals.size() - 1; i >= 0; --i) {
+//         auto &[local_name, local_depth, _] = locals[i];
+//         if (local_depth < depth) break;
+//
+//         if (local_name == name) return true;
+//     }
+//     return false;
+// }
+//
+// bool Compiler::Locals::define(const std::string &name, int depth) {
+//     if (contains(name, depth)) return false;
+//     locals.emplace_back(name, depth);
+//     return true;
+// }
+//
+// void Compiler::Locals::close(int local) {
+//     locals[local].is_closed = true;
+// }
+//
+// std::vector<Compiler::Local> &Compiler::Locals::get_locals() {
+//     return locals;
+// }
+
+void Compiler::Scope::mark_temporary(int count) {
+    items_on_stack += count;
+}
+
+void Compiler::Scope::pop_temporary(int count) {
+    items_on_stack -= count;
+}
+
+int Compiler::Scope::define(const std::string &name) {
+    locals.emplace_back(name);
+    //++items_on_stack;
+    return slot_start + items_on_stack;
+}
+
+std::optional<int> Compiler::Scope::get(const std::string &name) {
+    // assumes locals are not mixed with temporaries in scope is that true?
+    for (int i = 0; i < locals.size(); ++i) {
+        if (locals[i].name == name) {
+            return slot_start + i;
+        }
     }
-    return -1;
+    return {};
 }
 
-bool Compiler::Locals::contains(const std::string &name, int depth) const {
-    for (int i = locals.size() - 1; i >= 0; --i) {
-        auto &[local_name, local_depth, _] = locals[i];
-        if (local_depth < depth) break;
+void Compiler::Scope::close(int index) {
+    assert(index < locals.size());
+    locals[index].is_closed = true;
+}
 
-        if (local_name == name) return true;
+int Compiler::Scope::next_slot() {
+    return slot_start + items_on_stack;
+}
+
+std::optional<int> Compiler::Context::resolve_variable(const std::string& name) {
+    for (auto& scope : std::views::reverse(scopes)) {
+        if (auto index = scope.get(name)) return index;
     }
-    return false;
-}
-
-bool Compiler::Locals::define(const std::string &name, int depth) {
-    if (contains(name, depth)) return false;
-    locals.emplace_back(name, depth);
-    return true;
-}
-
-void Compiler::Locals::close(int local) {
-    locals[local].is_closed = true;
-}
-
-std::vector<Compiler::Local> &Compiler::Locals::get_locals() {
-    return locals;
+    return {};
 }
 
 int Compiler::Context::add_upvalue(int index, bool is_local) {
@@ -73,7 +113,7 @@ const std::vector<std::string> & Compiler::get_natives() {
 
 void Compiler::start_context(Function *function, FunctionType type) {
     context_stack.emplace_back(function, type);
-    current_context().scopes.emplace_back(ScopeType::BLOCK, ""); // TODO: should be function?
+    current_context().scopes.emplace_back(ScopeType::BLOCK, 0); // TODO: should be function?
 }
 
 void Compiler::end_context() {
@@ -88,16 +128,9 @@ Compiler::Scope& Compiler::current_scope() {
     return current_context().current_scope();
 }
 
-int &Compiler::current_depth() {
-    return current_context().current_depth;
-}
 
 Function *Compiler::current_function() {
     return current_context().function;
-}
-
-Compiler::Locals &Compiler::current_locals() {
-    return current_context().locals;
 }
 
 Program &Compiler::current_program() {
@@ -120,7 +153,7 @@ void Compiler::emit(OpCode op_code, bite_byte value) {
 void Compiler::emit_default_return() {
     if (current_context().function_type == FunctionType::CONSTRUCTOR) {
         emit(OpCode::GET);
-        emit(current_locals().get("this"));
+        emit(*current_context().resolve_variable("this"));
     } else {
         emit(OpCode::NIL);
     }
@@ -128,35 +161,32 @@ void Compiler::emit_default_return() {
 }
 
 void Compiler::begin_scope(ScopeType type, const std::string& label) {
-    ++current_depth();
-    current_context().scopes.emplace_back(type, label);
+    // ++current_depth();
+    current_context().scopes.emplace_back(type, current_scope().next_slot(), label);
 }
 
 void Compiler::end_scope() {
-    --current_depth();
-    int locals_count = 0;
-    auto &locals = current_locals().get_locals();
-    while (!locals.empty() && locals.back().depth > current_depth()) {
-        if (locals.back().is_closed) {
-            emit(OpCode::CLOSE_UPVALUE);
-        } else {
-            emit(OpCode::POP);
-        }
-        ++locals_count;
-        locals.pop_back();
+    // we don't actually pop lowest item in stack in current scope as it will be our retrun value
+    // isn't that actually kinda confusing?
+    for (int i = 0; i < current_scope().get_on_stack_count() - 1; ++i) {
+        // TODO: upvalues!
+        emit(OpCode::POP);
     }
+
     current_context().scopes.pop_back();
+    //current_scope().mark_temporary();
     //emit(OpCode::END_SCOPE, locals_count);
 }
 
 void Compiler::define_variable(const std::string &name) {
-    if (!current_locals().define(name, current_depth())) {
+    if (current_scope().get(name)) {
         throw Error("Variable redefinition in same scope is disallowed.");
     }
+    current_scope().define(name);
 }
 
 void Compiler::resolve_variable(const std::string &name) {
-    int idx = current_locals().get(name);
+    int idx = *current_context().resolve_variable(name);
 
     if (idx == -1) {
         idx = resolve_upvalue(name);
@@ -167,7 +197,7 @@ void Compiler::resolve_variable(const std::string &name) {
         emit(OpCode::GET);
         emit(idx); // todo: handle overflow
     }
-    current_scope().items_on_stack++;
+    current_scope().mark_temporary();
 }
 
 int Compiler::resolve_upvalue(const std::string &name) {
@@ -176,9 +206,10 @@ int Compiler::resolve_upvalue(const std::string &name) {
     // while tracking all contexts that we needed to go through while getting to that local
     std::vector<std::reference_wrapper<Context>> resolve_up;
     for (Context &context: context_stack | std::views::reverse) {
-        resolved = context.locals.get(name);
+        resolved = *context.resolve_variable(name);
         if (resolved != -1) {
-            context.locals.close(resolved);
+            // TODO: fix upvalues!
+            //context.locals.close(resolved);
             break;
         }
         resolve_up.emplace_back(context);
@@ -222,6 +253,7 @@ void Compiler::native_declaration(const NativeStmt &stmt) {
     natives.push_back(name);
     int idx = current_function()->add_constant(name);
     emit(OpCode::GET_NATIVE, idx);
+    current_scope().mark_temporary();
     define_variable(name);
 }
 
@@ -248,30 +280,26 @@ void Compiler::block(const BlockExpr &expr) {
 }
 
 void Compiler::loop_expression(const LoopExpr &expr) {
-    //emit(OpCode::PUSH_BLOCK);
-    // maybe some special expression scope?
-    emit(OpCode::NIL);
-    current_locals().define("$loop", current_depth());
-    current_scope().items_on_stack++;
     std::string label = expr.label ? expr.label->get_lexeme(source) : "";
     begin_scope(ScopeType::LOOP, label);
-    current_scope().return_slot = current_locals().get("$loop");
+    // to support breaking with values before loop body we create special invisible variable used for returing
+    emit(OpCode::NIL);
+    define_variable("$scope_return");
+    current_scope().mark_temporary();
+    current_scope().return_slot = *current_context().resolve_variable("$scope_return");
     int continue_idx = current_function()->add_jump_destination(current_program().size());
     int loop_idx = current_function()->add_jump_destination(current_program().size());
     int break_idx = current_function()->add_empty_jump_destination();
     current_scope().continue_idx = continue_idx;
     current_scope().break_idx = break_idx;
-    //current_context().blocks.emplace_back(break_idx, continue_idx, expr.label ? expr.label->get_lexeme(source) : "", BlockType::LOOP);
     visit_expr(*expr.body);
     emit(OpCode::POP); // ignore expressions result
-    current_scope().items_on_stack--;
+    current_scope().pop_temporary();
     emit(OpCode::JUMP, loop_idx);
     end_scope();
     current_function()->patch_jump_destination(break_idx, current_program().size());
-    //current_context().blocks.pop_back();
     // should be loop i hope???
-    current_locals().get_locals().pop_back();
-    //emit(OpCode::POP_BLOCK);
+    //cur().get_locals().pop_back();
 }
 
 void Compiler::while_expr(const WhileExpr &expr) {
@@ -280,7 +308,7 @@ void Compiler::while_expr(const WhileExpr &expr) {
     int loop_idx = current_function()->add_jump_destination(current_program().size());
     int break_idx = current_function()->add_empty_jump_destination();
     int end_idx = current_function()->add_empty_jump_destination();
-    current_context().blocks.emplace_back(break_idx, continue_idx, expr.label ? expr.label->get_lexeme(source) : "", BlockType::LOOP);
+    //current_context().blocks.emplace_back(break_idx, continue_idx, expr.label ? expr.label->get_lexeme(source) : "", BlockType::LOOP);
     visit_expr(*expr.condition);
     emit(OpCode::JUMP_IF_FALSE, end_idx);
     emit(OpCode::POP); // pop evaluation condition result
@@ -292,7 +320,7 @@ void Compiler::while_expr(const WhileExpr &expr) {
     emit(OpCode::NIL); // default result for while expression
     current_function()->patch_jump_destination(break_idx, current_program().size());
     emit(OpCode::POP_BLOCK);
-    current_context().blocks.pop_back();
+    //current_context().blocks.pop_back();
 }
 
 void Compiler::for_expr(const ForExpr &expr) {
@@ -307,7 +335,7 @@ void Compiler::for_expr(const ForExpr &expr) {
     int continue_idx = current_function()->add_jump_destination(current_program().size());
     int break_idx = current_function()->add_empty_jump_destination();
     int end_idx = current_function()->add_empty_jump_destination();
-    current_context().blocks.emplace_back(break_idx, continue_idx, expr.label ? expr.label->get_lexeme(source) : "", BlockType::LOOP);
+    //current_context().blocks.emplace_back(break_idx, continue_idx, expr.label ? expr.label->get_lexeme(source) : "", BlockType::LOOP);
     int loop_idx = current_function()->add_jump_destination(current_program().size());
     // condition mixin
     resolve_variable("$iter");
@@ -335,7 +363,7 @@ void Compiler::for_expr(const ForExpr &expr) {
     emit(OpCode::NIL); // default return
     current_function()->patch_jump_destination(break_idx, current_program().size());
     emit(OpCode::POP_BLOCK);
-    current_context().blocks.pop_back();
+    //current_context().blocks.pop_back();
     // at this point operand stack should look like this: [...] [iterator] [return value]
     // and we need to pop the iterator
     // TODO: find better way?
@@ -346,10 +374,14 @@ void Compiler::for_expr(const ForExpr &expr) {
 void Compiler::return_to_scope(int depth) {
     for (int i = 0; i < depth; ++i) {
         Scope& scope = current_context().scopes[current_context().scopes.size() - i - 1];
-        for (int j = 0; j < scope.items_on_stack; ++j) {
+        int pop_count = scope.get_on_stack_count();
+        // we don't actually want to pop last value as it will be our return of our scope
+        if (i == depth - 1) {
+            pop_count--;
+        }
+        for (int j = 0; j < pop_count; ++j) {
             emit(OpCode::POP); // todo: upvalues
         }
-        //current_context().scopes.pop_back();
     }
 }
 
@@ -359,10 +391,10 @@ void Compiler::break_expr(const BreakExpr &expr) {
     int scope_depth = 0;
     for (auto& scope : std::views::reverse(current_context().scopes)) {
         if (expr.label) {
-            if (scope.name == expr.label->get_lexeme(source)) {
+            if (scope.get_name() == expr.label->get_lexeme(source)) {
                 break;
             }
-        } else if (scope.type != ScopeType::BLOCK) {
+        } else if (scope.get_type() == ScopeType::LOOP) { // We want unlabeled breaks to break only from loops
             break;
         }
         ++scope_depth;
@@ -375,38 +407,22 @@ void Compiler::break_expr(const BreakExpr &expr) {
     // safety: assert that contains label?
     return_to_scope(scope_depth + 1);
     emit(OpCode::JUMP, scope.break_idx);
-    // for (auto& scope : std::views::reverse(current_context().scopes)) {
-    //     if (scope.type == ScopeType::BLOCK) {
-    //         // jump to scope
-    //         for (int i = 0; i < scope.items_on_stack; ++i) {
-    //             emit(OpCode::POP); // TODO: upvalues
-    //         }
-    //
-    //     } else {
-    //         for (int i = 0; i < scope.items_on_stack; ++i) {
-    //             emit(OpCode::POP); // TODO: upvalues
-    //         }
-    //         emit(OpCode::JUMP, scope.break_idx);
-    //         break;
-    //     }
-    // }
 }
 
 void Compiler::continue_expr(const ContinueExpr& expr) {
     // safety: assert that contains label?
     int scope_depth = 0;
     for (auto& scope : std::views::reverse(current_context().scopes)) {
-        if (expr.label) {
-            if (scope.name == expr.label->get_lexeme(source)) {
-                break;
-            }
-        } else if (scope.type != ScopeType::BLOCK) {
-            break;
+        if (scope.get_type() == ScopeType::LOOP) { // can only continue from loops
+            if (expr.label) {
+                if (expr.label->get_lexeme(source) == scope.get_name()) {
+                    break;
+                }
+            } else break;
         }
         ++scope_depth;
     }
     Scope& scope = current_context().scopes[current_context().scopes.size() - scope_depth - 1];
-    // safety: assert that contains label?
     return_to_scope(scope_depth + 1);
     emit(OpCode::JUMP, scope.continue_idx);
 }
@@ -422,9 +438,9 @@ void Compiler::function(const FunctionStmt &stmt, FunctionType type) {
     start_context(function, type);
     begin_scope(ScopeType::BLOCK);
     if (type == FunctionType::METHOD || type == FunctionType::CONSTRUCTOR) {
-        current_locals().define("this", current_depth());
+        current_scope().define("this");
     } else {
-        current_locals().define("", current_depth());
+        current_scope().define("");
     }
     for (const Token &param: stmt.params) {
         define_variable(param.get_lexeme(source));
@@ -451,22 +467,22 @@ void Compiler::function(const FunctionStmt &stmt, FunctionType type) {
 void Compiler::class_declaration(const ClassStmt &stmt) {
     std::string name = stmt.name.get_lexeme(source);
     uint8_t constant = current_function()->add_constant(name);
-    current_locals().define(name, current_depth());
+    current_scope().define(name);
 
     emit(OpCode::CLASS);
     emit(constant);
 
     if (stmt.super_name) {
         emit(OpCode::GET);
-        emit(current_locals().get(stmt.super_name->get_lexeme(source)));
+        emit(*current_context().resolve_variable(stmt.super_name->get_lexeme(source)));
         emit(OpCode::GET);
-        emit(current_locals().get(name));
+        emit(*current_context().resolve_variable(name));
         emit(OpCode::INHERIT);
         begin_scope(ScopeType::BLOCK);
-        current_locals().define("super", current_depth());
+        current_scope().define("super");
     }
     emit(OpCode::GET);
-    emit(current_locals().get(name));
+    emit(*current_context().resolve_variable(name));
     for (auto &method: stmt.methods) {
         function(*method, FunctionType::METHOD);
         int idx = current_function()->add_constant(method->name.get_lexeme(source));
@@ -485,7 +501,7 @@ void Compiler::expr_statement(const ExprStmt &stmt) {
     visit_expr(*stmt.expr);
 
     emit(OpCode::POP);
-    current_scope().items_on_stack--;
+    current_scope().pop_temporary();
     //end_scope();
 }
 
@@ -494,11 +510,11 @@ void Compiler::retrun_expression(const ReturnExpr &stmt) {
         visit_expr(*stmt.value);
     } else {
         emit(OpCode::NIL);
-        current_scope().items_on_stack++;
+        current_scope().mark_temporary();
     }
     emit(OpCode::RETURN);
     emit(OpCode::NIL);
-    current_scope().items_on_stack++;
+    current_scope().mark_temporary();
 }
 
 void Compiler::if_expression(const IfExpr &stmt) {
@@ -506,7 +522,7 @@ void Compiler::if_expression(const IfExpr &stmt) {
     int jump_to_else = current_function()->add_empty_jump_destination();
     emit(OpCode::JUMP_IF_FALSE, jump_to_else);
     emit(OpCode::POP);
-    current_scope().items_on_stack--;
+    current_scope().pop_temporary();
     visit_expr(*stmt.then_expr);
     auto jump_to_end = current_function()->add_empty_jump_destination();
     emit(OpCode::JUMP, jump_to_end);
@@ -517,7 +533,7 @@ void Compiler::if_expression(const IfExpr &stmt) {
         visit_expr(*stmt.else_expr);
     } else {
         emit(OpCode::NIL);
-        current_scope().items_on_stack++;
+        current_scope().mark_temporary();
     }
     current_function()->patch_jump_destination(jump_to_end, current_program().size());
 }
@@ -544,14 +560,14 @@ void Compiler::visit_expr(const Expr &expression) {
 }
 
 void Compiler::literal(const LiteralExpr &expr) {
-    current_scope().items_on_stack++;
+    current_scope().mark_temporary();
     int index = current_function()->add_constant(expr.literal);
     emit(OpCode::CONSTANT);
     emit(index); // handle overflow!!!
 }
 
 void Compiler::string_literal(const StringLiteral &expr) {
-    current_scope().items_on_stack++;
+    current_scope().mark_temporary();
     std::string s = expr.string.substr(1, expr.string.size() - 2);
     int index = current_function()->add_constant(s); // memory!
     emit(OpCode::CONSTANT, index); // handle overflow!!!
@@ -576,7 +592,7 @@ void Compiler::binary(const BinaryExpr &expr) {
     if (expr.op == Token::Type::EQUAL) {
         visit_expr(*expr.right);
         update_lvalue(*expr.left);
-        current_scope().items_on_stack--;
+        current_scope().pop_temporary();
         return;
     }
 
@@ -584,7 +600,7 @@ void Compiler::binary(const BinaryExpr &expr) {
     // we need handle logical expressions before we execute right side as they can short circut
     if (expr.op == Token::Type::AND_AND || expr.op == Token::Type::BAR_BAR) {
         logical(expr);
-        current_scope().items_on_stack--;
+        current_scope().pop_temporary();
         return;
     }
 
@@ -670,14 +686,14 @@ void Compiler::binary(const BinaryExpr &expr) {
         break;
         default: assert("unreachable");
     }
-    current_scope().items_on_stack--;
+    current_scope().pop_temporary();
 }
 
 
 void Compiler::update_lvalue(const Expr& lvalue) {
     if (std::holds_alternative<VariableExpr>(lvalue)) {
         std::string name = std::get<VariableExpr>(lvalue).identifier.get_lexeme(source);
-        int idx = current_locals().get(name);
+        int idx = *current_context().resolve_variable(name);
         if (idx == -1) {
             idx = resolve_upvalue(name);
             assert(idx != -1); // todo: error handling
@@ -716,7 +732,7 @@ void Compiler::call(const CallExpr &expr) {
     for (const ExprHandle &argument: expr.arguments) {
         visit_expr(*argument);
     }
-    current_scope().items_on_stack -= expr.arguments.size();
+    current_scope().pop_temporary(expr.arguments.size());
     emit(OpCode::CALL, expr.arguments.size()); // TODO: check
 }
 
@@ -732,5 +748,5 @@ void Compiler::super(const SuperExpr &expr) {
     resolve_variable("this");
     resolve_variable("super");
     emit(OpCode::GET_SUPER, constant);
-    current_scope().items_on_stack++;
+    current_scope().mark_temporary();
 }
