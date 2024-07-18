@@ -251,7 +251,8 @@ void Compiler::loop_expression(const LoopExpr &expr) {
     //emit(OpCode::PUSH_BLOCK);
     // maybe some special expression scope?
     emit(OpCode::NIL);
-    define_variable("$loop");
+    current_locals().define("$loop", current_depth());
+    current_scope().items_on_stack++;
     std::string label = expr.label ? expr.label->get_lexeme(source) : "";
     begin_scope(ScopeType::LOOP, label);
     current_scope().return_slot = current_locals().get("$loop");
@@ -268,7 +269,8 @@ void Compiler::loop_expression(const LoopExpr &expr) {
     end_scope();
     current_function()->patch_jump_destination(break_idx, current_program().size());
     //current_context().blocks.pop_back();
-
+    // should be loop i hope???
+    current_locals().get_locals().pop_back();
     //emit(OpCode::POP_BLOCK);
 }
 
@@ -347,6 +349,7 @@ void Compiler::return_to_scope(int depth) {
         for (int j = 0; j < scope.items_on_stack; ++j) {
             emit(OpCode::POP); // todo: upvalues
         }
+        //current_context().scopes.pop_back();
     }
 }
 
@@ -364,13 +367,14 @@ void Compiler::break_expr(const BreakExpr &expr) {
         }
         ++scope_depth;
     }
-
+    Scope& scope = current_context().scopes[current_context().scopes.size() - scope_depth - 1];
     if (expr.expr) {
         visit_expr(*expr.expr);
-        emit(OpCode::SET, current_context().scopes[current_context().scopes.size() - scope_depth - 1].return_slot);
+        emit(OpCode::SET, scope.return_slot);
     }
     // safety: assert that contains label?
-    return_to_scope(scope_depth);
+    return_to_scope(scope_depth + 1);
+    emit(OpCode::JUMP, scope.break_idx);
     // for (auto& scope : std::views::reverse(current_context().scopes)) {
     //     if (scope.type == ScopeType::BLOCK) {
     //         // jump to scope
@@ -390,27 +394,21 @@ void Compiler::break_expr(const BreakExpr &expr) {
 
 void Compiler::continue_expr(const ContinueExpr& expr) {
     // safety: assert that contains label?
-    for (auto& [_, continue_idx, block_label, type] : std::views::reverse(current_context().blocks)) {
+    int scope_depth = 0;
+    for (auto& scope : std::views::reverse(current_context().scopes)) {
         if (expr.label) {
-            emit(OpCode::NIL);
-            emit(OpCode::POP_BLOCK);
-            emit(OpCode::POP);
-            if (block_label == expr.label->get_lexeme(source)) {
-                emit(OpCode::PUSH_BLOCK);
-                emit(OpCode::JUMP, continue_idx);
+            if (scope.name == expr.label->get_lexeme(source)) {
                 break;
             }
-        } else {
-            emit(OpCode::NIL);
-            emit(OpCode::POP_BLOCK);
-            emit(OpCode::POP);
-            if (type == BlockType::LOOP) { // we want unlabeled continue to continue from only loops
-                emit(OpCode::PUSH_BLOCK);
-                emit(OpCode::JUMP, continue_idx);
-                break;
-            }
+        } else if (scope.type != ScopeType::BLOCK) {
+            break;
         }
+        ++scope_depth;
     }
+    Scope& scope = current_context().scopes[current_context().scopes.size() - scope_depth - 1];
+    // safety: assert that contains label?
+    return_to_scope(scope_depth + 1);
+    emit(OpCode::JUMP, scope.continue_idx);
 }
 
 
@@ -483,9 +481,12 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
 }
 
 void Compiler::expr_statement(const ExprStmt &stmt) {
+    //begin_scope(ScopeType::BLOCK);
     visit_expr(*stmt.expr);
+
     emit(OpCode::POP);
     current_scope().items_on_stack--;
+    //end_scope();
 }
 
 void Compiler::retrun_expression(const ReturnExpr &stmt) {
@@ -511,13 +512,13 @@ void Compiler::if_expression(const IfExpr &stmt) {
     emit(OpCode::JUMP, jump_to_end);
     current_function()->patch_jump_destination(jump_to_else, current_program().size());
     emit(OpCode::POP);
-    current_scope().items_on_stack--;
+    //current_scope().items_on_stack--;
     if (stmt.else_expr) {
         visit_expr(*stmt.else_expr);
     } else {
         emit(OpCode::NIL);
+        current_scope().items_on_stack++;
     }
-    current_scope().items_on_stack++;
     current_function()->patch_jump_destination(jump_to_end, current_program().size());
 }
 
