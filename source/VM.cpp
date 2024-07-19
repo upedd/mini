@@ -388,34 +388,6 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 push(natives[name]);
                 break;
             }
-            case OpCode::PUSH_BLOCK: {
-                block_stack.push_back(stack_index);
-                break;
-            }
-            case OpCode::POP_BLOCK: {
-                // TODO: does that work with upvalues?
-                Value val = stack[stack_index - 1];
-                close_upvalues(stack[block_stack.back()]);
-                stack_index = block_stack.back();
-                block_stack.pop_back();
-                push(val);
-                break;
-            }
-            case OpCode::SWAP: {
-                auto a = pop();
-                auto b = pop();
-                push(a);
-                push(b);
-                break;
-            }
-            case OpCode::END_SCOPE: {
-                // erase locals from current stack
-                int locals_count = fetch();
-                Value top = pop();
-                stack_index -= locals_count;
-                push(top);
-                break;
-            }
         }
         for (int i = 0; i < stack_index; ++i) {
             std::cout << '[' << stack[i].to_string() << "] ";

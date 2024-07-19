@@ -139,29 +139,34 @@ void Compiler::emit_default_return() {
 }
 
 void Compiler::begin_scope(ScopeType type, const std::string& label) {
-    // ++current_depth();
     current_context().scopes.emplace_back(type, current_scope().next_slot(), label);
 }
 
-void Compiler::end_scope() {
-    // we don't actually pop lowest item in stack in current scope as it will be our retrun value
-    // isn't that actually kinda confusing?
-    for (int i = 0; i < current_scope().get_temporaries_count(); ++i) {
-        emit(OpCode::POP);
-    }
-    //auto& locals = current_scope().get_locals();
-    // don't erase first
-    for (auto& local : current_scope().get_locals() | std::views::drop(1) | std::views::reverse) {
-        if (local.is_closed) {
-            emit(OpCode::CLOSE_UPVALUE);
-        } else {
+void Compiler::pop_out_of_scopes(int depth) {
+    for (int i = 0; i < depth; ++i) {
+        Scope& scope = current_context().scopes[current_context().scopes.size() - i - 1];
+        // every scope in bite is an expression which should produce a value
+        // so we actually leave last value on the stack
+        // every time we begin scope we have to remeber that (TODO: maybe this system could be rewritten more clearly)
+        for (int j = 0; j < scope.get_temporaries_count(); ++j) {
             emit(OpCode::POP);
         }
+        bool leave_last = i == depth - 1;
+        auto& locals =  scope.get_locals();
+        for (int j = locals.size() - 1; j >= leave_last; --j) {
+            if (locals[j].is_closed) {
+                emit(OpCode::CLOSE_UPVALUE);
+            } else {
+                emit(OpCode::POP);
+            }
+        }
     }
+}
+
+void Compiler::end_scope() {
+    pop_out_of_scopes(1);
     current_context().scopes.pop_back();
-    current_scope().mark_temporary(); // it leaves value on stack
-    //current_scope().mark_temporary();
-    //emit(OpCode::END_SCOPE, locals_count);
+    current_scope().mark_temporary();
 }
 
 void Compiler::define_variable(const std::string &name) {
@@ -241,11 +246,8 @@ void Compiler::native_declaration(const NativeStmt &stmt) {
 
 void Compiler::block(const BlockExpr &expr) {
     int break_idx = current_function()->add_empty_jump_destination();
-    // if (expr.label) {
-    //     emit(OpCode::PUSH_BLOCK);
-    //     current_context().blocks.emplace_back(break_idx, -1, expr.label->get_lexeme(source), BlockType::BLOCK);
-    // }
-    begin_scope(ScopeType::BLOCK);
+    begin_scope(ScopeType::BLOCK, expr.label ? expr.label->get_lexeme(source) : "");
+    current_scope().break_idx = break_idx;
     emit(OpCode::NIL);
     define_variable("$scope_return");
     current_scope().return_slot = *current_scope().get("$scope_return");
@@ -259,6 +261,7 @@ void Compiler::block(const BlockExpr &expr) {
         current_scope().pop_temporary();
     }
     end_scope();
+    current_function()->patch_jump_destination(break_idx, current_program().size());
 }
 
 void Compiler::loop_expression(const LoopExpr &expr) {
@@ -360,7 +363,7 @@ void Compiler::for_expr(const ForExpr &expr) {
     // ignore block expression result
     emit(OpCode::POP);
     current_scope().pop_temporary();
-    return_to_scope(1);
+    pop_out_of_scopes(1);
     emit(OpCode::JUMP, continue_idx);
     end_scope();
     current_function()->patch_jump_destination(end_idx, current_program().size());
@@ -372,19 +375,7 @@ void Compiler::for_expr(const ForExpr &expr) {
     end_scope();
 }
 
-void Compiler::return_to_scope(int depth) {
-    for (int i = 0; i < depth; ++i) {
-        Scope& scope = current_context().scopes[current_context().scopes.size() - i - 1];
-        int pop_count = scope.get_on_stack_count();
-        // we don't actually want to pop last value as it will be our return of our scope
-        if (i == depth - 1) {
-            pop_count--;
-        }
-        for (int j = 0; j < pop_count; ++j) {
-            emit(OpCode::POP); // todo: upvalues
-        }
-    }
-}
+
 
 void Compiler::break_expr(const BreakExpr &expr) {
     // TODO: parser should check if break expressions actually in loop
@@ -407,7 +398,7 @@ void Compiler::break_expr(const BreakExpr &expr) {
         emit(OpCode::POP);
         current_scope().pop_temporary();
     }
-    return_to_scope(scope_depth + 1);
+    pop_out_of_scopes(scope_depth + 1);
     emit(OpCode::JUMP, scope.break_idx);
 }
 
@@ -425,7 +416,7 @@ void Compiler::continue_expr(const ContinueExpr& expr) {
         ++scope_depth;
     }
     Scope& scope = current_context().scopes[current_context().scopes.size() - scope_depth - 1];
-    return_to_scope(scope_depth + 1);
+    pop_out_of_scopes(scope_depth + 1);
     emit(OpCode::JUMP, scope.continue_idx);
 }
 
@@ -435,7 +426,6 @@ void Compiler::function(const FunctionStmt &stmt, FunctionType type) {
     auto function_name = stmt.name.get_lexeme(source);
     auto *function = new Function(function_name, stmt.params.size());
     functions.push_back(function);
-    //current_function()->add_allocated(function);
 
     start_context(function, type);
     begin_scope(ScopeType::BLOCK);
@@ -499,12 +489,10 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
 }
 
 void Compiler::expr_statement(const ExprStmt &stmt) {
-    //begin_scope(ScopeType::BLOCK);
     visit_expr(*stmt.expr);
 
     emit(OpCode::POP);
     current_scope().pop_temporary();
-    //end_scope();
 }
 
 void Compiler::retrun_expression(const ReturnExpr &stmt) {
@@ -523,27 +511,19 @@ void Compiler::if_expression(const IfExpr &stmt) {
     visit_expr(*stmt.condition);
     int jump_to_else = current_function()->add_empty_jump_destination();
     emit(OpCode::JUMP_IF_FALSE, jump_to_else);
-    // true code path
     emit(OpCode::POP);
     current_scope().pop_temporary();
     visit_expr(*stmt.then_expr);
-    //current_scope().pop_temporary(); // for us this temporary should not exist?
     auto jump_to_end = current_function()->add_empty_jump_destination();
     emit(OpCode::JUMP, jump_to_end);
-    // else code path
     current_function()->patch_jump_destination(jump_to_else, current_program().size());
     emit(OpCode::POP);
-    //current_scope().items_on_stack--;
-    // TODO: else!
     if (stmt.else_expr) {
-        current_scope().pop_temporary(); // ignore current result exists?
+        current_scope().pop_temporary(); // current result does not exist
         visit_expr(*stmt.else_expr); // will mark new
     } else {
         emit(OpCode::NIL);
     }
-    // expression should produce value!
-    //emit(OpCode::NIL);
-    //current_scope().mark_temporary();
     current_function()->patch_jump_destination(jump_to_end, current_program().size());
 }
 

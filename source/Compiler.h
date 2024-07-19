@@ -23,25 +23,8 @@ public:
 
     struct Local {
         std::string name;
-        //int depth;
         bool is_closed = false;
     };
-
-    // class Locals {
-    // public:
-    //     [[nodiscard]] int get(const std::string &name) const;
-    //
-    //     [[nodiscard]] bool contains(const std::string &name, int depth) const;
-    //
-    //     bool define(const std::string &name, int depth);
-    //
-    //     void close(int local);
-    //
-    //     std::vector<Local> &get_locals();
-    //
-    // private:
-    //     std::vector<Local> locals;
-    // };
 
     enum class FunctionType {
         FUNCTION,
@@ -49,20 +32,6 @@ public:
         METHOD
     };
 
-    enum class BlockType {
-        BLOCK,
-        LOOP
-    };
-
-    /**
-     * Blocks enclosing loops or labeled blocks expressions
-     */
-    struct Block {
-        int break_jump_idx;
-        int continue_jump_idx;
-        std::string label;
-        BlockType type;
-    };
     enum class ScopeType {
         LOOP,
         LABELED_BLOCK,
@@ -117,13 +86,9 @@ public:
         std::vector<Local> locals;
     };
 
-
-
     struct Context {
         Function *function = nullptr;
         FunctionType function_type;
-        //int current_depth = 0;
-        //Locals locals;
         std::vector<Upvalue> upvalues;
         std::vector<Scope> scopes;
 
@@ -152,29 +117,12 @@ public:
     const std::vector<Function*>& get_functions();
     const std::vector<std::string>& get_natives();
 
-    void native_declaration(const NativeStmt& stmt);
-
-    void block(const BlockExpr & expr);
-
-    void loop_expression(const LoopExpr & expr);
-
-    void break_expr(const BreakExpr & expr);
-
-    void continue_expr(const ContinueExpr &expr);
-
-    void while_expr(const WhileExpr & expr);
-
-    void for_expr(const ForExpr & expr);
-
-    void return_to_scope(int depth);
-
 private:
     void start_context(Function *function, FunctionType type);
     void end_context();
     Context &current_context();
     Scope& current_scope();
     [[nodiscard]] Function *current_function();
-    //Locals &current_locals();
     [[nodiscard]] Program &current_program();
 
     void emit(bite_byte byte);
@@ -184,6 +132,7 @@ private:
 
     void begin_scope(ScopeType type, const std::string &label = "");
     void end_scope();
+    void pop_out_of_scopes(int depth);
 
     void define_variable(const std::string &name);
     void resolve_variable(const std::string &name);
@@ -196,11 +145,19 @@ private:
     void function(const FunctionStmt &stmt, FunctionType type);
     void class_declaration(const ClassStmt &stmt);
     void expr_statement(const ExprStmt &stmt);
-    void retrun_expression(const ReturnExpr &stmt);
+    void native_declaration(const NativeStmt& stmt);
 
     void if_expression(const IfExpr &stmt);
 
     void visit_expr(const Expr &expr);
+
+    void block(const BlockExpr & expr);
+    void loop_expression(const LoopExpr & expr);
+    void break_expr(const BreakExpr & expr);
+    void continue_expr(const ContinueExpr &expr);
+    void while_expr(const WhileExpr & expr);
+    void for_expr(const ForExpr & expr);
+    void retrun_expression(const ReturnExpr &stmt);
 
     void literal(const LiteralExpr &expr);
     void string_literal(const StringLiteral &expr);

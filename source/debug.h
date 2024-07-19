@@ -191,21 +191,6 @@ inline void Disassembler::disassemble(const std::string& name) {
                 constant_inst("GET_NATIVE");
                 break;
             }
-            case OpCode::PUSH_BLOCK: {
-                simple_opcode("PUSH_BLOCK");
-                break;
-            }
-            case OpCode::POP_BLOCK: {
-                simple_opcode("POP_BLOCK");
-                break;
-            }
-            case OpCode::SWAP: {
-                simple_opcode("SWAP");
-                break;
-            }
-            case OpCode::END_SCOPE: {
-                constant_inst("END_SCOPE");
-            }
         }
     }
 }
