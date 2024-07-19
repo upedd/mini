@@ -56,6 +56,15 @@ int Compiler::Context::add_upvalue(int index, bool is_local) {
     return upvalues.size() - 1;
 }
 
+void Compiler::Context::close_upvalue(int index) {
+    for (auto& scope : scopes) {
+        if (scope.get_start_slot() <= index) {
+            scope.close(index - scope.get_start_slot());
+            break;
+        }
+    }
+}
+
 void Compiler::compile() {
     for (auto &stmt: parser.parse()) {
         for (auto& err : parser.get_errors()) {
@@ -137,13 +146,20 @@ void Compiler::begin_scope(ScopeType type, const std::string& label) {
 void Compiler::end_scope() {
     // we don't actually pop lowest item in stack in current scope as it will be our retrun value
     // isn't that actually kinda confusing?
-    for (int i = 0; i < current_scope().get_on_stack_count() - 1; ++i) {
-        // TODO: upvalues!
+    for (int i = 0; i < current_scope().get_temporaries_count(); ++i) {
         emit(OpCode::POP);
     }
-
+    //auto& locals = current_scope().get_locals();
+    // don't erase first
+    for (auto& local : current_scope().get_locals() | std::views::drop(1) | std::views::reverse) {
+        if (local.is_closed) {
+            emit(OpCode::CLOSE_UPVALUE);
+        } else {
+            emit(OpCode::POP);
+        }
+    }
     current_context().scopes.pop_back();
-    current_scope().mark_temporary(); // it produces a values actually
+    current_scope().mark_temporary(); // it leaves value on stack
     //current_scope().mark_temporary();
     //emit(OpCode::END_SCOPE, locals_count);
 }
@@ -156,45 +172,41 @@ void Compiler::define_variable(const std::string &name) {
 }
 
 void Compiler::resolve_variable(const std::string &name) {
-    int idx = *current_context().resolve_variable(name);
-
-    if (idx == -1) {
-        idx = resolve_upvalue(name);
-        assert(idx != -1); // todo: error handling
-        emit(OpCode::GET_UPVALUE);
-        emit(idx);
+    if (auto idx = current_context().resolve_variable(name)) {
+        emit(OpCode::GET, *idx); // todo: handle overflow
     } else {
-        emit(OpCode::GET);
-        emit(idx); // todo: handle overflow
+        idx = resolve_upvalue(name);
+        assert(idx.has_value()); // todo: error handling
+        emit(OpCode::GET_UPVALUE, *idx);
     }
     current_scope().mark_temporary();
 }
 
 int Compiler::resolve_upvalue(const std::string &name) {
-    int resolved = -1;
+    std::optional<int> resolved;
     // find first context that contains given name as a local variable
     // while tracking all contexts that we needed to go through while getting to that local
     std::vector<std::reference_wrapper<Context>> resolve_up;
     for (Context &context: context_stack | std::views::reverse) {
-        resolved = *context.resolve_variable(name);
-        if (resolved != -1) {
+        resolved = context.resolve_variable(name);
+        if (resolved) {
             // TODO: fix upvalues!
-            //context.locals.close(resolved);
+            context.close_upvalue(*resolved);
             break;
         }
         resolve_up.emplace_back(context);
     }
     // if we didn't find any local variable with given name return -1;
-    if (resolved == -1) return resolved;
+    if (!resolved) return -1;
     // tracks whetever upvalue points to local value or another upvalue
     bool is_local = true;
     // go from context that contains local variable to context that we are resolving from
     for (std::reference_wrapper<Context> context: resolve_up | std::views::reverse) {
-        resolved = context.get().add_upvalue(resolved, is_local);
+        resolved = context.get().add_upvalue(*resolved, is_local);
         if (is_local) is_local = false; // only top level context points to local variable
     }
 
-    return resolved;
+    return *resolved;
 }
 
 void Compiler::visit_stmt(const Stmt &statement) {
@@ -505,25 +517,27 @@ void Compiler::if_expression(const IfExpr &stmt) {
     visit_expr(*stmt.condition);
     int jump_to_else = current_function()->add_empty_jump_destination();
     emit(OpCode::JUMP_IF_FALSE, jump_to_else);
+    // true code path
     emit(OpCode::POP);
     current_scope().pop_temporary();
     visit_expr(*stmt.then_expr);
-    current_scope().pop_temporary(); // for us this temporary should not exist?
+    //current_scope().pop_temporary(); // for us this temporary should not exist?
     auto jump_to_end = current_function()->add_empty_jump_destination();
     emit(OpCode::JUMP, jump_to_end);
+    // else code path
     current_function()->patch_jump_destination(jump_to_else, current_program().size());
     emit(OpCode::POP);
     //current_scope().items_on_stack--;
     // TODO: else!
     if (stmt.else_expr) {
-        visit_expr(*stmt.else_expr);
+        current_scope().pop_temporary(); // ignore current result exists?
+        visit_expr(*stmt.else_expr); // will mark new
     } else {
-        // emit(OpCode::NIL);
-        // current_scope().mark_temporary();
+        emit(OpCode::NIL);
     }
     // expression should produce value!
-    emit(OpCode::NIL);
-    current_scope().mark_temporary();
+    //emit(OpCode::NIL);
+    //current_scope().mark_temporary();
     current_function()->patch_jump_destination(jump_to_end, current_program().size());
 }
 
@@ -682,15 +696,12 @@ void Compiler::binary(const BinaryExpr &expr) {
 void Compiler::update_lvalue(const Expr& lvalue) {
     if (std::holds_alternative<VariableExpr>(lvalue)) {
         std::string name = std::get<VariableExpr>(lvalue).identifier.get_lexeme(source);
-        int idx = *current_context().resolve_variable(name);
-        if (idx == -1) {
-            idx = resolve_upvalue(name);
-            assert(idx != -1); // todo: error handling
-            emit(OpCode::SET_UPVALUE);
-            emit(idx);
+        if (auto idx = current_context().resolve_variable(name)) {
+            emit(OpCode::SET, *idx); // todo: handle overflow
         } else {
-            emit(OpCode::SET);
-            emit(idx); // todo: handle overflow
+            idx = resolve_upvalue(name);
+            assert(idx.has_value()); // todo: error handling
+            emit(OpCode::SET_UPVALUE, *idx);
         }
     } else if (std::holds_alternative<GetPropertyExpr>(lvalue)) {
         const auto& property_expr = std::get<GetPropertyExpr>(lvalue);

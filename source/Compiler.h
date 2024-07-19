@@ -86,13 +86,24 @@ public:
             return temporaries + locals.size();
         }
 
+        [[nodiscard]] int get_temporaries_count() const {
+            return temporaries;
+        }
+
         [[nodiscard]] const std::string& get_name() const {
             return name;
         }
 
         [[nodiscard]] ScopeType get_type() const {
             return type;
-        };
+        }
+
+        [[nodiscard]] int get_start_slot() const {
+            return slot_start;
+        }
+        [[nodiscard]] const std::vector<Local>& get_locals() const {
+            return locals;
+        }
 
         int break_idx = -1;
         int continue_idx = -1;
@@ -123,6 +134,8 @@ public:
         std::optional<int> resolve_variable(const std::string &name);
 
         int add_upvalue(int index, bool is_local);
+
+        void close_upvalue(int index);
     };
 
 
