@@ -5,49 +5,18 @@
 
 #include "debug.h"
 
-// int Compiler::Locals::get(const std::string &name) const {
-//     for (int i = locals.size() - 1; i >= 0; --i) {
-//         if (locals[i].name == name) return i;
-//     }
-//     return -1;
-// }
-//
-// bool Compiler::Locals::contains(const std::string &name, int depth) const {
-//     for (int i = locals.size() - 1; i >= 0; --i) {
-//         auto &[local_name, local_depth, _] = locals[i];
-//         if (local_depth < depth) break;
-//
-//         if (local_name == name) return true;
-//     }
-//     return false;
-// }
-//
-// bool Compiler::Locals::define(const std::string &name, int depth) {
-//     if (contains(name, depth)) return false;
-//     locals.emplace_back(name, depth);
-//     return true;
-// }
-//
-// void Compiler::Locals::close(int local) {
-//     locals[local].is_closed = true;
-// }
-//
-// std::vector<Compiler::Local> &Compiler::Locals::get_locals() {
-//     return locals;
-// }
-
 void Compiler::Scope::mark_temporary(int count) {
-    items_on_stack += count;
+    temporaries += count;
 }
 
 void Compiler::Scope::pop_temporary(int count) {
-    items_on_stack -= count;
+    temporaries -= count;
 }
 
 int Compiler::Scope::define(const std::string &name) {
     locals.emplace_back(name);
     //++items_on_stack;
-    return slot_start + items_on_stack;
+    return slot_start + temporaries;
 }
 
 std::optional<int> Compiler::Scope::get(const std::string &name) {
@@ -66,7 +35,7 @@ void Compiler::Scope::close(int index) {
 }
 
 int Compiler::Scope::next_slot() {
-    return slot_start + items_on_stack;
+    return slot_start + locals.size() + temporaries;
 }
 
 std::optional<int> Compiler::Context::resolve_variable(const std::string& name) {
@@ -174,6 +143,7 @@ void Compiler::end_scope() {
     }
 
     current_context().scopes.pop_back();
+    current_scope().mark_temporary(); // it produces a values actually
     //current_scope().mark_temporary();
     //emit(OpCode::END_SCOPE, locals_count);
 }
@@ -240,6 +210,7 @@ void Compiler::visit_stmt(const Stmt &statement) {
 void Compiler::variable_declaration(const VarStmt &expr) {
     auto name = expr.name.get_lexeme(source);
     visit_expr(*expr.value);
+    current_scope().pop_temporary();
     define_variable(name);
 }
 
@@ -253,7 +224,6 @@ void Compiler::native_declaration(const NativeStmt &stmt) {
     natives.push_back(name);
     int idx = current_function()->add_constant(name);
     emit(OpCode::GET_NATIVE, idx);
-    current_scope().mark_temporary();
     define_variable(name);
 }
 
@@ -264,14 +234,23 @@ void Compiler::block(const BlockExpr &expr) {
     //     current_context().blocks.emplace_back(break_idx, -1, expr.label->get_lexeme(source), BlockType::BLOCK);
     // }
     begin_scope(ScopeType::BLOCK);
+    emit(OpCode::NIL);
+    //current_scope().mark_temporary();
+    define_variable("$scope_return");
+    current_scope().return_slot = *current_scope().get("$scope_return");
     for (auto& stmt : expr.stmts) {
         visit_stmt(*stmt);
     }
     if (expr.expr) {
         visit_expr(*expr.expr);
+        emit(OpCode::SET, current_scope().return_slot);
+        emit(OpCode::POP);
+        current_scope().pop_temporary();
     } else {
-        emit(OpCode::NIL);
+        //emit(OpCode::POP);
     }
+    //current_scope().pop_temporary();
+    //current_scope().pop_temporary();
     end_scope();
     // if (expr.label) {
     //     current_function()->patch_jump_destination(break_idx, current_program().size());
@@ -285,7 +264,7 @@ void Compiler::loop_expression(const LoopExpr &expr) {
     // to support breaking with values before loop body we create special invisible variable used for returing
     emit(OpCode::NIL);
     define_variable("$scope_return");
-    current_scope().mark_temporary();
+    //current_scope().mark_temporary();
     current_scope().return_slot = *current_context().resolve_variable("$scope_return");
     int continue_idx = current_function()->add_jump_destination(current_program().size());
     int loop_idx = current_function()->add_jump_destination(current_program().size());
@@ -403,9 +382,14 @@ void Compiler::break_expr(const BreakExpr &expr) {
     if (expr.expr) {
         visit_expr(*expr.expr);
         emit(OpCode::SET, scope.return_slot);
+        emit(OpCode::POP);
+        current_scope().pop_temporary();
     }
     // safety: assert that contains label?
     return_to_scope(scope_depth + 1);
+    // expression must produce value
+    //emit(OpCode::NIL);
+    //current_context().scopes[current_context().scopes.size() - scope_depth - 2].mark_temporary();
     emit(OpCode::JUMP, scope.break_idx);
 }
 
@@ -524,17 +508,22 @@ void Compiler::if_expression(const IfExpr &stmt) {
     emit(OpCode::POP);
     current_scope().pop_temporary();
     visit_expr(*stmt.then_expr);
+    current_scope().pop_temporary(); // for us this temporary should not exist?
     auto jump_to_end = current_function()->add_empty_jump_destination();
     emit(OpCode::JUMP, jump_to_end);
     current_function()->patch_jump_destination(jump_to_else, current_program().size());
     emit(OpCode::POP);
     //current_scope().items_on_stack--;
+    // TODO: else!
     if (stmt.else_expr) {
         visit_expr(*stmt.else_expr);
     } else {
-        emit(OpCode::NIL);
-        current_scope().mark_temporary();
+        // emit(OpCode::NIL);
+        // current_scope().mark_temporary();
     }
+    // expression should produce value!
+    emit(OpCode::NIL);
+    current_scope().mark_temporary();
     current_function()->patch_jump_destination(jump_to_end, current_program().size());
 }
 

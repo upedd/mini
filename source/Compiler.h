@@ -83,7 +83,7 @@ public:
         int next_slot();
 
         [[nodiscard]] int get_on_stack_count() const {
-            return items_on_stack;
+            return temporaries + locals.size();
         }
 
         [[nodiscard]] const std::string& get_name() const {
@@ -101,7 +101,7 @@ public:
         ScopeType type;
         std::string name;
         int slot_start;
-        int items_on_stack = 0;
+        int temporaries = 0;
 
         std::vector<Local> locals;
     };
