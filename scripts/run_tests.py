@@ -34,7 +34,7 @@ def traverse_directory(path):
             if file_path.suffix == ".bite":
                 print(f"Running {file_path.stem} test...")
                 try:
-                    result = subprocess.run([BITE_PATH, f".\\{file_path}"], check=True, text=True, capture_output=True, timeout=4)
+                    result = subprocess.run([BITE_PATH, file_path], check=True, text=True, capture_output=True, timeout=4)
                 except subprocess.CalledProcessError as e:
                     fail_test(file_path.stem, "execution failed")
                     continue

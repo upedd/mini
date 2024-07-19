@@ -247,7 +247,6 @@ void Compiler::block(const BlockExpr &expr) {
     // }
     begin_scope(ScopeType::BLOCK);
     emit(OpCode::NIL);
-    //current_scope().mark_temporary();
     define_variable("$scope_return");
     current_scope().return_slot = *current_scope().get("$scope_return");
     for (auto& stmt : expr.stmts) {
@@ -258,16 +257,8 @@ void Compiler::block(const BlockExpr &expr) {
         emit(OpCode::SET, current_scope().return_slot);
         emit(OpCode::POP);
         current_scope().pop_temporary();
-    } else {
-        //emit(OpCode::POP);
     }
-    //current_scope().pop_temporary();
-    //current_scope().pop_temporary();
     end_scope();
-    // if (expr.label) {
-    //     current_function()->patch_jump_destination(break_idx, current_program().size());
-    //     emit(OpCode::POP_BLOCK);
-    // }
 }
 
 void Compiler::loop_expression(const LoopExpr &expr) {
@@ -276,89 +267,108 @@ void Compiler::loop_expression(const LoopExpr &expr) {
     // to support breaking with values before loop body we create special invisible variable used for returing
     emit(OpCode::NIL);
     define_variable("$scope_return");
-    //current_scope().mark_temporary();
     current_scope().return_slot = *current_context().resolve_variable("$scope_return");
     int continue_idx = current_function()->add_jump_destination(current_program().size());
-    int loop_idx = current_function()->add_jump_destination(current_program().size());
     int break_idx = current_function()->add_empty_jump_destination();
     current_scope().continue_idx = continue_idx;
     current_scope().break_idx = break_idx;
     visit_expr(*expr.body);
-    emit(OpCode::POP); // ignore expressions result
+    // ignore body expression result
+    emit(OpCode::POP);
     current_scope().pop_temporary();
-    emit(OpCode::JUMP, loop_idx);
+
+    emit(OpCode::JUMP, continue_idx);
     end_scope();
     current_function()->patch_jump_destination(break_idx, current_program().size());
-    // should be loop i hope???
-    //cur().get_locals().pop_back();
 }
 
 void Compiler::while_expr(const WhileExpr &expr) {
-    emit(OpCode::PUSH_BLOCK);
+    // Tons of overlap with normal loop maybe abstract this away?
+    std::string label = expr.label ? expr.label->get_lexeme(source) : "";
+    begin_scope(ScopeType::LOOP, label);
+    emit(OpCode::NIL);
+    define_variable("$scope_return");
+    current_scope().return_slot = *current_context().resolve_variable("$scope_return");
+
     int continue_idx = current_function()->add_jump_destination(current_program().size());
-    int loop_idx = current_function()->add_jump_destination(current_program().size());
     int break_idx = current_function()->add_empty_jump_destination();
     int end_idx = current_function()->add_empty_jump_destination();
-    //current_context().blocks.emplace_back(break_idx, continue_idx, expr.label ? expr.label->get_lexeme(source) : "", BlockType::LOOP);
+    current_scope().continue_idx = continue_idx;
+    current_scope().break_idx = break_idx;
+
     visit_expr(*expr.condition);
     emit(OpCode::JUMP_IF_FALSE, end_idx);
     emit(OpCode::POP); // pop evaluation condition result
+    current_scope().pop_temporary();
     visit_expr(*expr.body);
-    emit(OpCode::POP); // ignore block expression result
-    emit(OpCode::JUMP, loop_idx);
+    // ignore block expression result
+    emit(OpCode::POP);
+    current_scope().pop_temporary();
+    emit(OpCode::JUMP, continue_idx);
+    end_scope();
     current_function()->patch_jump_destination(end_idx, current_program().size());
     emit(OpCode::POP); // pop evalutaion condition result
-    emit(OpCode::NIL); // default result for while expression
     current_function()->patch_jump_destination(break_idx, current_program().size());
-    emit(OpCode::POP_BLOCK);
-    //current_context().blocks.pop_back();
 }
 
 void Compiler::for_expr(const ForExpr &expr) {
+    // Tons of overlap with while loop maybe abstract this away?
+    // ideally some sort of desugaring step
     begin_scope(ScopeType::BLOCK);
+    emit(OpCode::NIL);
+    define_variable("$scope_return");
+    // begin define iterator
     visit_expr(*expr.iterable);
-    int idx3 = current_function()->add_constant("iterator");
-    emit(OpCode::GET_PROPERTY, idx3);
+    int iterator_constant = current_function()->add_constant("iterator");
+    emit(OpCode::GET_PROPERTY, iterator_constant);
     emit(OpCode::CALL, 0);
-    define_variable("$iter");
-    // while loop copy!!!
-    emit(OpCode::PUSH_BLOCK);
+    define_variable("$iterator");
+    current_scope().pop_temporary();
+    // end define iterator
+    std::string label = expr.label ? expr.label->get_lexeme(source) : "";
+    begin_scope(ScopeType::LOOP, label);
+    emit(OpCode::NIL);
+    define_variable("$scope_return");
+    current_scope().return_slot = *current_context().resolve_variable("$scope_return");
     int continue_idx = current_function()->add_jump_destination(current_program().size());
     int break_idx = current_function()->add_empty_jump_destination();
     int end_idx = current_function()->add_empty_jump_destination();
-    //current_context().blocks.emplace_back(break_idx, continue_idx, expr.label ? expr.label->get_lexeme(source) : "", BlockType::LOOP);
-    int loop_idx = current_function()->add_jump_destination(current_program().size());
-    // condition mixin
-    resolve_variable("$iter");
-    int idx = current_function()->add_constant("has_next");
-    emit(OpCode::GET_PROPERTY, idx);
+    current_scope().continue_idx = continue_idx;
+    current_scope().break_idx = break_idx;
+
+    // begin condition
+    resolve_variable("$iterator");
+    int condition_cosntant = current_function()->add_constant("has_next");
+    emit(OpCode::GET_PROPERTY, condition_cosntant);
     emit(OpCode::CALL, 0);
-    // end condiiton mixin
+    // end condition
+
     emit(OpCode::JUMP_IF_FALSE, end_idx);
     emit(OpCode::POP); // pop evaluation condition result
-    // item mixin
-    begin_scope(ScopeType::BLOCK);
-    resolve_variable("$iter");
-    int idx2 = current_function()->add_constant("next");
-    emit(OpCode::GET_PROPERTY, idx2);
+    current_scope().pop_temporary();
+
+    // begin item
+    resolve_variable("$iterator");
+    int item_constant = current_function()->add_constant("next");
+    emit(OpCode::GET_PROPERTY, item_constant);
     emit(OpCode::CALL, 0);
     define_variable(expr.name.get_lexeme(source));
-    // end update item
-    // end item mixin
+    current_scope().pop_temporary();
+    // end item
+
     visit_expr(*expr.body);
-    emit(OpCode::POP); // ignore block expression result
+    // ignore block expression result
+    emit(OpCode::POP);
+    current_scope().pop_temporary();
+    return_to_scope(1);
+    emit(OpCode::JUMP, continue_idx);
     end_scope();
-    emit(OpCode::JUMP, loop_idx);
     current_function()->patch_jump_destination(end_idx, current_program().size());
     emit(OpCode::POP); // pop evalutaion condition result
-    emit(OpCode::NIL); // default return
     current_function()->patch_jump_destination(break_idx, current_program().size());
-    emit(OpCode::POP_BLOCK);
-    //current_context().blocks.pop_back();
-    // at this point operand stack should look like this: [...] [iterator] [return value]
-    // and we need to pop the iterator
-    // TODO: find better way?
-    emit(OpCode::SWAP);
+    emit(OpCode::SET, *current_scope().get("$scope_return"));
+    emit(OpCode::POP);
+    current_scope().pop_temporary();
     end_scope();
 }
 
@@ -397,11 +407,7 @@ void Compiler::break_expr(const BreakExpr &expr) {
         emit(OpCode::POP);
         current_scope().pop_temporary();
     }
-    // safety: assert that contains label?
     return_to_scope(scope_depth + 1);
-    // expression must produce value
-    //emit(OpCode::NIL);
-    //current_context().scopes[current_context().scopes.size() - scope_depth - 2].mark_temporary();
     emit(OpCode::JUMP, scope.break_idx);
 }
 
