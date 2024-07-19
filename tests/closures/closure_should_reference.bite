@@ -13,6 +13,7 @@ fun create() {
     display_fn = display;
     add_fn = add;
 }
+create();
 
 display_fn();
 add_fn(5);

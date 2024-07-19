@@ -57,7 +57,7 @@ int Compiler::Context::add_upvalue(int index, bool is_local) {
 }
 
 void Compiler::Context::close_upvalue(int index) {
-    for (auto& scope : scopes) {
+    for (auto& scope : std::views::reverse(scopes)) {
         if (scope.get_start_slot() <= index) {
             scope.close(index - scope.get_start_slot());
             break;
