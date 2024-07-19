@@ -1,0 +1,23 @@
+native print;
+let display_fn;
+let add_fn;
+
+fun create() {
+    let num = 0;
+    fun display() {
+        print(num);
+    }
+    fun add(x) {
+        num += x;
+    }
+    display_fn = display;
+    add_fn = add;
+}
+
+display_fn();
+add_fn(5);
+display_fn();
+display_fn();
+add_fn(2);
+add_fn(3);
+display_fn();

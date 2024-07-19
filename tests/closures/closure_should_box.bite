@@ -1,0 +1,14 @@
+native print;
+fun create_display() {
+    let num = 10;
+    fun display() {
+        print(num);
+    }
+    display();
+    num = 20;
+    display();
+    return display;
+}
+
+let display = create_display();
+display();

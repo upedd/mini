@@ -1,0 +1,15 @@
+native print;
+fun outer() {
+    let num = 10;
+    fun middle() {
+        fun inner() {
+            print(num);
+        }
+        return outer();
+    }
+    return middle;
+}
+
+let mid = outer();
+let inn = mid();
+inn();
