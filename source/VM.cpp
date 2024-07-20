@@ -71,11 +71,12 @@ std::optional<VM::RuntimeError> VM::call_value(const Value &value, const int arg
         auto *instance = new Instance(klass);
         push(instance);
         allocate(instance);
-        for (int i = 0; i < arguments_count; ++i) {
+        for (int i = arguments_count - 1; i >= 0; --i) {
             push(args[i]);
         }
+        // TODO: handle private construtors?
         if (klass->methods.contains("init")) {
-            return call_value(klass->methods["init"], arguments_count);
+            return call_value(klass->methods["init"].value, arguments_count);
         }
         return {}; // success
     }
@@ -166,7 +167,7 @@ void VM::adopt_objects(std::vector<Object *> objects) {
 
 bool VM::bind_method(Class *klass, const std::string &name) {
     if (!klass->methods.contains(name)) return false;
-    auto* method = dynamic_cast<Closure *>(klass->methods[name].get<Object*>());
+    auto* method = dynamic_cast<Closure *>(klass->methods[name].value.get<Object*>());
     auto* bound = new BoundMethod(peek(), method);
     pop();
     push(bound);
@@ -175,7 +176,7 @@ bool VM::bind_method(Class *klass, const std::string &name) {
 }
 
 std::optional<Instance*> VM::get_current_instance() {
-    Value first_on_stack = peek(stack_index - 1);
+    Value first_on_stack = stack[frames.back().frame_pointer];
     if (auto object = first_on_stack.as<Object*>()) {
         if (auto* instance = dynamic_cast<Instance*>(*object)) {
             return instance;
@@ -351,8 +352,25 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                         if (class_value.is_private && (!current_instance || *current_instance != instance)) {
                             return std::unexpected(RuntimeError("Attempted to read private property outside class definition"));
                         }
+                        if (class_value.is_static) {
+                            return std::unexpected(RuntimeError("Attempted to read static field on an instance."));
+                        }
                         push(class_value.value);
-                    } else if (!bind_method(instance->klass, name)) {
+                    } else if (instance->klass->methods.contains(name)) {
+                        ClassValue class_value = instance->klass->methods[name];
+                        std::optional<Instance*> current_instance = get_current_instance();
+                        if (class_value.is_private && (!current_instance || *current_instance != instance)) {
+                            return std::unexpected(RuntimeError("Attempted to read private property outside class definition"));
+                        }
+                        if (class_value.is_static) {
+                            return std::unexpected(RuntimeError("Attempted to read static field on an instance."));
+                        }
+                        auto* method = dynamic_cast<Closure *>(class_value.value.get<Object*>());
+                        auto* bound = new BoundMethod(peek(), method);
+                        pop();
+                        push(bound);
+                        allocate<BoundMethod>(bound);
+                    } else {
                         return std::unexpected(RuntimeError("Attempted to read not declared property."));
                     }
                 } else if (auto* klass = dynamic_cast<Class*>(*object)) {
@@ -360,7 +378,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                     auto name = get_constant(constant_idx).get<std::string>();
                     if (klass->fields.contains(name)) {
                         pop();
-                        ClassValue class_value = klass->methods[name];
+                        ClassValue class_value = klass->fields[name];
                         // TODO: check private!
                         std::optional<Instance*> current_instance = get_current_instance();
                         if (class_value.is_private && (!current_instance || (*current_instance)->klass != klass)) {
@@ -400,12 +418,39 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                     int constant_idx = fetch();
                     auto name = get_constant(constant_idx).get<std::string>();
                     if (instance->properties.contains(name)) {
-                        instance->properties[name] = peek(1);
+                        ClassValue class_value = instance->properties[name];
+                        std::optional<Instance*> current_instance = get_current_instance();
+                        if (class_value.is_private && (!current_instance || *current_instance != instance)) {
+                            return std::unexpected(RuntimeError("Attempted to set private property outside class definition"));
+                        }
+                        if (class_value.is_static) {
+                            return std::unexpected(RuntimeError("Attempted to set static field on an instance."));
+                        }
+                        instance->properties[name].value = peek(1);
                         Value value = pop();
                         pop(); // pop instance
                         push(value);
                     } else {
-                        return std::unexpected(RuntimeError("Attempted to read not declared property."));
+                        return std::unexpected(RuntimeError("Attempted to set not declared property."));
+                    }
+                } else if (auto* klass = dynamic_cast<Class*>(*object)) {
+                    int constant_idx = fetch();
+                    auto name = get_constant(constant_idx).get<std::string>();
+                    if (klass->fields.contains(name)) {
+                        ClassValue class_value = klass->fields[name];
+                        std::optional<Instance*> current_instance = get_current_instance();
+                        if (class_value.is_private && (!current_instance || (*current_instance)->klass != klass)) {
+                            return std::unexpected(RuntimeError("Attempted to set private property outside class definition"));
+                        }
+                        if (!class_value.is_static) {
+                            return std::unexpected(RuntimeError("Attempted to set non-static field on an Class."));
+                        }
+                        klass->fields[name].value = peek(1);
+                        Value value = pop();
+                        pop(); // pop instance
+                        push(value);
+                    } else {
+                        return std::unexpected(RuntimeError("Attempted to set not declared property."));
                     }
                 } else {
                     return std::unexpected(RuntimeError("Expected class instance value."));
@@ -420,7 +465,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 auto name = get_constant(constant_idx).get<std::string>();
                 Value method = peek();
                 Class *klass = dynamic_cast<Class *>(peek(1).get<Object *>());
-                klass->methods[name] = {.value = method, .is_private = is_static, .is_static = is_static};
+                klass->methods[name] = {.value = method, .is_private = is_private, .is_static = is_static};
                 pop();
                 break;
             }
@@ -456,7 +501,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 auto name = get_constant(constant_idx).get<std::string>();
                 Value value = peek();
                 Class *klass = dynamic_cast<Class *>(peek(1).get<Object *>());
-                klass->fields[name] = {.value = value, .is_private = is_static, .is_static = is_static};
+                klass->fields[name] = {.value = value, .is_private = is_private, .is_static = is_static};
                 pop();
                 break;
             }

@@ -8,10 +8,13 @@ class Disassembler {
 public:
     explicit Disassembler(Function& function) : function(function) {}
 
+
+
     void disassemble(const std::string &name);
 private:
     void simple_opcode(const std::string& name);
     void constant_inst(const std::string& name);
+    void class_inst(const std::string& name);
     void arg_inst(const std::string& name);
     void jump_inst(const std::string& name);
     int offset = 0;
@@ -27,6 +30,13 @@ inline void Disassembler::constant_inst(const std::string &name) {
     int x = function.get_program().get_at(offset++);
     std::cout << offset  - 2 << ": " << name << ' ' << x << ' ' << function.get_constant(x).to_string() << '\n';
 }
+
+inline void Disassembler::class_inst(const std::string &name) {
+    int x = function.get_program().get_at(offset++);
+    int y = function.get_program().get_at(offset++);
+    std::cout << offset  - 3 << ": " << name << ' ' << x << ' ' << function.get_constant(x).to_string() << " private: " << (y & 1) << " static: " << (y >> 1 & 1) << '\n';
+}
+
 inline void Disassembler::arg_inst(const std::string &name) {
     int x = function.get_program().get_at(offset++);
     std::cout << offset - 2 << ": " << name << ' ' << x << '\n';
@@ -176,7 +186,7 @@ inline void Disassembler::disassemble(const std::string& name) {
                 break;
             }
             case OpCode::METHOD: {
-                constant_inst("METHOD");
+                class_inst("METHOD");
                 break;
             }
             case OpCode::INHERIT: {
@@ -192,7 +202,8 @@ inline void Disassembler::disassemble(const std::string& name) {
                 break;
             }
             case OpCode::FIELD: {
-                constant_inst("FIELD");
+                class_inst("FIELD");
+                break;
             }
         }
     }

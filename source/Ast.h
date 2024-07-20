@@ -33,12 +33,13 @@ struct FunctionStmt;
 struct ClassStmt;
 struct NativeStmt;
 struct FieldStmt;
+struct MethodStmt;
 
 using Expr = std::variant<LiteralExpr, StringLiteral, UnaryExpr, BinaryExpr, VariableExpr, CallExpr, GetPropertyExpr,
     SuperExpr, BlockExpr, IfExpr, LoopExpr, BreakExpr, ContinueExpr, WhileExpr, ForExpr, ReturnExpr>;
 using ExprHandle = std::unique_ptr<Expr>;
 
-using Stmt = std::variant<VarStmt, ExprStmt, FunctionStmt, ClassStmt, NativeStmt, FieldStmt>;
+using Stmt = std::variant<VarStmt, ExprStmt, FunctionStmt, ClassStmt, NativeStmt, FieldStmt, MethodStmt>;
 using StmtHandle = std::unique_ptr<Stmt>;
 
 struct UnaryExpr {
@@ -156,8 +157,8 @@ struct MethodStmt {
 
 struct ClassStmt {
     Token name;
-    std::vector<std::unique_ptr<MethodStmt>> methods;
-    std::vector<std::unique_ptr<FieldStmt>> fields;
+    std::vector<std::unique_ptr<MethodStmt> > methods;
+    std::vector<std::unique_ptr<FieldStmt> > fields;
     // TODO: add inheritance back!
     //std::optional<Token> super_name;
 };
@@ -196,6 +197,12 @@ inline std::string stmt_to_string(const Stmt &stmt, std::string_view source) {
                           },
                           [source](const NativeStmt &stmt) {
                               return std::format("(native {})", stmt.name.get_lexeme(source));
+                          },
+                          [source](const MethodStmt&) {
+                              return std::string("method");
+                          },
+                          [source](const FieldStmt&) {
+                              return std::string("field");
                           }
 
                       }, stmt);
