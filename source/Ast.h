@@ -32,12 +32,13 @@ struct VarStmt;
 struct FunctionStmt;
 struct ClassStmt;
 struct NativeStmt;
+struct FieldStmt;
 
 using Expr = std::variant<LiteralExpr, StringLiteral, UnaryExpr, BinaryExpr, VariableExpr, CallExpr, GetPropertyExpr,
     SuperExpr, BlockExpr, IfExpr, LoopExpr, BreakExpr, ContinueExpr, WhileExpr, ForExpr, ReturnExpr>;
 using ExprHandle = std::unique_ptr<Expr>;
 
-using Stmt = std::variant<VarStmt, ExprStmt, FunctionStmt, ClassStmt, NativeStmt>;
+using Stmt = std::variant<VarStmt, ExprStmt, FunctionStmt, ClassStmt, NativeStmt, FieldStmt>;
 using StmtHandle = std::unique_ptr<Stmt>;
 
 struct UnaryExpr {
@@ -139,10 +140,24 @@ struct ExprStmt {
     ExprHandle expr;
 };
 
+struct FieldStmt {
+    std::unique_ptr<VarStmt> variable;
+    bool is_private = false;
+    bool is_static = false;
+    bool is_abstract = false;
+};
+
+struct MethodStmt {
+    std::unique_ptr<FunctionStmt> function;
+    bool is_private = false;
+    bool is_static = false;
+    bool is_abstract = false;
+};
+
 struct ClassStmt {
     Token name;
-    std::vector<std::unique_ptr<FunctionStmt>> methods;
-    std::vector<std::unique_ptr<VarStmt>> fields;
+    std::vector<std::unique_ptr<MethodStmt>> methods;
+    std::vector<std::unique_ptr<FieldStmt>> fields;
     // TODO: add inheritance back!
     //std::optional<Token> super_name;
 };

@@ -54,6 +54,8 @@ public:
     void adopt_objects(std::vector<Object*> objects);
     bool bind_method(Class * klass, const std::string & name);
 
+    std::optional<Instance *> get_current_instance();
+
     std::expected<Value, RuntimeError> run();
 
     void add_native(const std::string& name, const Value &value);

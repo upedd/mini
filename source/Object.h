@@ -150,6 +150,12 @@ private:
     Function *function;
 };
 
+struct ClassValue {
+    Value value;
+    bool is_private = false;
+    bool is_static = false;
+};
+
 class Class final : public Object{
 public:
     explicit Class(std::string  name) : name(std::move(name)) {}
@@ -164,24 +170,30 @@ public:
 
     void mark_references(GarbageCollector &gc) override {
         for (auto& value : std::views::values(methods)) {
-            gc.mark(value);
+            gc.mark(value.value);
         }
         for (auto& value : std::views::values(fields)) {
-            gc.mark(value);
+            gc.mark(value.value);
         }
     }
 
     std::string name;
-    std::unordered_map<std::string, Value> methods;
-    std::unordered_map<std::string, Value> fields;
+    std::unordered_map<std::string, ClassValue> methods;
+    std::unordered_map<std::string, ClassValue> fields;
 };
+
+
 
 class Instance final : public Object {
 public:
     explicit Instance(Class* klass) : klass(klass) {
         // default intialize properties
         // should this be here or in vm?
-        properties.insert(klass->fields.begin(), klass->fields.end());
+        for (auto& [name, value] : klass->fields) {
+            if (!value.is_static) {
+                properties[name] = value;
+            }
+        }
     }
 
     std::size_t get_size() override {
@@ -195,12 +207,12 @@ public:
     void mark_references(GarbageCollector &gc) override {
         gc.mark(klass);
         for (auto& value : std::views::values(properties)) {
-            gc.mark(value);
+            gc.mark(value.value);
         }
     }
 
     Class* klass;
-    std::unordered_map<std::string, Value> properties;
+    std::unordered_map<std::string, ClassValue> properties;
 };
 
 class BoundMethod final : public Object {

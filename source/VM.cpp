@@ -174,6 +174,16 @@ bool VM::bind_method(Class *klass, const std::string &name) {
     return true;
 }
 
+std::optional<Instance*> VM::get_current_instance() {
+    Value first_on_stack = peek(stack_index - 1);
+    if (auto object = first_on_stack.as<Object*>()) {
+        if (auto* instance = dynamic_cast<Instance*>(*object)) {
+            return instance;
+        }
+    }
+    return {};
+}
+
 std::expected<Value, VM::RuntimeError> VM::run() {
 #define BINARY_OPERATION(op) { \
     auto b = pop(); \
@@ -336,8 +346,43 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                     auto name = get_constant(constant_idx).get<std::string>();
                     if (instance->properties.contains(name)) {
                         pop();
-                        push(instance->properties[name]);
+                        ClassValue class_value = instance->properties[name];
+                        std::optional<Instance*> current_instance = get_current_instance();
+                        if (class_value.is_private && (!current_instance || *current_instance != instance)) {
+                            return std::unexpected(RuntimeError("Attempted to read private property outside class definition"));
+                        }
+                        push(class_value.value);
                     } else if (!bind_method(instance->klass, name)) {
+                        return std::unexpected(RuntimeError("Attempted to read not declared property."));
+                    }
+                } else if (auto* klass = dynamic_cast<Class*>(*object)) {
+                    int constant_idx = fetch();
+                    auto name = get_constant(constant_idx).get<std::string>();
+                    if (klass->fields.contains(name)) {
+                        pop();
+                        ClassValue class_value = klass->methods[name];
+                        // TODO: check private!
+                        std::optional<Instance*> current_instance = get_current_instance();
+                        if (class_value.is_private && (!current_instance || (*current_instance)->klass != klass)) {
+                            return std::unexpected(RuntimeError("Attempted to read private property outside class definition"));
+                        }
+                        if (!class_value.is_static) {
+                            return std::unexpected(RuntimeError("Attempted to read non-static field on a Class."));
+                        }
+                        push(class_value.value);
+                    } else if (klass->methods.contains(name)) {
+                        // TODO: check private!
+                        pop();
+                        ClassValue class_value = klass->methods[name];
+                        std::optional<Instance*> current_instance = get_current_instance();
+                        if (class_value.is_private && (!current_instance || (*current_instance)->klass != klass)) {
+                            return std::unexpected(RuntimeError("Attempted to read private property outside class definition"));
+                        }
+                        if (!class_value.is_static) {
+                            return std::unexpected(RuntimeError("Attempted to call non-static method on a Class."));
+                        }
+                        push(class_value.value);
+                    } else {
                         return std::unexpected(RuntimeError("Attempted to read not declared property."));
                     }
                 } else {
@@ -369,10 +414,13 @@ std::expected<Value, VM::RuntimeError> VM::run() {
             }
             case OpCode::METHOD: {
                 int constant_idx = fetch();
+                int attributes = fetch();
+                bool is_private = attributes & 1;
+                bool is_static = attributes & 2;
                 auto name = get_constant(constant_idx).get<std::string>();
                 Value method = peek();
                 Class *klass = dynamic_cast<Class *>(peek(1).get<Object *>());
-                klass->methods[name] = method;
+                klass->methods[name] = {.value = method, .is_private = is_static, .is_static = is_static};
                 pop();
                 break;
             }
@@ -402,10 +450,13 @@ std::expected<Value, VM::RuntimeError> VM::run() {
             }
             case OpCode::FIELD: {
                 int constant_idx = fetch();
+                int attributes = fetch();
+                bool is_private = attributes & 1;
+                bool is_static = attributes & 2;
                 auto name = get_constant(constant_idx).get<std::string>();
                 Value value = peek();
                 Class *klass = dynamic_cast<Class *>(peek(1).get<Object *>());
-                klass->fields[name] = value;
+                klass->fields[name] = {.value = value, .is_private = is_static, .is_static = is_static};
                 pop();
                 break;
             }

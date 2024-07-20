@@ -68,9 +68,8 @@ struct Token {
         CONTINUE,
         NONE,
         MATCH,
-        RETURN, SUPER, LET, WHILE, TILDE, NATIVE ,FOR, LABEL, COLON,
+        RETURN, SUPER, LET, WHILE, TILDE, NATIVE ,FOR, LABEL, COLON, PRIVATE, STATIC, ABSTRACT,
         END // NOTE: Type END must always be last element in this enum.
-
     };
 
     Type type = Type::NONE;

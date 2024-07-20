@@ -215,14 +215,24 @@ Stmt Parser::class_declaration() {
     // }
     consume(Token::Type::LEFT_BRACE, "Expected '{' before class body.");
 
-    std::vector<std::unique_ptr<FunctionStmt>> methods;
-    std::vector<std::unique_ptr<VarStmt>> fields;
+    std::vector<std::unique_ptr<MethodStmt>> methods;
+    std::vector<std::unique_ptr<FieldStmt>> fields;
     while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
+        bool is_private = false, is_static = false;
+        if (match(Token::Type::PRIVATE)) {
+            is_private = true;
+        }
+        if (match(Token::Type::STATIC)) {
+            is_static = true;
+        }
+
         consume(Token::Type::IDENTIFIER, "Expected identifier.");
         if (check(Token::Type::SEMICOLON) || check(Token::Type::EQUAL)) {
-            fields.push_back(std::make_unique<VarStmt>(var_declaration_after_name(current)));
+            auto var_stmt = std::make_unique<VarStmt>(var_declaration_after_name(current));
+            fields.push_back(std::make_unique<FieldStmt>(std::move(var_stmt), is_private, is_static));
         } else {
-            methods.push_back(std::make_unique<FunctionStmt>(function_declaration_after_name(current)));
+            auto function_stmt = std::make_unique<FunctionStmt>(function_declaration_after_name(current));
+            methods.push_back(std::make_unique<MethodStmt>(std::move(function_stmt), is_private, is_static));
         }
 
     }

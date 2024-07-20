@@ -246,7 +246,9 @@ void Compiler::visit_stmt(const Stmt &statement) {
                    [this](const FunctionStmt &stmt) { function_declaration(stmt); },
                    [this](const ExprStmt &stmt) { expr_statement(stmt); },
                    [this](const ClassStmt &stmt) { class_declaration(stmt); },
-                   [this](const NativeStmt& stmt) {native_declaration(stmt); }
+                   [this](const NativeStmt& stmt) {native_declaration(stmt); },
+                   [this](const MethodStmt&) {assert("unreachable");},
+                   [this](const FieldStmt&) {assert("unreachable");},
                }, statement);
 }
 
@@ -507,19 +509,21 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
     emit(OpCode::GET, std::get<Context::LocalResolution>(current_context().resolve_variable(name)).slot);
     current_scope().mark_temporary();
     for (auto& field : stmt.fields) {
-        visit_expr(*field->value);
-        int idx = current_function()->add_constant(field->name.get_lexeme(source));
+        visit_expr(*field->variable->value);
+        int idx = current_function()->add_constant(field->variable->name.get_lexeme(source));
         emit(OpCode::FIELD, idx);
+        emit(field->is_private | (field->is_static << 1));
         current_scope().pop_temporary();
-        current_scope().add_field(field->name.get_lexeme(source));
+        current_scope().add_field(field->variable->name.get_lexeme(source));
     }
 
 
     for (auto &method: stmt.methods) {
-        std::string name = method->name.get_lexeme(source);
-        function(*method, name == "init" ? FunctionType::CONSTRUCTOR : FunctionType::METHOD);
+        std::string name = method->function->name.get_lexeme(source);
+        function(*method->function, name == "init" ? FunctionType::CONSTRUCTOR : FunctionType::METHOD);
         int idx = current_function()->add_constant(name);
         emit(OpCode::METHOD, idx);
+        emit(method->is_private | (method->is_static << 1));
         current_scope().pop_temporary();
     }
     emit(OpCode::POP);
