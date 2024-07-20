@@ -166,15 +166,23 @@ public:
         for (auto& value : std::views::values(methods)) {
             gc.mark(value);
         }
+        for (auto& value : std::views::values(fields)) {
+            gc.mark(value);
+        }
     }
 
     std::string name;
     std::unordered_map<std::string, Value> methods;
+    std::unordered_map<std::string, Value> fields;
 };
 
 class Instance final : public Object {
 public:
-    explicit Instance(Class* klass) : klass(klass) {}
+    explicit Instance(Class* klass) : klass(klass) {
+        // default intialize properties
+        // should this be here or in vm?
+        properties.insert(klass->fields.begin(), klass->fields.end());
+    }
 
     std::size_t get_size() override {
         return sizeof(Instance);
@@ -186,13 +194,13 @@ public:
 
     void mark_references(GarbageCollector &gc) override {
         gc.mark(klass);
-        for (auto& value : std::views::values(fields)) {
+        for (auto& value : std::views::values(properties)) {
             gc.mark(value);
         }
     }
 
     Class* klass;
-    std::unordered_map<std::string, Value> fields;
+    std::unordered_map<std::string, Value> properties;
 };
 
 class BoundMethod final : public Object {

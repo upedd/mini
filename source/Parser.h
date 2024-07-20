@@ -56,7 +56,12 @@ private:
 
     Stmt var_declaration();
 
+    VarStmt var_declaration_after_name(Token name);
+
     FunctionStmt function_declaration();
+
+    FunctionStmt function_declaration_after_name(Token name);
+
     Stmt class_declaration();
 
     Stmt expr_statement();

@@ -191,6 +191,9 @@ inline void Disassembler::disassemble(const std::string& name) {
                 constant_inst("GET_NATIVE");
                 break;
             }
+            case OpCode::FIELD: {
+                constant_inst("FIELD");
+            }
         }
     }
 }

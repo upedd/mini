@@ -141,8 +141,10 @@ struct ExprStmt {
 
 struct ClassStmt {
     Token name;
-    std::vector<std::unique_ptr<FunctionStmt> > methods;
-    std::optional<Token> super_name;
+    std::vector<std::unique_ptr<FunctionStmt>> methods;
+    std::vector<std::unique_ptr<VarStmt>> fields;
+    // TODO: add inheritance back!
+    //std::optional<Token> super_name;
 };
 
 struct NativeStmt {

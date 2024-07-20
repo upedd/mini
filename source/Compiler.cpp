@@ -94,7 +94,14 @@ void Compiler::start_context(Function *function, FunctionType type) {
     current_context().scopes.emplace_back(ScopeType::BLOCK, 0); // TODO: should be function?
 }
 
+#define COMPILER_PRINT_BYTECODE
+
 void Compiler::end_context() {
+#ifdef COMPILER_PRINT_BYTECODE
+    Disassembler disassembler(*current_function());
+    disassembler.disassemble(current_function()->to_string());
+#endif
+
     context_stack.pop_back();
 }
 
@@ -456,36 +463,54 @@ void Compiler::function(const FunctionStmt &stmt, FunctionType type) {
     }
 }
 
+
+
 void Compiler::class_declaration(const ClassStmt &stmt) {
     std::string name = stmt.name.get_lexeme(source);
-    uint8_t constant = current_function()->add_constant(name);
+    uint8_t name_constant = current_function()->add_constant(name);
+    emit(OpCode::CLASS, name_constant);
     current_scope().define(name);
 
-    emit(OpCode::CLASS);
-    emit(constant);
-
-    if (stmt.super_name) {
-        emit(OpCode::GET);
-        emit(*current_context().resolve_variable(stmt.super_name->get_lexeme(source)));
-        emit(OpCode::GET);
-        emit(*current_context().resolve_variable(name));
-        emit(OpCode::INHERIT);
-        begin_scope(ScopeType::BLOCK);
-        current_scope().define("super");
+    // if (stmt.super_name) {
+    //     emit(OpCode::GET);
+    //     emit(*current_context().resolve_variable(stmt.super_name->get_lexeme(source)));
+    //     emit(OpCode::GET);
+    //     emit(*current_context().resolve_variable(name));
+    //     emit(OpCode::INHERIT);
+    //     begin_scope(ScopeType::BLOCK);
+    //     current_scope().define("super");
+    // }
+    //// class scope
+    begin_scope(ScopeType::BLOCK);
+    // TODO: non-expression scope?
+    // emit(OpCode::NIL);
+    // define_variable("$scope_return");
+    emit(OpCode::GET, *current_context().resolve_variable(name));
+    current_scope().mark_temporary();
+    for (auto& field : stmt.fields) {
+        visit_expr(*field->value);
+        int idx = current_function()->add_constant(field->name.get_lexeme(source));
+        emit(OpCode::FIELD, idx);
+        current_scope().pop_temporary();
     }
-    emit(OpCode::GET);
-    emit(*current_context().resolve_variable(name));
+
+
     for (auto &method: stmt.methods) {
-        function(*method, FunctionType::METHOD);
-        int idx = current_function()->add_constant(method->name.get_lexeme(source));
-        emit(OpCode::METHOD);
-        emit(idx);
+        std::string name = method->name.get_lexeme(source);
+        function(*method, name == "init" ? FunctionType::CONSTRUCTOR : FunctionType::METHOD);
+        int idx = current_function()->add_constant(name);
+        emit(OpCode::METHOD, idx);
+        current_scope().pop_temporary();
     }
     emit(OpCode::POP);
-
-    if (stmt.super_name) {
-        end_scope();
-    }
+    current_scope().pop_temporary();
+    // TODO: non-expression scope?
+    // end_scope();
+    // emit(OpCode::POP);
+    // current_scope().pop_temporary();
+    // if (stmt.super_name) {
+    //     end_scope();
+    // }
 }
 
 void Compiler::expr_statement(const ExprStmt &stmt) {

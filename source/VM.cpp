@@ -326,11 +326,11 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 if (auto *instance = dynamic_cast<Instance *>(*object)) {
                     int constant_idx = fetch();
                     auto name = get_constant(constant_idx).get<std::string>();
-                    if (instance->fields.contains(name)) {
+                    if (instance->properties.contains(name)) {
                         pop();
-                        push(instance->fields[name]);
+                        push(instance->properties[name]);
                     } else if (!bind_method(instance->klass, name)) {
-                        return std::unexpected(RuntimeError("Attempted to read undefined property."));
+                        return std::unexpected(RuntimeError("Attempted to read not declared property."));
                     }
                 } else {
                     return std::unexpected(RuntimeError("Expected class instance value."));
@@ -346,10 +346,14 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 if (auto *instance = dynamic_cast<Instance *>(*object)) {
                     int constant_idx = fetch();
                     auto name = get_constant(constant_idx).get<std::string>();
-                    instance->fields[name] = peek(1);
-                    Value value = pop();
-                    pop(); // pop instance
-                    push(value);
+                    if (instance->properties.contains(name)) {
+                        instance->properties[name] = peek(1);
+                        Value value = pop();
+                        pop(); // pop instance
+                        push(value);
+                    } else {
+                        return std::unexpected(RuntimeError("Attempted to read not declared property."));
+                    }
                 } else {
                     return std::unexpected(RuntimeError("Expected class instance value."));
                 }
@@ -386,6 +390,15 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 int constant_idx = fetch();
                 auto name = get_constant(constant_idx).get<std::string>();
                 push(natives[name]);
+                break;
+            }
+            case OpCode::FIELD: {
+                int constant_idx = fetch();
+                auto name = get_constant(constant_idx).get<std::string>();
+                Value value = peek();
+                Class *klass = dynamic_cast<Class *>(peek(1).get<Object *>());
+                klass->fields[name] = value;
+                pop();
                 break;
             }
         }

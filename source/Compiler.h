@@ -1,6 +1,7 @@
 #ifndef COMPILER_H
 #define COMPILER_H
 #include "Ast.h"
+#include "debug.h"
 #include "Object.h"
 #include "Parser.h"
 
@@ -143,6 +144,7 @@ private:
     void variable_declaration(const VarStmt &expr);
     void function_declaration(const FunctionStmt &stmt);
     void function(const FunctionStmt &stmt, FunctionType type);
+
     void class_declaration(const ClassStmt &stmt);
     void expr_statement(const ExprStmt &stmt);
     void native_declaration(const NativeStmt& stmt);

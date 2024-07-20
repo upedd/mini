@@ -170,7 +170,10 @@ std::optional<Stmt> Parser::statement() {
 
 Stmt Parser::var_declaration() {
     consume(Token::Type::IDENTIFIER, "expected identifier");
-    Token name = current;
+    return var_declaration_after_name(current);
+}
+
+VarStmt Parser::var_declaration_after_name(const Token name) {
     Expr expr = match(Token::Type::EQUAL) ? expression() : LiteralExpr{nil_t};
     consume(Token::Type::SEMICOLON, "Expected ';' after variable declaration.");
     return VarStmt{.name = name, .value = make_expr_handle(std::move(expr))};
@@ -178,7 +181,10 @@ Stmt Parser::var_declaration() {
 
 FunctionStmt Parser::function_declaration() {
     consume(Token::Type::IDENTIFIER, "expected function name");
-    Token name = current;
+    return function_declaration_after_name(current);
+}
+
+FunctionStmt Parser::function_declaration_after_name(const Token name) {
     consume(Token::Type::LEFT_PAREN, "Expected '(' after function name");
     std::vector<Token> parameters;
     if (!check(Token::Type::RIGHT_PAREN)) {
@@ -201,22 +207,28 @@ Stmt Parser::class_declaration() {
     consume(Token::Type::IDENTIFIER, "Expected class name.");
     Token name = current;
 
-
-    std::optional<Token> super_name {};
-    if (match(Token::Type::LESS)) {
-        consume(Token::Type::IDENTIFIER, "Expected superclass name.");
-        super_name = current;
-    }
+    // TODO: add inheritance back!
+    // std::optional<Token> super_name {};
+    // if (match(Token::Type::LESS)) {
+    //     consume(Token::Type::IDENTIFIER, "Expected superclass name.");
+    //     super_name = current;
+    // }
     consume(Token::Type::LEFT_BRACE, "Expected '{' before class body.");
 
     std::vector<std::unique_ptr<FunctionStmt>> methods;
-    // todo: fix!
+    std::vector<std::unique_ptr<VarStmt>> fields;
     while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
-        methods.push_back(std::make_unique<FunctionStmt>(function_declaration()));
+        consume(Token::Type::IDENTIFIER, "Expected identifier.");
+        if (check(Token::Type::SEMICOLON) || check(Token::Type::EQUAL)) {
+            fields.push_back(std::make_unique<VarStmt>(var_declaration_after_name(current)));
+        } else {
+            methods.push_back(std::make_unique<FunctionStmt>(function_declaration_after_name(current)));
+        }
+
     }
     consume(Token::Type::RIGHT_BRACE, "Expected '}' after class body.");
 
-    return ClassStmt {.name = name, .methods = std::move(methods), .super_name = super_name};
+    return ClassStmt {.name = name, .methods = std::move(methods), .fields = std::move(fields)};
 }
 
 Stmt Parser::expr_statement() {
