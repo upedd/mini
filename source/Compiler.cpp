@@ -38,11 +38,15 @@ int Compiler::Scope::next_slot() {
     return slot_start + locals.size() + temporaries;
 }
 
-std::optional<int> Compiler::Context::resolve_variable(const std::string& name) {
+Compiler::Context::Resolution Compiler::Context::resolve_variable(const std::string& name) {
     for (auto& scope : std::views::reverse(scopes)) {
-        if (auto index = scope.get(name)) return index;
+        if (scope.get_type() == ScopeType::CLASS) {
+            if (scope.has_field(name)) return FieldResolution();
+        } else if (auto index = scope.get(name)) { // resolve local
+            return LocalResolution(*index);
+        }
     }
-    return {};
+    return std::monostate();
 }
 
 int Compiler::Context::add_upvalue(int index, bool is_local) {
@@ -94,7 +98,7 @@ void Compiler::start_context(Function *function, FunctionType type) {
     current_context().scopes.emplace_back(ScopeType::BLOCK, 0); // TODO: should be function?
 }
 
-#define COMPILER_PRINT_BYTECODE
+//#define COMPILER_PRINT_BYTECODE
 
 void Compiler::end_context() {
 #ifdef COMPILER_PRINT_BYTECODE
@@ -138,7 +142,7 @@ void Compiler::emit(OpCode op_code, bite_byte value) {
 void Compiler::emit_default_return() {
     if (current_context().function_type == FunctionType::CONSTRUCTOR) {
         emit(OpCode::GET);
-        emit(*current_context().resolve_variable("this"));
+        emit(std::get<Context::LocalResolution>(current_context().resolve_variable("this")).slot);
     } else {
         emit(OpCode::NIL);
     }
@@ -183,33 +187,48 @@ void Compiler::define_variable(const std::string &name) {
     current_scope().define(name);
 }
 
+// TODO: total mess!!!!
 void Compiler::resolve_variable(const std::string &name) {
-    if (auto idx = current_context().resolve_variable(name)) {
-        emit(OpCode::GET, *idx); // todo: handle overflow
+    auto resolution = current_context().resolve_variable(name);
+    if (std::holds_alternative<Context::LocalResolution>(resolution)) {
+        emit(OpCode::GET, std::get<Context::LocalResolution>(resolution).slot); // todo: handle overflow
+    } else if (std::holds_alternative<Context::FieldResolution>(resolution)) {
+        // TODO: this doesn't work with nested classes i think?
+        emit(OpCode::GET, std::get<Context::LocalResolution>(current_context().resolve_variable("this")).slot);
+        emit(OpCode::GET_PROPERTY, current_function()->add_constant(name));
     } else {
-        idx = resolve_upvalue(name);
-        assert(idx.has_value()); // todo: error handling
-        emit(OpCode::GET_UPVALUE, *idx);
+        auto up_resolution = resolve_upvalue(name);
+        if (std::holds_alternative<Context::LocalResolution>(up_resolution)) {
+            emit(OpCode::GET_UPVALUE, std::get<Context::LocalResolution>(up_resolution).slot); // todo: handle overflow
+        } else if (std::holds_alternative<Context::FieldResolution>(up_resolution)) {
+            // TODO: this doesn't work with nested classes i think?
+            emit(OpCode::GET, std::get<Context::LocalResolution>(current_context().resolve_variable("this")).slot);
+            emit(OpCode::GET_PROPERTY, current_function()->add_constant(name));
+        }
     }
     current_scope().mark_temporary();
 }
 
-int Compiler::resolve_upvalue(const std::string &name) {
+Compiler::Context::Resolution Compiler::resolve_upvalue(const std::string &name) {
     std::optional<int> resolved;
     // find first context that contains given name as a local variable
     // while tracking all contexts that we needed to go through while getting to that local
     std::vector<std::reference_wrapper<Context>> resolve_up;
     for (Context &context: context_stack | std::views::reverse) {
-        resolved = context.resolve_variable(name);
-        if (resolved) {
+        auto resolution = context.resolve_variable(name);
+        if (std::holds_alternative<Context::LocalResolution>(resolution)) {
+            resolved = std::get<Context::LocalResolution>(resolution).slot;
             // TODO: fix upvalues!
             context.close_upvalue(*resolved);
             break;
         }
+        if (std::holds_alternative<Context::FieldResolution>(resolution)) {
+            return resolution;
+        }
         resolve_up.emplace_back(context);
     }
     // if we didn't find any local variable with given name return -1;
-    if (!resolved) return -1;
+    if (!resolved) return std::monostate();
     // tracks whetever upvalue points to local value or another upvalue
     bool is_local = true;
     // go from context that contains local variable to context that we are resolving from
@@ -218,7 +237,7 @@ int Compiler::resolve_upvalue(const std::string &name) {
         if (is_local) is_local = false; // only top level context points to local variable
     }
 
-    return *resolved;
+    return Context::LocalResolution(*resolved);
 }
 
 void Compiler::visit_stmt(const Stmt &statement) {
@@ -277,7 +296,7 @@ void Compiler::loop_expression(const LoopExpr &expr) {
     // to support breaking with values before loop body we create special invisible variable used for returing
     emit(OpCode::NIL);
     define_variable("$scope_return");
-    current_scope().return_slot = *current_context().resolve_variable("$scope_return");
+    current_scope().return_slot = std::get<Context::LocalResolution>(current_context().resolve_variable("$scope_return")).slot;
     int continue_idx = current_function()->add_jump_destination(current_program().size());
     int break_idx = current_function()->add_empty_jump_destination();
     current_scope().continue_idx = continue_idx;
@@ -298,7 +317,7 @@ void Compiler::while_expr(const WhileExpr &expr) {
     begin_scope(ScopeType::LOOP, label);
     emit(OpCode::NIL);
     define_variable("$scope_return");
-    current_scope().return_slot = *current_context().resolve_variable("$scope_return");
+    current_scope().return_slot = std::get<Context::LocalResolution>(current_context().resolve_variable("$scope_return")).slot;
 
     int continue_idx = current_function()->add_jump_destination(current_program().size());
     int break_idx = current_function()->add_empty_jump_destination();
@@ -339,7 +358,7 @@ void Compiler::for_expr(const ForExpr &expr) {
     begin_scope(ScopeType::LOOP, label);
     emit(OpCode::NIL);
     define_variable("$scope_return");
-    current_scope().return_slot = *current_context().resolve_variable("$scope_return");
+    current_scope().return_slot = std::get<Context::LocalResolution>(current_context().resolve_variable("$scope_return")).slot;
     int continue_idx = current_function()->add_jump_destination(current_program().size());
     int break_idx = current_function()->add_empty_jump_destination();
     int end_idx = current_function()->add_empty_jump_destination();
@@ -481,17 +500,18 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
     //     current_scope().define("super");
     // }
     //// class scope
-    begin_scope(ScopeType::BLOCK);
+    begin_scope(ScopeType::CLASS);
     // TODO: non-expression scope?
-    // emit(OpCode::NIL);
-    // define_variable("$scope_return");
-    emit(OpCode::GET, *current_context().resolve_variable(name));
+    emit(OpCode::NIL);
+    define_variable("$scope_return");
+    emit(OpCode::GET, std::get<Context::LocalResolution>(current_context().resolve_variable(name)).slot);
     current_scope().mark_temporary();
     for (auto& field : stmt.fields) {
         visit_expr(*field->value);
         int idx = current_function()->add_constant(field->name.get_lexeme(source));
         emit(OpCode::FIELD, idx);
         current_scope().pop_temporary();
+        current_scope().add_field(field->name.get_lexeme(source));
     }
 
 
@@ -505,9 +525,9 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
     emit(OpCode::POP);
     current_scope().pop_temporary();
     // TODO: non-expression scope?
-    // end_scope();
-    // emit(OpCode::POP);
-    // current_scope().pop_temporary();
+    end_scope();
+    emit(OpCode::POP);
+    current_scope().pop_temporary();
     // if (stmt.super_name) {
     //     end_scope();
     // }
@@ -703,16 +723,26 @@ void Compiler::binary(const BinaryExpr &expr) {
     current_scope().pop_temporary();
 }
 
-
+// TODO: total mess and loads of overlap with Compiler::resolve_variable
 void Compiler::update_lvalue(const Expr& lvalue) {
     if (std::holds_alternative<VariableExpr>(lvalue)) {
         std::string name = std::get<VariableExpr>(lvalue).identifier.get_lexeme(source);
-        if (auto idx = current_context().resolve_variable(name)) {
-            emit(OpCode::SET, *idx); // todo: handle overflow
+        auto resolution = current_context().resolve_variable(name);
+        if (std::holds_alternative<Context::LocalResolution>(resolution)) {
+            emit(OpCode::SET, std::get<Context::LocalResolution>(resolution).slot); // todo: handle overflow
+        } else if (std::holds_alternative<Context::FieldResolution>(resolution)) {
+            // TODO: this doesn't work with nested classes i think?
+            emit(OpCode::GET, std::get<Context::LocalResolution>(current_context().resolve_variable("this")).slot);
+            emit(OpCode::SET_PROPERTY, current_function()->add_constant(name));
         } else {
-            idx = resolve_upvalue(name);
-            assert(idx.has_value()); // todo: error handling
-            emit(OpCode::SET_UPVALUE, *idx);
+            auto up_resolution = resolve_upvalue(name);
+            if (std::holds_alternative<Context::LocalResolution>(up_resolution)) {
+                emit(OpCode::SET_UPVALUE, std::get<Context::LocalResolution>(up_resolution).slot); // todo: handle overflow
+            } else if (std::holds_alternative<Context::FieldResolution>(up_resolution)) {
+                // TODO: this doesn't work with nested classes i think?
+                emit(OpCode::GET, std::get<Context::LocalResolution>(current_context().resolve_variable("this")).slot);
+                emit(OpCode::SET_PROPERTY, current_function()->add_constant(name));
+            }
         }
     } else if (std::holds_alternative<GetPropertyExpr>(lvalue)) {
         const auto& property_expr = std::get<GetPropertyExpr>(lvalue);

@@ -62,10 +62,18 @@ std::optional<VM::RuntimeError> VM::call_value(const Value &value, const int arg
     }
 
     if (auto *klass = dynamic_cast<Class *>(*object)) {
-        pop();
+        // TODO: do this some other way as it definitely breaks gc
+        std::vector<Value> args;
+        for (int i = 0; i < arguments_count; ++i) {
+            args.push_back(pop());
+        }
+        pop(); // pop class
         auto *instance = new Instance(klass);
         push(instance);
         allocate(instance);
+        for (int i = 0; i < arguments_count; ++i) {
+            push(args[i]);
+        }
         if (klass->methods.contains("init")) {
             return call_value(klass->methods["init"], arguments_count);
         }
@@ -402,10 +410,10 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 break;
             }
         }
-        for (int i = 0; i < stack_index; ++i) {
-            std::cout << '[' << stack[i].to_string() << "] ";
-        }
-        std::cout << '\n';
+        // for (int i = 0; i < stack_index; ++i) {
+        //     std::cout << '[' << stack[i].to_string() << "] ";
+        // }
+        // std::cout << '\n';
     }
 #undef BINARY_OPERATION
 }

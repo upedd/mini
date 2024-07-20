@@ -1,5 +1,7 @@
 #ifndef COMPILER_H
 #define COMPILER_H
+#include <unordered_set>
+
 #include "Ast.h"
 #include "debug.h"
 #include "Object.h"
@@ -36,9 +38,11 @@ public:
     enum class ScopeType {
         LOOP,
         LABELED_BLOCK,
-        BLOCK
+        BLOCK,
+        CLASS
     };
 
+    // Break this scope into classes because it is too monolithic
     class Scope {
     public:
         Scope(ScopeType type, int slot_start, std::string name = "") : type(type), slot_start(slot_start), name(std::move(name)) {}
@@ -75,6 +79,14 @@ public:
             return locals;
         }
 
+        [[nodiscard]] bool has_field(const std::string& name) const {
+            return fields.contains(name);
+        }
+
+        void add_field(const std::string & string) {
+            fields.emplace(string);
+        }
+
         int break_idx = -1;
         int continue_idx = -1;
         int return_slot = -1;
@@ -85,6 +97,7 @@ public:
         int temporaries = 0;
 
         std::vector<Local> locals;
+        std::unordered_set<std::string> fields;
     };
 
     struct Context {
@@ -96,8 +109,16 @@ public:
         Scope& current_scope() {
             return scopes.back();
         }
+        // TODO: does this support nested classes??
+        struct FieldResolution {
+        };
+        struct LocalResolution {
+            int slot;
+        };
 
-        std::optional<int> resolve_variable(const std::string &name);
+        using Resolution = std::variant<std::monostate, FieldResolution, LocalResolution>;
+
+        Resolution resolve_variable(const std::string &name);
 
         int add_upvalue(int index, bool is_local);
 
@@ -137,7 +158,8 @@ private:
 
     void define_variable(const std::string &name);
     void resolve_variable(const std::string &name);
-    int resolve_upvalue(const std::string &name);
+
+    Compiler::Context::Resolution resolve_upvalue(const std::string &name);
 
     void visit_stmt(const Stmt &stmt);
 
