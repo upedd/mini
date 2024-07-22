@@ -488,9 +488,14 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 int constant_idx = fetch();
                 auto name = get_constant(constant_idx).get<std::string>();
                 Class *superclass = dynamic_cast<Class *>(peek().get<Object *>());
-                if (!bind_method(superclass, name)) {
+                if (!superclass->methods.contains(name)) {
                     return std::unexpected(RuntimeError("Unexpected call to undefined method of super class."));
-                };
+                }
+                auto* method = dynamic_cast<Closure *>(superclass->methods[name].value.get<Object*>());
+                auto* bound = new BoundMethod(peek(1), method);
+                pop();
+                push(bound);
+                allocate<BoundMethod>(bound);
                 break;
             }
             case OpCode::GET_NATIVE: {

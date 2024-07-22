@@ -40,9 +40,10 @@ int Compiler::Scope::next_slot() {
 
 Compiler::Context::Resolution Compiler::Context::resolve_variable(const std::string& name) {
     for (auto& scope : std::views::reverse(scopes)) {
-        if (scope.get_type() == ScopeType::CLASS) {
-            if (scope.has_field(name)) return FieldResolution();
-        } else if (auto index = scope.get(name)) { // resolve local
+        if (scope.get_type() == ScopeType::CLASS && scope.has_field(name)) {
+            return FieldResolution();
+        }
+        if (auto index = scope.get(name)) { // resolve local
             return LocalResolution(*index);
         }
     }
@@ -207,6 +208,8 @@ void Compiler::resolve_variable(const std::string &name) {
             // TODO: this doesn't work with nested classes i think?
             emit(OpCode::GET, std::get<Context::LocalResolution>(current_context().resolve_variable("this")).slot);
             emit(OpCode::GET_PROPERTY, current_function()->add_constant(name));
+        } else {
+            assert("unreachable!");
         }
     }
     current_scope().mark_temporary();
