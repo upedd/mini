@@ -478,6 +478,9 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 for (auto &value: superclass->methods) {
                     subclass->methods.insert(value);
                 }
+                for (auto& value : superclass->fields) {
+                    subclass->fields.insert(value);
+                }
                 pop();
                 break;
             }

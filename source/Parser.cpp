@@ -207,12 +207,11 @@ Stmt Parser::class_declaration() {
     consume(Token::Type::IDENTIFIER, "Expected class name.");
     Token name = current;
 
-    // TODO: add inheritance back!
-    // std::optional<Token> super_name {};
-    // if (match(Token::Type::LESS)) {
-    //     consume(Token::Type::IDENTIFIER, "Expected superclass name.");
-    //     super_name = current;
-    // }
+    std::optional<Token> super_class {};
+    if (match(Token::Type::COLON)) {
+        consume(Token::Type::IDENTIFIER, "Expected superclass name.");
+        super_class = current;
+    }
     consume(Token::Type::LEFT_BRACE, "Expected '{' before class body.");
 
     std::vector<std::unique_ptr<MethodStmt>> methods;
@@ -238,7 +237,7 @@ Stmt Parser::class_declaration() {
     }
     consume(Token::Type::RIGHT_BRACE, "Expected '}' after class body.");
 
-    return ClassStmt {.name = name, .methods = std::move(methods), .fields = std::move(fields)};
+    return ClassStmt {.name = name, .methods = std::move(methods), .fields = std::move(fields), .super_class = super_class};
 }
 
 Stmt Parser::expr_statement() {

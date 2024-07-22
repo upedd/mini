@@ -159,8 +159,7 @@ struct ClassStmt {
     Token name;
     std::vector<std::unique_ptr<MethodStmt> > methods;
     std::vector<std::unique_ptr<FieldStmt> > fields;
-    // TODO: add inheritance back!
-    //std::optional<Token> super_name;
+    std::optional<Token> super_class;
 };
 
 struct NativeStmt {

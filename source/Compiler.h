@@ -83,6 +83,10 @@ public:
             return fields.contains(name);
         }
 
+        [[nodiscard]] std::unordered_set<std::string>& get_fields() {
+            return fields;
+        }
+
         void add_field(const std::string & string) {
             fields.emplace(string);
         }
@@ -100,11 +104,16 @@ public:
         std::unordered_set<std::string> fields;
     };
 
+    struct ResolvedClass {
+        std::unordered_set<std::string> fields;
+    };
+
     struct Context {
         Function *function = nullptr;
         FunctionType function_type;
         std::vector<Upvalue> upvalues;
         std::vector<Scope> scopes;
+        std::unordered_map<std::string, ResolvedClass> resolved_classes;
 
         Scope& current_scope() {
             return scopes.back();

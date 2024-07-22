@@ -175,6 +175,9 @@ void Compiler::pop_out_of_scopes(int depth) {
 }
 
 void Compiler::end_scope() {
+    if (current_scope().get_type() == ScopeType::CLASS) {
+        current_context().resolved_classes[current_scope().get_name()] = ResolvedClass(current_scope().get_fields());
+    }
     pop_out_of_scopes(1);
     current_context().scopes.pop_back();
     current_scope().mark_temporary();
@@ -502,12 +505,27 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
     //     current_scope().define("super");
     // }
     //// class scope
-    begin_scope(ScopeType::CLASS);
+    begin_scope(ScopeType::CLASS, name);
+
+
     // TODO: non-expression scope?
     emit(OpCode::NIL);
     define_variable("$scope_return");
+
+    if (stmt.super_class) {
+        std::string super_class_name = stmt.super_class->get_lexeme(source);
+        emit(OpCode::GET, std::get<Context::LocalResolution>(current_context().resolve_variable(super_class_name)).slot);
+        emit(OpCode::GET, std::get<Context::LocalResolution>(current_context().resolve_variable(name)).slot);
+        emit(OpCode::INHERIT);
+        assert(current_context().resolved_classes.contains(super_class_name));
+        auto super_fields = current_context().resolved_classes[super_class_name].fields;
+        current_scope().get_fields().insert(super_fields.begin(), super_fields.end());
+        current_scope().define("super");
+    }
+
     emit(OpCode::GET, std::get<Context::LocalResolution>(current_context().resolve_variable(name)).slot);
     current_scope().mark_temporary();
+
     for (auto& field : stmt.fields) {
         visit_expr(*field->variable->value);
         int idx = current_function()->add_constant(field->variable->name.get_lexeme(source));
