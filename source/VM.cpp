@@ -165,16 +165,6 @@ void VM::adopt_objects(std::vector<Object *> objects) {
     }
 }
 
-bool VM::bind_method(Class *klass, const std::string &name) {
-    if (!klass->methods.contains(name)) return false;
-    auto* method = dynamic_cast<Closure *>(klass->methods[name].value.get<Object*>());
-    auto* bound = new BoundMethod(peek(), method);
-    pop();
-    push(bound);
-    allocate<BoundMethod>(bound);
-    return true;
-}
-
 std::optional<Instance*> VM::get_current_instance() {
     Value first_on_stack = stack[frames.back().frame_pointer];
     if (auto object = first_on_stack.as<Object*>()) {
@@ -183,6 +173,83 @@ std::optional<Instance*> VM::get_current_instance() {
         }
     }
     return {};
+}
+
+std::optional<Receiver*> VM::get_current_receiver() const {
+    Value first_on_stack = stack[frames.back().frame_pointer];
+    if (auto object = first_on_stack.as<Object*>()) {
+        if (auto* receiver = dynamic_cast<Receiver*>(*object)) {
+            return receiver;
+        }
+    }
+    return {};
+}
+
+
+std::optional<VM::RuntimeError> VM::validate_instance_access(Instance* accessor, const ClassValue& class_value) {
+    std::optional<Receiver*> receiver = get_current_receiver();
+    if (class_value.is_private && (!receiver || (*receiver)->instance != accessor)) {
+        return RuntimeError("Private propererties can be access only inside their class definitions.");
+    }
+    if (class_value.is_static && (!receiver || (*receiver)->instance != nullptr)) {
+        return RuntimeError("Static propererties cannot be accesed on class instances.");
+    }
+    // if (!class_value.is_static && (!receiver || (*receiver)->klass != nullptr)) {
+    //     return RuntimeError("Only static propererties cannot be accesed on class objects.");
+    // }
+}
+
+std::optional<VM::RuntimeError> VM::validate_class_access(Class* accessor, const ClassValue& class_value) {
+    std::optional<Receiver*> receiver = get_current_receiver();
+    if (class_value.is_private && (!receiver || (*receiver)->klass != accessor)) {
+        return RuntimeError("Private propererties can be access only inside their class definitions.");
+    }
+    if (class_value.is_static && (!receiver || (*receiver)->instance != nullptr)) {
+        return RuntimeError("Static propererties cannot be accesed on class instances.");
+    }
+    // if (!class_value.is_static && (!receiver || (*receiver)->klass != nullptr)) {
+    //     return RuntimeError("Only static propererties cannot be accesed on class objects.");
+    // }
+}
+
+
+Value VM::bind_method(const ClassValue& method, Class* klass, Instance* instance) {
+    // TODO: fix gc!!!!
+    auto* closure = dynamic_cast<Closure *>(method.value.get<Object*>());
+    auto* receiver = new Receiver(klass, instance);
+    auto* bound = new BoundMethod(receiver, closure);
+    allocate<BoundMethod>(bound);
+    allocate<Receiver>(receiver);
+    return bound;
+}
+
+std::expected<Value, VM::RuntimeError> VM::get_instance_property(Instance *instance, const std::string &name) {
+    if (instance->properties.contains(name)) {
+        ClassValue class_value = instance->properties[name];
+        std::optional<RuntimeError> error = validate_property_access(instance->klass, class_value);
+        if (error) {
+            return std::unexpected(*error);
+        }
+        return class_value.value;
+    }
+
+    if (instance->klass->methods.contains(name)) {
+        ClassValue class_value = instance->klass->methods[name];
+        std::optional<RuntimeError> error = validate_property_access(instance->klass, class_value);
+        if (error) {
+            return std::unexpected(*error);
+        }
+        return bind_method(class_value, instance->klass, instance);
+    }
+
+    return std::unexpected(RuntimeError("Property must be declared on class."));
+}
+
+std::expected<Value, VM::RuntimeError> VM::get_class_property(Class *klass, const std::string &name) {
+    if (klass->fields.contains(name)) {
+        ClassValue class_value = klass->fields[name];
+        validate_property_access(klass, );
+    }
 }
 
 std::expected<Value, VM::RuntimeError> VM::run() {
@@ -345,34 +412,42 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 if (auto *instance = dynamic_cast<Instance *>(*object)) {
                     int constant_idx = fetch();
                     auto name = get_constant(constant_idx).get<std::string>();
-                    if (instance->properties.contains(name)) {
-                        pop();
-                        ClassValue class_value = instance->properties[name];
-                        std::optional<Instance*> current_instance = get_current_instance();
-                        if (class_value.is_private && (!current_instance || *current_instance != instance)) {
-                            return std::unexpected(RuntimeError("Attempted to read private property outside class definition"));
-                        }
-                        if (class_value.is_static) {
-                            return std::unexpected(RuntimeError("Attempted to read static field on an instance."));
-                        }
-                        push(class_value.value);
-                    } else if (instance->klass->methods.contains(name)) {
-                        ClassValue class_value = instance->klass->methods[name];
-                        std::optional<Instance*> current_instance = get_current_instance();
-                        if (class_value.is_private && (!current_instance || *current_instance != instance)) {
-                            return std::unexpected(RuntimeError("Attempted to read private property outside class definition"));
-                        }
-                        if (class_value.is_static) {
-                            return std::unexpected(RuntimeError("Attempted to read static field on an instance."));
-                        }
-                        auto* method = dynamic_cast<Closure *>(class_value.value.get<Object*>());
-                        auto* bound = new BoundMethod(peek(), method);
-                        pop();
-                        push(bound);
-                        allocate<BoundMethod>(bound);
-                    } else {
-                        return std::unexpected(RuntimeError("Attempted to read not declared property."));
+                    std::expected<Value, RuntimeError> property = get_instance_property(instance, name);
+                    if (!property) {
+                        return std::unexpected(property.error());
                     }
+                    pop();
+                    push(*property);
+                    // if (instance->properties.contains(name)) {
+                    //     pop();
+                    //     ClassValue class_value = instance->properties[name];
+                    //     std::optional<Instance*> current_instance = get_current_instance();
+                    //     if (class_value.is_private && (!current_instance || *current_instance != instance)) {
+                    //         return std::unexpected(RuntimeError("Attempted to read private property outside class definition"));
+                    //     }
+                    //     if (class_value.is_static) {
+                    //         return std::unexpected(RuntimeError("Attempted to read static field on an instance."));
+                    //     }
+                    //     push(class_value.value);
+                    // } else if (instance->klass->methods.contains(name)) {
+                    //     ClassValue class_value = instance->klass->methods[name];
+                    //     std::optional<Instance*> current_instance = get_current_instance();
+                    //     if (class_value.is_private && (!current_instance || *current_instance != instance)) {
+                    //         return std::unexpected(RuntimeError("Attempted to read private property outside class definition"));
+                    //     }
+                    //     if (class_value.is_static) {
+                    //         return std::unexpected(RuntimeError("Attempted to read static field on an instance."));
+                    //     }
+                    //     auto* method = dynamic_cast<Closure *>(class_value.value.get<Object*>());
+                    //     auto* receiver = new Receiver(instance->klass, instance);
+                    //     auto* bound = new BoundMethod(receiver, method);
+                    //     pop();
+                    //     push(bound);
+                    //     allocate<BoundMethod>(bound);
+                    //     allocate<Receiver>(receiver);
+                    // } else {
+                    //     return std::unexpected(RuntimeError("Attempted to read not declared property."));
+                    // }
                 } else if (auto* klass = dynamic_cast<Class*>(*object)) {
                     int constant_idx = fetch();
                     auto name = get_constant(constant_idx).get<std::string>();
@@ -501,10 +576,12 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                         return std::unexpected(RuntimeError("Unexpected call to undefined method of super class."));
                     }
                     auto* method = dynamic_cast<Closure *>(superinstance->klass->methods[name].value.get<Object*>());
-                    auto* bound = new BoundMethod(peek(1), method);
+                    auto* receiver = new Receiver(superinstance->klass, dynamic_cast<Instance*>(peek(1).get<Object*>()));
+                    auto* bound = new BoundMethod(receiver, method);
                     pop();
                     push(bound);
                     allocate<BoundMethod>(bound);
+                    allocate(receiver);
                 }
 
                 break;

@@ -154,6 +154,7 @@ struct ClassValue {
     Value value;
     bool is_private = false;
     bool is_static = false;
+    bool is_override = false;
 };
 
 class Class final : public Object{

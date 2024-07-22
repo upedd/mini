@@ -52,9 +52,24 @@ public:
     T *allocate(T *ptr);
 
     void adopt_objects(std::vector<Object*> objects);
-    bool bind_method(Class * klass, const std::string & name);
 
     std::optional<Instance *> get_current_instance();
+
+    std::optional<Receiver *> get_current_receiver() const;
+
+    std::optional<VM::RuntimeError> validate_instance_access(Instance *accessor, const ClassValue &class_value);
+
+    std::optional<VM::RuntimeError> validate_instance_accesss(Instance *accessor, const ClassValue &class_value);
+
+    std::optional<VM::RuntimeError> validate_property_access(Class *value_source, const ClassValue &class_value);
+
+    std::optional<VM::RuntimeError> validate_class_access(Class *accessor, const ClassValue &class_value);
+
+    Value bind_method(const ClassValue &method, Class *klass, Instance *instance);
+
+    std::expected<Value, VM::RuntimeError> get_instance_property(Instance *instance, const std::string &name);
+
+    std::expected<Value, VM::RuntimeError> get_class_property(Class *klass, const std::string &name);
 
     std::expected<Value, RuntimeError> run();
 
