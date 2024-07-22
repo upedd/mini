@@ -390,7 +390,6 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                         push(class_value.value);
                     } else if (klass->methods.contains(name)) {
                         // TODO: check private!
-                        pop();
                         ClassValue class_value = klass->methods[name];
                         std::optional<Instance*> current_instance = get_current_instance();
                         if (class_value.is_private && (!current_instance || (*current_instance)->klass != klass)) {
@@ -399,7 +398,11 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                         if (!class_value.is_static) {
                             return std::unexpected(RuntimeError("Attempted to call non-static method on a Class."));
                         }
-                        push(class_value.value);
+                        auto* method = dynamic_cast<Closure *>(class_value.value.get<Object*>());
+                        auto* bound = new BoundMethod(peek(), method);
+                        pop();
+                        push(bound);
+                        allocate<BoundMethod>(bound);
                     } else {
                         return std::unexpected(RuntimeError("Attempted to read not declared property."));
                     }

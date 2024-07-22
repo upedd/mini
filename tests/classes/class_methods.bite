@@ -8,7 +8,7 @@ class Foo {
     }
 
     add_to_10(a) {
-        return this.add(a, this.get_10());
+        return this.add(a, this.get10());
     }
 }
 native print;

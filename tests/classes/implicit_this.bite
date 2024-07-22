@@ -16,6 +16,8 @@ class Foo {
     }
 }
 
+native print;
+
 let instance = Foo();
 instance.set(10, 5);
 print(instance.foo);

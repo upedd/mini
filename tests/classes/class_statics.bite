@@ -1,0 +1,24 @@
+class Foo {
+    foo;
+    static bar;
+
+    add() {
+        return foo + bar;
+    }
+
+    static get_bar_plus_ten() {
+        return bar + 10;
+    }
+
+    add_plus_ten() {
+        return foo + get_bar_plus_ten();
+    }
+}
+
+# TODO: should also check for access violations
+# but for now test runner does not support this
+native print;
+
+Foo.bar = 5;
+print(Foo.bar);
+print(Foo.get_bar_plus_ten());
