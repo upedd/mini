@@ -520,12 +520,18 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
 
     for (auto &method: stmt.methods) {
         std::string name = method->function->name.get_lexeme(source);
+        current_scope().add_field(name);
+    }
+    // hoist methods
+    for (auto& method : stmt.methods) {
+        std::string name = method->function->name.get_lexeme(source);
         function(*method->function, name == "init" ? FunctionType::CONSTRUCTOR : FunctionType::METHOD);
         int idx = current_function()->add_constant(name);
         emit(OpCode::METHOD, idx);
         emit(method->is_private | (method->is_static << 1));
         current_scope().pop_temporary();
     }
+
     emit(OpCode::POP);
     current_scope().pop_temporary();
     // TODO: non-expression scope?
