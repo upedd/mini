@@ -204,7 +204,7 @@ void Compiler::resolve_variable(const std::string &name) {
         emit(OpCode::GET, std::get<Context::LocalResolution>(resolution).slot); // todo: handle overflow
     } else if (std::holds_alternative<Context::FieldResolution>(resolution)) {
         // TODO: this doesn't work with nested classes i think?
-        emit(OpCode::GET, std::get<Context::LocalResolution>(current_context().resolve_variable("this")).slot);
+        emit(OpCode::THIS);
         emit(OpCode::GET_PROPERTY, current_function()->add_constant(name));
     } else {
         auto up_resolution = resolve_upvalue(name);
@@ -212,7 +212,7 @@ void Compiler::resolve_variable(const std::string &name) {
             emit(OpCode::GET_UPVALUE, std::get<Context::LocalResolution>(up_resolution).slot); // todo: handle overflow
         } else if (std::holds_alternative<Context::FieldResolution>(up_resolution)) {
             // TODO: this doesn't work with nested classes i think?
-            emit(OpCode::GET, std::get<Context::LocalResolution>(current_context().resolve_variable("this")).slot);
+            emit(OpCode::THIS);
             emit(OpCode::GET_PROPERTY, current_function()->add_constant(name));
         } else {
             assert("unreachable!");
@@ -771,7 +771,7 @@ void Compiler::update_lvalue(const Expr& lvalue) {
             emit(OpCode::SET, std::get<Context::LocalResolution>(resolution).slot); // todo: handle overflow
         } else if (std::holds_alternative<Context::FieldResolution>(resolution)) {
             // TODO: this doesn't work with nested classes i think?
-            emit(OpCode::GET, std::get<Context::LocalResolution>(current_context().resolve_variable("this")).slot);
+            emit(OpCode::THIS);
             emit(OpCode::SET_PROPERTY, current_function()->add_constant(name));
         } else {
             auto up_resolution = resolve_upvalue(name);
@@ -779,7 +779,7 @@ void Compiler::update_lvalue(const Expr& lvalue) {
                 emit(OpCode::SET_UPVALUE, std::get<Context::LocalResolution>(up_resolution).slot); // todo: handle overflow
             } else if (std::holds_alternative<Context::FieldResolution>(up_resolution)) {
                 // TODO: this doesn't work with nested classes i think?
-                emit(OpCode::GET, std::get<Context::LocalResolution>(current_context().resolve_variable("this")).slot);
+                emit(OpCode::THIS);
                 emit(OpCode::SET_PROPERTY, current_function()->add_constant(name));
             }
         }

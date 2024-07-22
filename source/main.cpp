@@ -20,8 +20,8 @@ int main(int argc, char** argv) {
     Compiler compiler(source);
     compiler.compile();
     auto& func = compiler.get_main();
-    Disassembler disassembler(func);
-    disassembler.disassemble("main");
+    // Disassembler disassembler(func);
+    // disassembler.disassemble("main");
     auto& functions = compiler.get_functions();
     GarbageCollector gc;
     for (auto* function : functions) {

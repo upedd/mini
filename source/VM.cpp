@@ -214,8 +214,6 @@ Value VM::bind_method(const ClassValue& method, Class* klass, Instance* instance
     auto* closure = dynamic_cast<Closure *>(method.value.get<Object*>());
     auto* receiver = new Receiver(klass, instance);
     auto* bound = new BoundMethod(receiver, closure);
-    allocate<BoundMethod>(bound);
-    allocate<Receiver>(receiver);
     return bound;
 }
 
@@ -479,6 +477,13 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                     }
                     pop();
                     push(*property);
+                    // this will wait for gc refactoring
+                    if (property->is<Object*>()) {
+                        if (auto* bound = dynamic_cast<BoundMethod*>(property->get<Object*>())) {
+                            allocate(bound);
+                            allocate<Receiver>(dynamic_cast<Receiver*>(bound->receiver.get<Object*>()));
+                        }
+                    }
                 } else if (auto* klass = dynamic_cast<Class*>(*object)) {
                     std::expected<Value, RuntimeError> property = get_class_property(klass, name);
                     if (!property) {
@@ -578,6 +583,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
             }
             case OpCode::THIS: {
                 push(dynamic_cast<Receiver*>(stack[frames.back().frame_pointer].get<Object*>())->instance);
+                break;
             }
         }
         for (int i = 0; i < stack_index; ++i) {
