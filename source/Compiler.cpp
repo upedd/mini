@@ -526,11 +526,14 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
         emit(OpCode::GET, std::get<Context::LocalResolution>(current_context().resolve_variable(super_class_name)).slot);
         emit(OpCode::GET, std::get<Context::LocalResolution>(current_context().resolve_variable(name)).slot);
         emit(OpCode::INHERIT);
-        emit(OpCode::CALL, 0);
+        //emit(OpCode::CALL, 0);
+        //emit(OpCode::FIELD, 1); // private field for super
         assert(current_context().resolved_classes.contains(super_class_name));
         auto super_fields = current_context().resolved_classes[super_class_name].fields;
         current_scope().get_fields().insert(super_fields.begin(), super_fields.end());
-        current_scope().define("super");
+        // TODO: private field for super
+        //current_scope().add_field("super");
+        // current_scope().define("super");
     }
 
     emit(OpCode::GET, std::get<Context::LocalResolution>(current_context().resolve_variable(name)).slot);

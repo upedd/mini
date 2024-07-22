@@ -176,11 +176,13 @@ public:
         for (auto& value : std::views::values(fields)) {
             gc.mark(value.value);
         }
+        gc.mark(superclass);
     }
 
     std::string name;
     std::unordered_map<std::string, ClassValue> methods;
     std::unordered_map<std::string, ClassValue> fields;
+    Class* superclass = nullptr;
 };
 
 
@@ -210,9 +212,11 @@ public:
         for (auto& value : std::views::values(properties)) {
             gc.mark(value.value);
         }
+        gc.mark(super_instance);
     }
 
     Class* klass;
+    Instance* super_instance = nullptr;
     std::unordered_map<std::string, ClassValue> properties;
 };
 

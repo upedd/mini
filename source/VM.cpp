@@ -74,6 +74,11 @@ std::optional<VM::RuntimeError> VM::call_value(const Value &value, const int arg
         for (int i = arguments_count - 1; i >= 0; --i) {
             push(args[i]);
         }
+        // TODO: check
+        if (klass->superclass) {
+            instance->super_instance = new Instance(klass->superclass);
+            allocate(instance->super_instance);
+        }
         // TODO: handle private construtors?
         if (klass->methods.contains("init")) {
             return call_value(klass->methods["init"].value, arguments_count);
@@ -218,6 +223,34 @@ Value VM::bind_method(const ClassValue& method, Class* klass, Instance* instance
 }
 
 std::expected<Value, VM::RuntimeError> VM::get_instance_property(Instance *instance, const std::string &name) {
+    // TODO: rethink this section please!
+    // private or static members get resolved first
+    std::optional<Receiver*> receiver = get_current_receiver();
+    if (receiver && receiver.value()->klass->methods.contains(name)) {
+        ClassValue& class_value = instance->klass->methods[name];
+        if (class_value.is_static) {
+            return bind_method(class_value, receiver.value()->klass, nullptr);
+        }
+        if (class_value.is_private) {
+            return bind_method(class_value, receiver.value()->klass, instance);
+        }
+    }
+
+    if (receiver && receiver.value()->klass->fields.contains(name)) {
+        if (receiver.value()->instance->klass != receiver.value()->klass) { // receiver and caller don't match;
+            Instance* super_instance = receiver.value()->instance->super_instance;
+            assert(super_instance != nullptr);
+            assert(super_instance == receiver.value()->instance);
+            if (super_instance->properties[name].is_static) {
+                return std::unexpected(RuntimeError("Static propererties cannot be accesed on class instances."));
+            }
+            if (super_instance->properties[name].is_private) {
+                return super_instance->properties[name].value;
+            }
+        }
+    }
+
+    // members properties
     if (instance->properties.contains(name)) {
         ClassValue& class_value = instance->properties[name];
         if (std::optional<RuntimeError> error = validate_instance_access(instance, class_value)) {
@@ -279,6 +312,20 @@ std::expected<Value, VM::RuntimeError> VM::get_super_property(Instance *super_in
 
 std::optional<VM::RuntimeError> VM::set_instance_property(Instance *instance, const std::string &name,
                                                           const Value &value) {
+    std::optional<Receiver*> receiver = get_current_receiver();
+    if (receiver && receiver.value()->klass->fields.contains(name)) {
+        if (receiver.value()->instance->klass != receiver.value()->klass) { // receiver and caller don't match;
+            Instance* super_instance = receiver.value()->instance->super_instance;
+            assert(super_instance != nullptr);
+            assert(super_instance == receiver.value()->instance);
+            if (super_instance->properties[name].is_static) {
+                return RuntimeError("Static propererties cannot be accesed on class instances.");
+            }
+            if (super_instance->properties[name].is_private) {
+                super_instance->properties[name].value = value;
+            }
+        }
+    }
     if (instance->properties.contains(name)) {
         ClassValue& class_value = instance->properties[name];
         if (std::optional<RuntimeError> error = validate_instance_access(instance, class_value)) {
@@ -546,6 +593,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 for (auto& value : superclass->fields) {
                     subclass->fields.insert(value);
                 }
+                subclass->superclass = superclass;
                 pop();
                 break;
             }
@@ -586,10 +634,10 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 break;
             }
         }
-        for (int i = 0; i < stack_index; ++i) {
-            std::cout << '[' << stack[i].to_string() << "] ";
-        }
-        std::cout << '\n';
+        // for (int i = 0; i < stack_index; ++i) {
+        //     std::cout << '[' << stack[i].to_string() << "] ";
+        // }
+        // std::cout << '\n';
     }
 #undef BINARY_OPERATION
 }
