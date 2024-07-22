@@ -399,10 +399,12 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                             return std::unexpected(RuntimeError("Attempted to call non-static method on a Class."));
                         }
                         auto* method = dynamic_cast<Closure *>(class_value.value.get<Object*>());
-                        auto* bound = new BoundMethod(peek(), method);
+                        auto* receiver = new Receiver(klass, nullptr);
+                        auto* bound = new BoundMethod(receiver, method);
                         pop();
                         push(bound);
                         allocate<BoundMethod>(bound);
+                        allocate<Receiver>(receiver);
                     } else {
                         return std::unexpected(RuntimeError("Attempted to read not declared property."));
                     }
@@ -485,17 +487,26 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 break;
             }
             case OpCode::GET_SUPER: {
+                // TODO: check for access violations
                 int constant_idx = fetch();
                 auto name = get_constant(constant_idx).get<std::string>();
-                Class *superclass = dynamic_cast<Class *>(peek().get<Object *>());
-                if (!superclass->methods.contains(name)) {
-                    return std::unexpected(RuntimeError("Unexpected call to undefined method of super class."));
+                Instance* superinstance = dynamic_cast<Instance *>(peek().get<Object *>());
+                if (superinstance->properties.contains(name)) {
+                    ClassValue class_value = superinstance->properties[name];
+                    pop();
+                    pop();
+                    push(class_value.value);
+                } else {
+                    if (!superinstance->klass->methods.contains(name)) {
+                        return std::unexpected(RuntimeError("Unexpected call to undefined method of super class."));
+                    }
+                    auto* method = dynamic_cast<Closure *>(superinstance->klass->methods[name].value.get<Object*>());
+                    auto* bound = new BoundMethod(peek(1), method);
+                    pop();
+                    push(bound);
+                    allocate<BoundMethod>(bound);
                 }
-                auto* method = dynamic_cast<Closure *>(superclass->methods[name].value.get<Object*>());
-                auto* bound = new BoundMethod(peek(1), method);
-                pop();
-                push(bound);
-                allocate<BoundMethod>(bound);
+
                 break;
             }
             case OpCode::GET_NATIVE: {
@@ -515,6 +526,9 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 klass->fields[name] = {.value = value, .is_private = is_private, .is_static = is_static};
                 pop();
                 break;
+            }
+            case OpCode::THIS: {
+                push(dynamic_cast<Receiver*>(stack[frames.back().frame_pointer].get<Object*>())->instance);
             }
         }
         // for (int i = 0; i < stack_index; ++i) {

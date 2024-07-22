@@ -215,6 +215,33 @@ public:
     std::unordered_map<std::string, ClassValue> properties;
 };
 
+
+/**
+ * klass = class context where method is dispatched
+ */
+class Receiver final : public Object {
+public:
+    Receiver(Class* klass, Instance* instance) : klass(klass), instance(instance) {}
+
+    std::size_t get_size() override {
+        return sizeof(Receiver);
+    }
+
+    std::string to_string() override {
+        return std::format("<Receiver({}, {})>",
+            klass->to_string(),
+            instance->to_string());
+    }
+
+    void mark_references(GarbageCollector &gc) override {
+        gc.mark(klass);
+        gc.mark(instance);
+    }
+
+    Class* klass;
+    Instance* instance;
+};
+
 class BoundMethod final : public Object {
 public:
     BoundMethod(Value receiver, Closure *closure)
@@ -230,6 +257,11 @@ public:
         return std::format("<BoundMethod({}, {})>",
             receiver.to_string(),
             closure->to_string());
+    }
+
+    void mark_references(GarbageCollector &gc) override {
+        gc.mark(receiver);
+        gc.mark(closure);
     }
 
     Value receiver;

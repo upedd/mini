@@ -94,6 +94,12 @@ const std::vector<std::string> & Compiler::get_natives() {
     return natives;
 }
 
+void Compiler::this_expr() {
+    // safety: check if used in class method context
+    emit(OpCode::THIS);
+
+}
+
 void Compiler::start_context(Function *function, FunctionType type) {
     context_stack.emplace_back(function, type);
     current_context().scopes.emplace_back(ScopeType::BLOCK, 0); // TODO: should be function?
@@ -520,6 +526,7 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
         emit(OpCode::GET, std::get<Context::LocalResolution>(current_context().resolve_variable(super_class_name)).slot);
         emit(OpCode::GET, std::get<Context::LocalResolution>(current_context().resolve_variable(name)).slot);
         emit(OpCode::INHERIT);
+        emit(OpCode::CALL, 0);
         assert(current_context().resolved_classes.contains(super_class_name));
         auto super_fields = current_context().resolved_classes[super_class_name].fields;
         current_scope().get_fields().insert(super_fields.begin(), super_fields.end());
@@ -621,6 +628,7 @@ void Compiler::visit_expr(const Expr &expression) {
                    [this](const WhileExpr& expr) {while_expr(expr);},
                        [this](const ForExpr& expr) {for_expr(expr);},
                            [this](const ReturnExpr &expr) { retrun_expression(expr); },
+                               [this](const ThisExpr& expr) {this_expr();}
                }, expression);
 }
 

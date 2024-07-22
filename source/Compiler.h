@@ -148,6 +148,8 @@ public:
     const std::vector<Function*>& get_functions();
     const std::vector<std::string>& get_natives();
 
+    void this_expr();
+
 private:
     void start_context(Function *function, FunctionType type);
     void end_context();

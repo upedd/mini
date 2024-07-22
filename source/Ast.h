@@ -26,6 +26,7 @@ struct ContinueExpr;
 struct WhileExpr;
 struct ForExpr;
 struct ReturnExpr;
+struct ThisExpr;
 
 struct ExprStmt;
 struct VarStmt;
@@ -36,7 +37,7 @@ struct FieldStmt;
 struct MethodStmt;
 
 using Expr = std::variant<LiteralExpr, StringLiteral, UnaryExpr, BinaryExpr, VariableExpr, CallExpr, GetPropertyExpr,
-    SuperExpr, BlockExpr, IfExpr, LoopExpr, BreakExpr, ContinueExpr, WhileExpr, ForExpr, ReturnExpr>;
+    SuperExpr, BlockExpr, IfExpr, LoopExpr, BreakExpr, ContinueExpr, WhileExpr, ForExpr, ReturnExpr, ThisExpr>;
 using ExprHandle = std::unique_ptr<Expr>;
 
 using Stmt = std::variant<VarStmt, ExprStmt, FunctionStmt, ClassStmt, NativeStmt, FieldStmt, MethodStmt>;
@@ -121,6 +122,8 @@ struct ForExpr {
 struct ReturnExpr {
     ExprHandle value;
 };
+
+struct ThisExpr {};
 
 inline ExprHandle make_expr_handle(Expr expr) {
     return std::make_unique<Expr>(std::move(expr));
@@ -284,6 +287,9 @@ inline std::string expr_to_string(const Expr &expr, std::string_view source) {
                               }
                               return std::string("retrun");
                           },
+                            [](const ThisExpr& expr) {
+                                return std::string("this");
+                            }
                       }, expr);
 }
 
