@@ -1,0 +1,43 @@
+class Foo {
+    foo;
+    bar;
+
+    set(foo, bar) {
+        this.foo = foo;
+        this.bar = bar;
+    }
+
+    add() {
+       return foo + bar;
+    }
+
+    add_plus_ten() {
+        return add() + 10;
+    }
+}
+
+let instance = Foo();
+instance.set(10, 5);
+print(instance.foo);
+print(instance.bar);
+print(instance.add());
+print(instance.add_plus_ten());
+
+instance.set(-7, 3);
+print(instance.foo);
+print(instance.bar);
+print(instance.add());
+print(instance.add_plus_ten());
+
+let instance2 = Foo();
+instance2.set(3, 4);
+print(instance2.foo);
+print(instance2.bar);
+print(instance2.add());
+print(instance2.add_plus_ten());
+
+instance.set(2, 1);
+print(instance.foo);
+print(instance.bar);
+print(instance.add());
+print(instance.add_plus_ten());

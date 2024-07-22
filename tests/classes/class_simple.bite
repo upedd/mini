@@ -1,0 +1,25 @@
+class Foo {
+    bar;
+    baz = "abc";
+}
+
+native print;
+
+let instance = Foo();
+print(instance.bar);
+print(instance.baz);
+
+instance.bar = "xyz";
+print(instance.bar);
+print(instance.baz);
+
+instance.baz = 10;
+print(instance.bar);
+print(instance.baz);
+
+let instance2 = Foo();
+print(instance2.bar);
+print(instance2.baz);
+
+print(instance.bar);
+print(instance.baz);

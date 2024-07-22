@@ -1,0 +1,20 @@
+class Foo {
+    add_to_10(a) {
+        return this.add(a, this.get_10());
+    }
+
+    get10() {
+        return 10;
+    }
+
+    add(a, b) {
+        return a + b;
+    }
+}
+native print;
+
+let instance = Foo();
+
+print(instance.get10());
+print(instance.add(3, 5));
+print(instance.add_to_10(7));

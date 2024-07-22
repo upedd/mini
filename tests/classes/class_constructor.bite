@@ -1,0 +1,35 @@
+class Foo {
+    bar;
+    baz = 10;
+    xyz = "abc";
+
+    init(bar, xyz) {
+        this.bar = bar;
+        this.xyz = xyz;
+    }
+
+    add() {
+        return this.bar + this.baz;
+    }
+}
+
+native print;
+
+let instance = Foo(5, "foo");
+
+print(instance.bar);
+print(instance.baz);
+print(instance.xyz);
+print(instance.add());
+
+let instance2 = Foo(-3, "foo2");
+
+print(instance2.bar);
+print(instance2.baz);
+print(instance2.xyz);
+print(instance2.add());
+
+print(instance.bar);
+print(instance.baz);
+print(instance.xyz);
+print(instance.add());
