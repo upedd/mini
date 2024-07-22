@@ -57,19 +57,24 @@ public:
 
     std::optional<Receiver *> get_current_receiver() const;
 
-    std::optional<VM::RuntimeError> validate_instance_access(Instance *accessor, const ClassValue &class_value);
-
-    std::optional<VM::RuntimeError> validate_instance_accesss(Instance *accessor, const ClassValue &class_value);
-
-    std::optional<VM::RuntimeError> validate_property_access(Class *value_source, const ClassValue &class_value);
-
-    std::optional<VM::RuntimeError> validate_class_access(Class *accessor, const ClassValue &class_value);
+    std::optional<VM::RuntimeError> validate_instance_access(Instance *accessor, const ClassValue &class_value) const;
+    std::optional<VM::RuntimeError> validate_class_access(Class *accessor, const ClassValue &class_value) const;
 
     Value bind_method(const ClassValue &method, Class *klass, Instance *instance);
 
     std::expected<Value, VM::RuntimeError> get_instance_property(Instance *instance, const std::string &name);
 
-    std::expected<Value, VM::RuntimeError> get_class_property(Class *klass, const std::string &name);
+    std::expected<Value, VM::RuntimeError> get_class_property(Class *klass, const std::string &name) const;
+
+    std::expected<Value, VM::RuntimeError> get_super_property(Instance *super_instance, Instance *accessor, const std::string &name);
+
+    std::optional<VM::RuntimeError> set_instance_property(Instance *instance, const std::string &name,
+                                                          const Value &value);
+
+    std::optional<VM::RuntimeError> set_class_property(Class *klass, const std::string &name, const Value &value);
+
+    std::optional<VM::RuntimeError> set_super_property(Instance *super_instance, Instance *accessor,
+                                                       const std::string &name, const Value &value);
 
     std::expected<Value, RuntimeError> run();
 
