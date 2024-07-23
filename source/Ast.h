@@ -35,12 +35,14 @@ struct ClassStmt;
 struct NativeStmt;
 struct FieldStmt;
 struct MethodStmt;
+struct ConstructorStmt;
 
 using Expr = std::variant<LiteralExpr, StringLiteral, UnaryExpr, BinaryExpr, VariableExpr, CallExpr, GetPropertyExpr,
     SuperExpr, BlockExpr, IfExpr, LoopExpr, BreakExpr, ContinueExpr, WhileExpr, ForExpr, ReturnExpr, ThisExpr>;
 using ExprHandle = std::unique_ptr<Expr>;
 
-using Stmt = std::variant<VarStmt, ExprStmt, FunctionStmt, ClassStmt, NativeStmt, FieldStmt, MethodStmt>;
+using Stmt = std::variant<VarStmt, ExprStmt, FunctionStmt, ClassStmt, NativeStmt, FieldStmt, MethodStmt,
+    ConstructorStmt>;
 using StmtHandle = std::unique_ptr<Stmt>;
 
 struct UnaryExpr {
@@ -123,7 +125,9 @@ struct ReturnExpr {
     ExprHandle value;
 };
 
-struct ThisExpr {};
+
+struct ThisExpr {
+};
 
 inline ExprHandle make_expr_handle(Expr expr) {
     return std::make_unique<Expr>(std::move(expr));
@@ -160,9 +164,17 @@ struct MethodStmt {
 
 struct ClassStmt {
     Token name;
+    std::unique_ptr<ConstructorStmt> constructor;
     std::vector<std::unique_ptr<MethodStmt> > methods;
     std::vector<std::unique_ptr<FieldStmt> > fields;
     std::optional<Token> super_class;
+};
+
+struct ConstructorStmt {
+    std::vector<Token> parameters;
+    bool has_super;
+    std::vector<ExprHandle> super_arguments;
+    ExprHandle body;
 };
 
 struct NativeStmt {
@@ -200,10 +212,10 @@ inline std::string stmt_to_string(const Stmt &stmt, std::string_view source) {
                           [source](const NativeStmt &stmt) {
                               return std::format("(native {})", stmt.name.get_lexeme(source));
                           },
-                          [source](const MethodStmt&) {
+                          [source](const MethodStmt &) {
                               return std::string("method");
                           },
-                          [source](const FieldStmt&) {
+                          [source](const FieldStmt &) {
                               return std::string("field");
                           }
 
@@ -287,9 +299,12 @@ inline std::string expr_to_string(const Expr &expr, std::string_view source) {
                               }
                               return std::string("retrun");
                           },
-                            [](const ThisExpr& expr) {
-                                return std::string("this");
-                            }
+                          [](const ThisExpr &expr) {
+                              return std::string("this");
+                          },
+                          [](const ConstructorStmt &stmt) {
+                              return std::string("constructor"); // TODO: implement!
+                          }
                       }, expr);
 }
 

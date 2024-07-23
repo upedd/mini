@@ -188,6 +188,8 @@ private:
     void function_declaration(const FunctionStmt &stmt);
     void function(const FunctionStmt &stmt, FunctionType type);
 
+    void constructor(const ConstructorStmt &stmt, const std::vector<FieldStmt> &fields);
+
     void class_declaration(const ClassStmt &stmt);
     void expr_statement(const ExprStmt &stmt);
     void native_declaration(const NativeStmt& stmt);

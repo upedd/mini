@@ -104,7 +104,7 @@ void Compiler::start_context(Function *function, FunctionType type) {
     current_context().scopes.emplace_back(ScopeType::BLOCK, 0); // TODO: should be function?
 }
 
-//#define COMPILER_PRINT_BYTECODE
+#define COMPILER_PRINT_BYTECODE
 
 void Compiler::end_context() {
 #ifdef COMPILER_PRINT_BYTECODE
@@ -468,12 +468,55 @@ void Compiler::function(const FunctionStmt &stmt, FunctionType type) {
 
     start_context(function, type);
     begin_scope(ScopeType::BLOCK);
-    if (type == FunctionType::METHOD || type == FunctionType::CONSTRUCTOR) {
-        current_scope().define("this");
-    } else {
-        current_scope().define("");
-    }
+    current_scope().define(""); // reserve slot for receiver
     for (const Token &param: stmt.params) {
+        define_variable(param.get_lexeme(source));
+    }
+
+    visit_expr(*stmt.body);
+    emit_default_return();
+    end_scope();
+
+    function->set_upvalue_count(current_context().upvalues.size());
+    // we need to emit those upvalues in enclosing context (context where function is called)
+    std::vector<Upvalue> function_upvalues = std::move(current_context().upvalues);
+    end_context();
+
+    int constant = current_function()->add_constant(function);
+    emit(OpCode::CLOSURE, constant);
+
+    for (const Upvalue &upvalue: function_upvalues) {
+        emit(upvalue.is_local);
+        emit(upvalue.index);
+    }
+}
+
+void Compiler::constructor(const ConstructorStmt& stmt, const std::vector<FieldStmt>& fields) {
+    // refactor: tons of overlap with function generator
+    if (stmt.has_super) {
+        // refactor: ideally ast builder
+        // Call super consturctor TODO!
+    }
+    // TODO: check name
+    auto *function = new Function("constructor", stmt.parameters.size());
+    functions.push_back(function);
+
+    start_context(function, FunctionType::CONSTRUCTOR);
+    begin_scope(ScopeType::BLOCK);
+    current_scope().define(""); // reserve slot for receiver
+
+    // default initialize fields
+    for (const FieldStmt& field : fields) {
+        // ast builder
+        if (field.is_static) continue;
+        visit_expr(*field.variable->value);
+        emit(OpCode::THIS);
+        int property_name = current_function()->add_constant(field.variable->name.get_lexeme(source));
+        emit(OpCode::SET_PROPERTY, property_name);
+        emit(OpCode::POP); // pop value;
+    }
+
+    for (const Token &param: stmt.parameters) {
         define_variable(param.get_lexeme(source));
     }
 

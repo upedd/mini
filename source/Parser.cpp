@@ -135,10 +135,12 @@ Expr Parser::for_expression(std::optional<Token> label) {
         error(current, "Expected '{' before loop body.");
     }
     Expr body = block();
-    return ForExpr {.name = name,
+    return ForExpr{
+        .name = name,
         .iterable = make_expr_handle(std::move(iterable)),
         .body = make_expr_handle(std::move(body)),
-        .label = label};
+        .label = label
+    };
 }
 
 Expr Parser::return_expression() {
@@ -203,19 +205,57 @@ FunctionStmt Parser::function_declaration_after_name(const Token name) {
     };
 }
 
+ConstructorStmt Parser::constructor_statement() {
+    // overlap with function declaration!
+    consume(Token::Type::LEFT_PAREN, "Expected '(' after constructor name");
+    std::vector<Token> parameters;
+    if (!check(Token::Type::RIGHT_PAREN)) {
+        do {
+            consume(Token::Type::IDENTIFIER, "Expected identifier");
+            parameters.push_back(current);
+        } while (match(Token::Type::COMMA));
+    }
+    consume(Token::Type::RIGHT_PAREN, "Expected ')' after constructor parameters");
+
+    std::vector<ExprHandle> super_arguments;
+    bool has_super = false;
+    // init(parameters*) : super(arguments*) [block]
+    if (match(Token::Type::SEMICOLON)) {
+        has_super = true;
+        consume(Token::Type::SUPER, "Expected superclass constructor call after ':' ");
+        // overlap with function call!!!
+        consume(Token::Type::LEFT_PAREN, "Expected '(' after superclass constructor call");
+        if (!check(Token::Type::RIGHT_PAREN)) {
+            do {
+                super_arguments.emplace_back(make_expr_handle(expression()));
+            } while (match(Token::Type::COMMA));
+        }
+        consume(Token::Type::RIGHT_PAREN, "Expected ')' after superclass constructor call arguments.");
+    }
+
+    consume(Token::Type::LEFT_BRACE, "Expected '{' before constructor body");
+    return ConstructorStmt{
+        .parameters = parameters,
+        .has_super = has_super,
+        .super_arguments = std::move(super_arguments),
+        .body = make_expr_handle(block())
+    };
+}
+
 Stmt Parser::class_declaration() {
     consume(Token::Type::IDENTIFIER, "Expected class name.");
     Token name = current;
 
-    std::optional<Token> super_class {};
+    std::optional<Token> super_class{};
     if (match(Token::Type::COLON)) {
         consume(Token::Type::IDENTIFIER, "Expected superclass name.");
         super_class = current;
     }
     consume(Token::Type::LEFT_BRACE, "Expected '{' before class body.");
 
-    std::vector<std::unique_ptr<MethodStmt>> methods;
-    std::vector<std::unique_ptr<FieldStmt>> fields;
+    std::vector<std::unique_ptr<MethodStmt> > methods;
+    std::vector<std::unique_ptr<FieldStmt> > fields;
+    std::unique_ptr<ConstructorStmt> constructor_handle;
     while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
         bool is_private = false, is_static = false, is_override = false;
         // maybe order independant
@@ -229,18 +269,24 @@ Stmt Parser::class_declaration() {
             is_override = true;
         }
         consume(Token::Type::IDENTIFIER, "Expected identifier.");
-        if (check(Token::Type::SEMICOLON) || check(Token::Type::EQUAL)) {
+        if (current.get_lexeme(lexer.get_source()) == "init") {
+            // constructor call
+            constructor_handle = std::make_unique<ConstructorStmt>(constructor_statement());
+        } else if (check(Token::Type::SEMICOLON) || check(Token::Type::EQUAL)) {
             auto var_stmt = std::make_unique<VarStmt>(var_declaration_after_name(current));
             fields.push_back(std::make_unique<FieldStmt>(std::move(var_stmt), is_private, is_static, is_override));
         } else {
             auto function_stmt = std::make_unique<FunctionStmt>(function_declaration_after_name(current));
-            methods.push_back(std::make_unique<MethodStmt>(std::move(function_stmt), is_private, is_static, is_override));
+            methods.push_back(
+                std::make_unique<MethodStmt>(std::move(function_stmt), is_private, is_static, is_override));
         }
-
     }
     consume(Token::Type::RIGHT_BRACE, "Expected '}' after class body.");
 
-    return ClassStmt {.name = name, .methods = std::move(methods), .fields = std::move(fields), .super_class = super_class};
+    return ClassStmt{
+        .name = name, .constructor = std::move(constructor_handle), .methods = std::move(methods),
+        .fields = std::move(fields), .super_class = super_class
+    };
 }
 
 Stmt Parser::expr_statement() {
@@ -379,18 +425,18 @@ bool has_prefix(Token::Type type) {
         case Token::Type::FOR:
         case Token::Type::LABEL:
         case Token::Type::RETURN:
-        return true;
+            return true;
         default: return false;
     }
 }
 
 bool starts_block_expression(Token::Type type) {
     return type == Token::Type::LABEL
-        || type == Token::Type::LEFT_BRACE
-        || type == Token::Type::LOOP
-        || type == Token::Type::WHILE
-        || type == Token::Type::FOR
-        || type == Token::Type::IF;
+           || type == Token::Type::LEFT_BRACE
+           || type == Token::Type::LOOP
+           || type == Token::Type::WHILE
+           || type == Token::Type::FOR
+           || type == Token::Type::IF;
 }
 
 Expr Parser::block(std::optional<Token> label) {
@@ -402,7 +448,9 @@ Expr Parser::block(std::optional<Token> label) {
         } else {
             bool is_block_expression = starts_block_expression(next.type);
             auto expr = expression();
-            if (match(Token::Type::SEMICOLON) || (is_block_expression && (!check(Token::Type::RIGHT_BRACE) || current.type == Token::Type::SEMICOLON))) {
+            if (match(Token::Type::SEMICOLON) || (
+                    is_block_expression && (!check(Token::Type::RIGHT_BRACE) || current.type ==
+                                            Token::Type::SEMICOLON))) {
                 stmts.push_back(std::make_unique<Stmt>(ExprStmt(std::make_unique<Expr>(std::move(expr)))));
             } else {
                 expr_at_end = std::make_unique<Expr>(std::move(expr));
@@ -518,7 +566,7 @@ Expr Parser::integer() {
     if (!result) {
         error(current, result.error().what());
     }
-    return LiteralExpr {*result};
+    return LiteralExpr{*result};
 }
 
 Expr Parser::number() {
@@ -527,7 +575,7 @@ Expr Parser::number() {
     if (!result) {
         error(current, result.error().what());
     }
-    return LiteralExpr {*result};
+    return LiteralExpr{*result};
 }
 
 Expr Parser::string() const {
@@ -562,7 +610,7 @@ Expr Parser::unary(Token::Type operator_type) {
 
 Expr Parser::dot(Expr left) {
     consume(Token::Type::IDENTIFIER, "Expected property name after '.'");
-    return GetPropertyExpr {.left = make_expr_handle(std::move(left)), .property = current};
+    return GetPropertyExpr{.left = make_expr_handle(std::move(left)), .property = current};
 }
 
 Expr Parser::infix(Expr left) {
@@ -610,7 +658,8 @@ Expr Parser::infix(Expr left) {
 }
 
 Expr Parser::binary(Expr left, bool expect_lvalue) {
-    if (expect_lvalue && !std::holds_alternative<VariableExpr>(left) && !std::holds_alternative<GetPropertyExpr>(left)) {
+    if (expect_lvalue && !std::holds_alternative<VariableExpr>(left) && !std::holds_alternative<
+            GetPropertyExpr>(left)) {
         error(current, "Expected lvalue as left hand side of an binary expression.");
     }
     Token::Type op = current.type;

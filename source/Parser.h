@@ -62,6 +62,8 @@ private:
 
     FunctionStmt function_declaration_after_name(Token name);
 
+    ConstructorStmt constructor_statement();
+
     Stmt class_declaration();
 
     Stmt expr_statement();
