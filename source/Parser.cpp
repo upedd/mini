@@ -217,21 +217,24 @@ Stmt Parser::class_declaration() {
     std::vector<std::unique_ptr<MethodStmt>> methods;
     std::vector<std::unique_ptr<FieldStmt>> fields;
     while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
-        bool is_private = false, is_static = false;
+        bool is_private = false, is_static = false, is_override = false;
+        // maybe order independant
         if (match(Token::Type::PRIVATE)) {
             is_private = true;
         }
         if (match(Token::Type::STATIC)) {
             is_static = true;
         }
-
+        if (match(Token::Type::OVERRDIE)) {
+            is_override = true;
+        }
         consume(Token::Type::IDENTIFIER, "Expected identifier.");
         if (check(Token::Type::SEMICOLON) || check(Token::Type::EQUAL)) {
             auto var_stmt = std::make_unique<VarStmt>(var_declaration_after_name(current));
-            fields.push_back(std::make_unique<FieldStmt>(std::move(var_stmt), is_private, is_static));
+            fields.push_back(std::make_unique<FieldStmt>(std::move(var_stmt), is_private, is_static, is_override));
         } else {
             auto function_stmt = std::make_unique<FunctionStmt>(function_declaration_after_name(current));
-            methods.push_back(std::make_unique<MethodStmt>(std::move(function_stmt), is_private, is_static));
+            methods.push_back(std::make_unique<MethodStmt>(std::move(function_stmt), is_private, is_static, is_override));
         }
 
     }

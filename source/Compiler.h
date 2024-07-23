@@ -42,6 +42,12 @@ public:
         CLASS
     };
 
+    struct FieldInfo {
+        bool is_private = false;
+        bool is_static = false;
+        bool is_override = false;
+    };
+
     // Break this scope into classes because it is too monolithic
     class Scope {
     public:
@@ -83,12 +89,16 @@ public:
             return fields.contains(name);
         }
 
-        [[nodiscard]] std::unordered_set<std::string>& get_fields() {
+        [[nodiscard]] std::unordered_map<std::string, FieldInfo>& get_fields() {
             return fields;
         }
 
-        void add_field(const std::string & string) {
-            fields.emplace(string);
+        void add_field(const std::string & string, FieldInfo field_info) {
+            fields[string] = field_info;
+        }
+
+        FieldInfo get_field_info(const std::string& name) {
+            return fields[name];
         }
 
         int break_idx = -1;
@@ -101,11 +111,11 @@ public:
         int temporaries = 0;
 
         std::vector<Local> locals;
-        std::unordered_set<std::string> fields;
+        std::unordered_map<std::string, FieldInfo> fields;
     };
 
     struct ResolvedClass {
-        std::unordered_set<std::string> fields;
+        std::unordered_map<std::string, FieldInfo> fields;
     };
 
     struct Context {

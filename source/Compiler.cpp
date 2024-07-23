@@ -499,28 +499,19 @@ void Compiler::function(const FunctionStmt &stmt, FunctionType type) {
 
 
 void Compiler::class_declaration(const ClassStmt &stmt) {
+    // TODO: refactor!
     std::string name = stmt.name.get_lexeme(source);
     uint8_t name_constant = current_function()->add_constant(name);
     emit(OpCode::CLASS, name_constant);
     current_scope().define(name);
 
-    // if (stmt.super_name) {
-    //     emit(OpCode::GET);
-    //     emit(*current_context().resolve_variable(stmt.super_name->get_lexeme(source)));
-    //     emit(OpCode::GET);
-    //     emit(*current_context().resolve_variable(name));
-    //     emit(OpCode::INHERIT);
-    //     begin_scope(ScopeType::BLOCK);
-    //     current_scope().define("super");
-    // }
-    //// class scope
     begin_scope(ScopeType::CLASS, name);
-
-
     // TODO: non-expression scope?
     emit(OpCode::NIL);
     define_variable("$scope_return");
 
+    //std::unordered_map<std::string, FieldInfo>* super_fields = nullptr;
+    std::unordered_set<std::string> current_fields;
     if (stmt.super_class) {
         std::string super_class_name = stmt.super_class->get_lexeme(source);
         emit(OpCode::GET, std::get<Context::LocalResolution>(current_context().resolve_variable(super_class_name)).slot);
@@ -529,27 +520,62 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
         emit(OpCode::POP);
         assert(current_context().resolved_classes.contains(super_class_name));
         auto super_fields = current_context().resolved_classes[super_class_name].fields;
-        current_scope().get_fields().insert(super_fields.begin(), super_fields.end());
+        for (auto& field : super_fields) {
+            // TODO: private fields should not even be included!
+            //if (field.second.is_private) continue;
+            current_scope().add_field(field.first, field.second);
+        }
+
     }
 
     emit(OpCode::GET, std::get<Context::LocalResolution>(current_context().resolve_variable(name)).slot);
     current_scope().mark_temporary();
 
     for (auto& field : stmt.fields) {
+        std::string field_name = field->variable->name.get_lexeme(source);
         visit_expr(*field->variable->value);
-        int idx = current_function()->add_constant(field->variable->name.get_lexeme(source));
+        int idx = current_function()->add_constant(field_name);
         emit(OpCode::FIELD, idx);
         emit(field->is_private | (field->is_static << 1));
+        if (current_fields.contains(field_name)) {
+            // TODO: better error handling!!!
+            assert(false && "Field redefnintion is disallowed.");
+        }
+        bool is_overriding = false;
+        if (current_scope().has_field(field_name)) {
+            if (!current_scope().get_field_info(field_name).is_private && !current_scope().get_field_info(field_name).is_static) { // non-private!
+                is_overriding = true;
+                if (!field->is_override) assert(false && "override expected");
+            }
+        }
+        if (!is_overriding && field->is_override) assert(false && "no member to override.");
         current_scope().pop_temporary();
-        current_scope().add_field(field->variable->name.get_lexeme(source));
+        current_scope().add_field(field->variable->name.get_lexeme(source), {.is_private = field->is_private, .is_static = field->is_static, .is_override = field->is_override});
+        current_fields.insert(field_name);
     }
 
-
-    for (auto &method: stmt.methods) {
-        std::string name = method->function->name.get_lexeme(source);
-        current_scope().add_field(name);
-    }
     // hoist methods
+    for (auto &method: stmt.methods) {
+        std::string method_name = method->function->name.get_lexeme(source);
+        bool is_overriding = false;
+        if (current_scope().has_field(method_name)) {
+            if (!current_scope().get_field_info(method_name).is_private && !current_scope().get_field_info(method_name).is_static) { // non-private!
+                is_overriding = true;
+                if (!method->is_override) assert(false && "override expected");
+            }
+        }
+        if (!is_overriding && method->is_override) {
+
+            assert(false && "no member to override.");
+        }
+        if (current_fields.contains(method_name)) {
+            // TODO: better error handling!!!
+            assert(false && "Field redefnintion is disallowed.");
+        }
+        current_scope().add_field(method_name, {.is_private = method->is_private, .is_static = method->is_static, .is_override = method->is_override});
+        current_fields.insert(method_name);
+    }
+
     for (auto& method : stmt.methods) {
         std::string name = method->function->name.get_lexeme(source);
         function(*method->function, name == "init" ? FunctionType::CONSTRUCTOR : FunctionType::METHOD);
@@ -625,9 +651,9 @@ void Compiler::visit_expr(const Expr &expression) {
                    [this](const BreakExpr& expr) {break_expr(expr);},
                    [this](const ContinueExpr& expr) {continue_expr(expr);},
                    [this](const WhileExpr& expr) {while_expr(expr);},
-                       [this](const ForExpr& expr) {for_expr(expr);},
-                           [this](const ReturnExpr &expr) { retrun_expression(expr); },
-                               [this](const ThisExpr& expr) {this_expr();}
+                   [this](const ForExpr& expr) {for_expr(expr);},
+                   [this](const ReturnExpr &expr) { retrun_expression(expr); },
+                   [this](const ThisExpr& expr) {this_expr();}
                }, expression);
 }
 

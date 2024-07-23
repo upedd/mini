@@ -148,14 +148,14 @@ struct FieldStmt {
     std::unique_ptr<VarStmt> variable;
     bool is_private = false;
     bool is_static = false;
-    bool is_abstract = false;
+    bool is_override = false;
 };
 
 struct MethodStmt {
     std::unique_ptr<FunctionStmt> function;
     bool is_private = false;
     bool is_static = false;
-    bool is_abstract = false;
+    bool is_override = false;
 };
 
 struct ClassStmt {
