@@ -75,9 +75,9 @@ std::optional<VM::RuntimeError> VM::call_value(const Value &value, const int arg
             push(args[i]);
         }
         // TODO: check
-        if (klass->superclass) {
-            instance->super_instance = new Instance(klass->superclass);
-            allocate(instance->super_instance);
+        for (auto* superclass : klass->superclasses)
+            instance->super_instances.push_back(new Instance(superclass));
+            allocate(instance->super_instances.back());
         }
         // TODO: handle private construtors?
         if (klass->methods.contains("init")) {
@@ -215,7 +215,6 @@ std::optional<VM::RuntimeError> VM::validate_class_access(Class* accessor, const
 
 
 Value VM::bind_method(const ClassValue& method, Class* klass, Instance* instance) {
-    // TODO: fix gc!!!!
     auto* closure = dynamic_cast<Closure *>(method.value.get<Object*>());
     auto* receiver = new Receiver(klass, instance);
     auto* bound = new BoundMethod(receiver, closure);
@@ -223,85 +222,78 @@ Value VM::bind_method(const ClassValue& method, Class* klass, Instance* instance
 }
 
 std::expected<Value, VM::RuntimeError> VM::get_instance_property(Instance *instance, const std::string &name) {
-    // TODO: rethink this section please!
     // private or static members get resolved first
     std::optional<Receiver*> receiver = get_current_receiver();
     if (receiver) {
-        if (auto class_method = receiver.value()->klass->resolve_private(name)) {
+        // try receiver private method
+        if (auto class_method = receiver.value()->klass->resolve_private_method(name)) {
             return bind_method(class_method.value().value, class_method.value().owner, instance);
         }
+        // try receiver static method
+        if (auto class_method = receiver.value()->klass->resolve_static_method(name)) {
+            return bind_method(class_method.value().value, class_method.value().owner, nullptr);
+        }
+        // try static property
+        if (auto class_property = receiver.value()->klass->resolve_static_property(name)) {
+            return class_property.value().get().value;
+        }
 
-    }
-
-    if (receiver && receiver.value()->klass->fields.contains(name)) {
-        if (receiver.value()->instance->klass != receiver.value()->klass) { // receiver and caller don't match;
-            Instance* super_instance = receiver.value()->instance->super_instance;
-            assert(super_instance != nullptr);
-            assert(super_instance == receiver.value()->instance);
-            if (super_instance->properties[name].is_static) {
-                return std::unexpected(RuntimeError("Static propererties cannot be accesed on class instances."));
-            }
-            if (super_instance->properties[name].is_private) {
-                return super_instance->properties[name].value;
+        if (auto super_instnace = receiver.value()->instance->get_super_instance_by_class(receiver.value()->klass)) {
+            // private property
+            if (auto class_property = super_instnace.value()->resolve_private_property(name)) {
+                return class_property.value().get().value;
             }
         }
     }
-
     // members properties
-    if (instance->properties.contains(name)) {
-        ClassValue& class_value = instance->properties[name];
-        if (std::optional<RuntimeError> error = validate_instance_access(instance, class_value)) {
+    if (auto class_property = instance->resolve_dynamic_property(name)) {
+        if (std::optional<RuntimeError> error = validate_instance_access(instance, *class_property)) {
             return std::unexpected(*error);
         }
-        return class_value.value;
+        return class_property->get().value;
     }
 
-    if (instance->klass->methods.contains(name)) {
-        ClassValue& class_value = instance->klass->methods[name];
-        if (std::optional<RuntimeError> error = validate_instance_access(instance, class_value)) {
+    if (auto class_method = instance->klass->resolve_dynamic_method(name)) {
+        if (std::optional<RuntimeError> error = validate_instance_access(instance, class_method->value)) {
             return std::unexpected(*error);
         }
-        return bind_method(class_value, instance->klass, instance);
+        return bind_method(class_method->value, class_method->owner, instance);
     }
 
     return std::unexpected(RuntimeError("Property must be declared on class."));
 }
 
-std::expected<Value, VM::RuntimeError> VM::get_class_property(Class *klass, const std::string &name) const {
-    if (klass->fields.contains(name)) {
-        ClassValue& class_value = klass->fields[name];
-        if (std::optional<RuntimeError> error = validate_class_access(klass, class_value)) {
+std::expected<Value, VM::RuntimeError> VM::get_class_property(Class *klass, const std::string &name) {
+    if (auto class_property = klass->resolve_static_property(name)) {
+        if (std::optional<RuntimeError> error = validate_class_access(klass, class_property.value())) {
             return std::unexpected(*error);
         }
-        return class_value.value;
+        return class_property->get().value;
     }
 
-    if (klass->methods.contains(name)) {
-        ClassValue& class_value = klass->methods[name];
-        if (std::optional<RuntimeError> error = validate_class_access(klass, class_value)) {
+    if (auto class_method = klass->resolve_static_method(name)) {
+        if (std::optional<RuntimeError> error = validate_class_access(klass, class_method.value().value)) {
             return std::unexpected(*error);
         }
-        return class_value.value;
+        return bind_method(class_method->value, class_method->owner, nullptr);
     }
 
     return std::unexpected(RuntimeError("Property must be declared on class."));
 }
 
 std::expected<Value, VM::RuntimeError> VM::get_super_property(Instance *super_instance, Instance* accessor, const std::string &name) {
-    if (super_instance->properties.contains(name)) {
-        ClassValue& class_value = super_instance->properties[name];
-        if (std::optional<RuntimeError> error = validate_instance_access(accessor, class_value)) {
+    if (auto super_property = super_instance->resolve_dynamic_property(name)) {
+        if (std::optional<RuntimeError> error = validate_instance_access(accessor, super_property.value())) {
             return std::unexpected(*error);
         }
-        return class_value.value;
+        return super_property->get().value;
     }
 
-    if (super_instance->klass->methods.contains(name)) {
-        ClassValue& class_value = super_instance->klass->methods[name];
-        if (std::optional<RuntimeError> error = validate_instance_access(accessor, class_value)) {
+    if (auto super_method = super_instance->klass->resolve_dynamic_method(name)) {
+        if (std::optional<RuntimeError> error = validate_instance_access(accessor, super_method->value)) {
             return std::unexpected(*error);
         }
-        return bind_method(class_value, super_instance->klass, accessor);
+        return bind_method(super_method->value, super_method->owner, accessor);
     }
 
     return std::unexpected(RuntimeError("Property must be declared on class."));
@@ -310,47 +302,46 @@ std::expected<Value, VM::RuntimeError> VM::get_super_property(Instance *super_in
 std::optional<VM::RuntimeError> VM::set_instance_property(Instance *instance, const std::string &name,
                                                           const Value &value) {
     std::optional<Receiver*> receiver = get_current_receiver();
-    if (receiver && receiver.value()->klass->fields.contains(name)) {
-        if (receiver.value()->instance->klass != receiver.value()->klass) { // receiver and caller don't match;
-            Instance* super_instance = receiver.value()->instance->super_instance;
-            assert(super_instance != nullptr);
-            assert(super_instance == receiver.value()->instance);
-            if (super_instance->properties[name].is_static) {
-                return RuntimeError("Static propererties cannot be accesed on class instances.");
-            }
-            if (super_instance->properties[name].is_private) {
-                super_instance->properties[name].value = value;
+    if (receiver) {
+        // try static property
+        if (auto class_property = receiver.value()->klass->resolve_static_property(name)) {
+            class_property.value().get().value = value;
+        }
+
+        if (auto super_instnace = receiver.value()->instance->get_super_instance_by_class(receiver.value()->klass)) {
+            // private property
+            if (auto class_property = super_instnace.value()->resolve_private_property(name)) {
+                class_property.value().get().value = value;
             }
         }
     }
-    if (instance->properties.contains(name)) {
-        ClassValue& class_value = instance->properties[name];
-        if (std::optional<RuntimeError> error = validate_instance_access(instance, class_value)) {
+    // members properties
+    if (auto class_property = instance->resolve_dynamic_property(name)) {
+        if (std::optional<RuntimeError> error = validate_instance_access(instance, *class_property)) {
             return error;
         }
-        class_value.value = value;
+        class_property.value().get().value = value;
     }
+
     return RuntimeError("Property must be declared on class.");
 }
 
 std::optional<VM::RuntimeError> VM::set_class_property(Class *klass, const std::string &name, const Value& value) {
-    if (klass->fields.contains(name)) {
-        ClassValue& class_value = klass->fields[name];
-        if (std::optional<RuntimeError> error = validate_class_access(klass, class_value)) {
+    if (auto class_property = klass->resolve_static_property(name)) {
+        if (std::optional<RuntimeError> error = validate_class_access(klass, class_property.value())) {
             return error;
         }
-        class_value.value = value;
+        class_property->get().value = value;
     }
     return RuntimeError("Property must be declared on class.");
 }
 
 std::optional<VM::RuntimeError> VM::set_super_property(Instance* super_instance, Instance* accessor, const std::string &name, const Value& value) {
-    if (super_instance->properties.contains(name)) {
-        ClassValue& class_value = super_instance->properties[name];
-        if (std::optional<RuntimeError> error = validate_instance_access(accessor, class_value)) {
+    if (auto super_property = super_instance->resolve_dynamic_property(name)) {
+        if (std::optional<RuntimeError> error = validate_instance_access(accessor, super_property.value())) {
             return error;
         }
-        class_value.value = value;
+        super_property->get().value = value;
     }
     return RuntimeError("Property must be declared on class.");
 }
@@ -590,7 +581,8 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 for (auto& value : superclass->fields) {
                     subclass->fields.insert(value);
                 }
-                subclass->superclass = superclass;
+                subclass->superclasses = superclass->superclasses;
+                subclass->superclasses.push_back(superclass);
                 pop();
                 break;
             }

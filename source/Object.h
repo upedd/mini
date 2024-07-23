@@ -164,47 +164,6 @@ struct ClassMethod {
     Class* owner = nullptr;
 };
 
-// class DispatchTable {
-// public:
-//     void add_static(const std::string& name, const ClassValue& method) {
-//         static_methods[klass][name] = {method, klass};
-//     }
-//
-//     void add_dynamic(const std::string& name, const ClassValue& method) {
-//         add_static(name, method);
-//         dynamic_methods[name] = {method, klass};
-//     }
-//
-//     void inherit(const DispatchTable& table) {
-//         static_methods.insert(table.static_methods.begin(), table.static_methods.end());
-//         dynamic_methods.insert(table.dynamic_methods.begin(), table.dynamic_methods.end());
-//         // copy true static methods
-//         for (auto& class_method : static_methods[table.klass]) {
-//             if (class_method.second.value.is_static) {
-//                 static_methods[klass].insert(class_method);
-//             }
-//         }
-//     }
-//
-//     std::optional<ClassMethod> resolve_static(const std::string& name, Class* call_context = nullptr) {
-//         if (!call_context || !static_methods[call_context].contains(name)) {
-//             return {};
-//         }
-//         return static_methods[call_context][name];
-//     }
-//
-//     std::optional<ClassMethod> resolve_dynamic(const std::string& name, Class* call_context = nullptr) {
-//         if (dynamic_methods.contains(name)) {
-//             return dynamic_methods[name];
-//         }
-//         return resolve_static(name, call_context);
-//     }
-//
-//     Class* klass;
-//     std::unordered_map<Class*, std::unordered_map<std::string, ClassMethod>> static_methods;
-//     std::unordered_map<std::string, ClassMethod> dynamic_methods;
-// };
-
 class Class final : public Object{
 public:
     explicit Class(std::string name) : name(std::move(name)) {}
@@ -221,53 +180,62 @@ public:
         for (auto& value : std::views::values(methods)) {
             gc.mark(value.value);
         }
-        // gc.mark(dispatch_table.klass);
-        // for (auto& [klass, static_table] : dispatch_table.static_methods) {
-        //     for (auto& [name, method] : static_table) {
-        //         gc.mark(method.owner);
-        //         gc.mark(method.value.value);
-        //     }
-        // }
         for (auto& value : std::views::values(fields)) {
             gc.mark(value.value);
         }
-        gc.mark(superclass);
+        for (auto* superclass : superclasses) {
+            gc.mark(superclass);
+        }
     }
 
     // resolve only current class memebers
-    std::optional<ClassMethod> resolve_private(const std::string& name) {
+    std::optional<ClassMethod> resolve_private_method(const std::string& name) {
         if (!methods.contains(name) || !methods[name].is_private) {
             return {};
         }
         return {{methods[name], this}};
     }
 
-    std::optional<ClassMethod> resolve_static(const std::string& name) {
+    std::optional<ClassMethod> resolve_static_method(const std::string& name) {
         if (methods.contains(name) && methods[name].is_static) {
             return {{methods[name], this}};
         }
-        if (superclass != nullptr) {
-            return superclass->resolve_static(name);
+        for (auto* superclass : std::views::reverse(superclasses)) {
+            if (superclass->methods.contains(name) && superclass->methods[name].is_static) {
+                return {{superclass->methods[name], this}};
+            }
         }
         return {};
     }
 
-    std::optional<ClassMethod> resolve_dynamic(const std::string& name) {
+    std::optional<ClassMethod> resolve_dynamic_method(const std::string& name) {
         if (methods.contains(name) && !methods[name].is_static && !methods[name].is_private) {
             return {{methods[name], this}};
         }
-        if (superclass != nullptr) {
-            return superclass->resolve_dynamic(name);
+        for (auto* superclass : std::views::reverse(superclasses)) {
+            if (superclass->methods.contains(name) && !superclass->methods[name].is_static && !superclass->methods[name].is_private) {
+                return {{superclass->methods[name], this}};
+            }
+        }
+        return {};
+    }
+
+    std::optional<std::reference_wrapper<ClassValue>> resolve_static_property(const std::string& name) {
+        if (fields.contains(name) && fields[name].is_static) {
+            return fields[name];
+        }
+        for (auto* super_instance : std::views::reverse(superclasses)) {
+            if (super_instance->fields.contains(name) && super_instance->fields[name].is_static) {
+                return super_instance->fields[name];
+            }
         }
         return {};
     }
 
     std::string name;
-    //std::unordered_map<Class*, std::unordered_map<std::string, >> methods; // actually true static and private
     std::unordered_map<std::string, ClassValue> methods;
-    //DispatchTable dispatch_table;
     std::unordered_map<std::string, ClassValue> fields;
-    Class* superclass = nullptr;
+    std::vector<Class*> superclasses;
 };
 
 
@@ -297,11 +265,40 @@ public:
         for (auto& value : std::views::values(properties)) {
             gc.mark(value.value);
         }
-        gc.mark(super_instance);
+        for (auto* super_instance : super_instances) {
+            gc.mark(super_instance);
+        }
     }
 
+    std::optional<std::reference_wrapper<ClassValue>> resolve_private_property(const std::string& name) {
+        if (properties.contains(name) && properties[name].is_private) {
+            return properties[name];
+        }
+        return {};
+    }
+
+    std::optional<std::reference_wrapper<ClassValue>> resolve_dynamic_property(const std::string& name) {
+        if (properties.contains(name) && !properties[name].is_static && !properties[name].is_private) {
+            return properties[name];
+        }
+        for (auto* super_instance : std::views::reverse(super_instances)) {
+            if (super_instance->properties.contains(name) && !super_instance->properties[name].is_static && !super_instance->properties[name].is_private) {
+                return super_instance->properties[name];
+            }
+        }
+        return {};
+    }
+
+    std::optional<Instance*> get_super_instance_by_class(Class* klass) {
+        for (auto* super_instance : super_instances) {
+            if (super_instance->klass == klass) {
+                return super_instance;
+            }
+        }
+        return {};
+    }
     Class* klass;
-    Instance* super_instance = nullptr;
+    std::vector<Instance*> super_instances;
     std::unordered_map<std::string, ClassValue> properties;
 };
 

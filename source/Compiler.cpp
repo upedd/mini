@@ -531,9 +531,9 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
         assert(current_context().resolved_classes.contains(super_class_name));
         auto super_fields = current_context().resolved_classes[super_class_name].fields;
         current_scope().get_fields().insert(super_fields.begin(), super_fields.end());
-        // TODO: private field for super
+        // TODO: change supe expr implementaion!
         //current_scope().add_field("super");
-        // current_scope().define("super");
+        current_scope().define("super");
     }
 
     emit(OpCode::GET, std::get<Context::LocalResolution>(current_context().resolve_variable(name)).slot);

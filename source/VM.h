@@ -64,7 +64,7 @@ public:
 
     std::expected<Value, VM::RuntimeError> get_instance_property(Instance *instance, const std::string &name);
 
-    std::expected<Value, VM::RuntimeError> get_class_property(Class *klass, const std::string &name) const;
+    std::expected<Value, VM::RuntimeError> get_class_property(Class *klass, const std::string &name);
 
     std::expected<Value, VM::RuntimeError> get_super_property(Instance *super_instance, Instance *accessor, const std::string &name);
 
