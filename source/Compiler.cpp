@@ -526,14 +526,10 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
         emit(OpCode::GET, std::get<Context::LocalResolution>(current_context().resolve_variable(super_class_name)).slot);
         emit(OpCode::GET, std::get<Context::LocalResolution>(current_context().resolve_variable(name)).slot);
         emit(OpCode::INHERIT);
-        //emit(OpCode::CALL, 0);
-        //emit(OpCode::FIELD, 1); // private field for super
+        emit(OpCode::POP);
         assert(current_context().resolved_classes.contains(super_class_name));
         auto super_fields = current_context().resolved_classes[super_class_name].fields;
         current_scope().get_fields().insert(super_fields.begin(), super_fields.end());
-        // TODO: change supe expr implementaion!
-        //current_scope().add_field("super");
-        current_scope().define("super");
     }
 
     emit(OpCode::GET, std::get<Context::LocalResolution>(current_context().resolve_variable(name)).slot);
@@ -828,8 +824,9 @@ void Compiler::get_property(const GetPropertyExpr &expr) {
 
 void Compiler::super(const SuperExpr &expr) {
     int constant = current_function()->add_constant(expr.method.get_lexeme(source));
-    resolve_variable("this");
-    resolve_variable("super");
+    // or just resolve this in vm?
+    emit(OpCode::THIS);
+    //resolve_variable("super");
     emit(OpCode::GET_SUPER, constant);
     current_scope().mark_temporary();
 }

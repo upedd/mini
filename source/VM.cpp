@@ -75,7 +75,7 @@ std::optional<VM::RuntimeError> VM::call_value(const Value &value, const int arg
             push(args[i]);
         }
         // TODO: check
-        for (auto* superclass : klass->superclasses)
+        for (auto* superclass : klass->superclasses) {
             instance->super_instances.push_back(new Instance(superclass));
             allocate(instance->super_instances.back());
         }
@@ -207,7 +207,7 @@ std::optional<VM::RuntimeError> VM::validate_class_access(Class* accessor, const
     if (class_value.is_private && (!receiver || (*receiver)->klass != accessor)) {
         return RuntimeError("Private propererties can be access only inside their class definitions.");
     }
-    if (class_value.is_static && (!receiver || (*receiver)->instance != nullptr)) {
+    if (class_value.is_static && receiver && (*receiver)->instance != nullptr) {
         return RuntimeError("Static propererties cannot be accesed on class instances.");
     }
     return {};
@@ -575,12 +575,13 @@ std::expected<Value, VM::RuntimeError> VM::run() {
             case OpCode::INHERIT: {
                 Class *superclass = dynamic_cast<Class *>(peek(1).get<Object *>());
                 Class *subclass = dynamic_cast<Class *>(peek(0).get<Object *>());
-                for (auto &value: superclass->methods) {
-                    subclass->methods.insert(value);
-                }
-                for (auto& value : superclass->fields) {
-                    subclass->fields.insert(value);
-                }
+                // for (auto &value: superclass->methods) {
+                //     if (value.second.is_private ||) continue;
+                //     subclass->methods.insert(value);
+                // }
+                // for (auto& value : superclass->fields) {
+                //     subclass->fields.insert(value);
+                // }
                 subclass->superclasses = superclass->superclasses;
                 subclass->superclasses.push_back(superclass);
                 pop();
@@ -589,9 +590,8 @@ std::expected<Value, VM::RuntimeError> VM::run() {
             case OpCode::GET_SUPER: {
                 int constant_idx = fetch();
                 auto name = get_constant(constant_idx).get<std::string>();
-                Instance* super_instance = dynamic_cast<Instance *>(peek().get<Object *>());
-                Instance* accessor = dynamic_cast<Instance*>(peek(1).get<Object*>());
-                std::expected<Value, RuntimeError> property = get_super_property(super_instance, accessor, name);
+                Instance* accessor = dynamic_cast<Instance*>(peek().get<Object*>());
+                std::expected<Value, RuntimeError> property = get_super_property(accessor->get_super().value(), accessor, name);
                 if (!property) {
                     return std::unexpected(property.error());
                 }

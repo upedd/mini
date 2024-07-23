@@ -297,6 +297,11 @@ public:
         }
         return {};
     }
+
+    std::optional<Instance*> get_super() {
+        if (super_instances.empty()) return {};
+        return super_instances.back();
+    }
     Class* klass;
     std::vector<Instance*> super_instances;
     std::unordered_map<std::string, ClassValue> properties;
