@@ -226,14 +226,11 @@ std::expected<Value, VM::RuntimeError> VM::get_instance_property(Instance *insta
     // TODO: rethink this section please!
     // private or static members get resolved first
     std::optional<Receiver*> receiver = get_current_receiver();
-    if (receiver && receiver.value()->klass->methods.contains(name)) {
-        ClassValue& class_value = instance->klass->methods[name];
-        if (class_value.is_static) {
-            return bind_method(class_value, receiver.value()->klass, nullptr);
+    if (receiver) {
+        if (auto class_method = receiver.value()->klass->resolve_private(name)) {
+            return bind_method(class_method.value().value, class_method.value().owner, instance);
         }
-        if (class_value.is_private) {
-            return bind_method(class_value, receiver.value()->klass, instance);
-        }
+
     }
 
     if (receiver && receiver.value()->klass->fields.contains(name)) {

@@ -157,9 +157,57 @@ struct ClassValue {
     bool is_override = false;
 };
 
+class Class;
+
+struct ClassMethod {
+    ClassValue value;
+    Class* owner = nullptr;
+};
+
+// class DispatchTable {
+// public:
+//     void add_static(const std::string& name, const ClassValue& method) {
+//         static_methods[klass][name] = {method, klass};
+//     }
+//
+//     void add_dynamic(const std::string& name, const ClassValue& method) {
+//         add_static(name, method);
+//         dynamic_methods[name] = {method, klass};
+//     }
+//
+//     void inherit(const DispatchTable& table) {
+//         static_methods.insert(table.static_methods.begin(), table.static_methods.end());
+//         dynamic_methods.insert(table.dynamic_methods.begin(), table.dynamic_methods.end());
+//         // copy true static methods
+//         for (auto& class_method : static_methods[table.klass]) {
+//             if (class_method.second.value.is_static) {
+//                 static_methods[klass].insert(class_method);
+//             }
+//         }
+//     }
+//
+//     std::optional<ClassMethod> resolve_static(const std::string& name, Class* call_context = nullptr) {
+//         if (!call_context || !static_methods[call_context].contains(name)) {
+//             return {};
+//         }
+//         return static_methods[call_context][name];
+//     }
+//
+//     std::optional<ClassMethod> resolve_dynamic(const std::string& name, Class* call_context = nullptr) {
+//         if (dynamic_methods.contains(name)) {
+//             return dynamic_methods[name];
+//         }
+//         return resolve_static(name, call_context);
+//     }
+//
+//     Class* klass;
+//     std::unordered_map<Class*, std::unordered_map<std::string, ClassMethod>> static_methods;
+//     std::unordered_map<std::string, ClassMethod> dynamic_methods;
+// };
+
 class Class final : public Object{
 public:
-    explicit Class(std::string  name) : name(std::move(name)) {}
+    explicit Class(std::string name) : name(std::move(name)) {}
 
     std::size_t get_size() override {
         return sizeof(Class);
@@ -173,14 +221,51 @@ public:
         for (auto& value : std::views::values(methods)) {
             gc.mark(value.value);
         }
+        // gc.mark(dispatch_table.klass);
+        // for (auto& [klass, static_table] : dispatch_table.static_methods) {
+        //     for (auto& [name, method] : static_table) {
+        //         gc.mark(method.owner);
+        //         gc.mark(method.value.value);
+        //     }
+        // }
         for (auto& value : std::views::values(fields)) {
             gc.mark(value.value);
         }
         gc.mark(superclass);
     }
 
+    // resolve only current class memebers
+    std::optional<ClassMethod> resolve_private(const std::string& name) {
+        if (!methods.contains(name) || !methods[name].is_private) {
+            return {};
+        }
+        return {{methods[name], this}};
+    }
+
+    std::optional<ClassMethod> resolve_static(const std::string& name) {
+        if (methods.contains(name) && methods[name].is_static) {
+            return {{methods[name], this}};
+        }
+        if (superclass != nullptr) {
+            return superclass->resolve_static(name);
+        }
+        return {};
+    }
+
+    std::optional<ClassMethod> resolve_dynamic(const std::string& name) {
+        if (methods.contains(name) && !methods[name].is_static && !methods[name].is_private) {
+            return {{methods[name], this}};
+        }
+        if (superclass != nullptr) {
+            return superclass->resolve_dynamic(name);
+        }
+        return {};
+    }
+
     std::string name;
+    //std::unordered_map<Class*, std::unordered_map<std::string, >> methods; // actually true static and private
     std::unordered_map<std::string, ClassValue> methods;
+    //DispatchTable dispatch_table;
     std::unordered_map<std::string, ClassValue> fields;
     Class* superclass = nullptr;
 };
