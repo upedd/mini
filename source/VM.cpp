@@ -71,17 +71,24 @@ std::optional<VM::RuntimeError> VM::call_value(const Value &value, const int arg
         auto *instance = new Instance(klass);
         push(instance);
         allocate(instance);
-        for (int i = arguments_count - 1; i >= 0; --i) {
-            push(args[i]);
-        }
-        // TODO: check
+
         for (auto* superclass : klass->superclasses) {
             instance->super_instances.push_back(new Instance(superclass));
             allocate(instance->super_instances.back());
         }
         // TODO: handle private construtors?
         if (klass->methods.contains("init")) {
-            return call_value(klass->methods["init"].value, arguments_count);
+            auto bound = bind_method(klass->methods["init"], klass, instance);
+            // TODO: refactor!
+            push(bound);
+            for (int i = arguments_count - 1; i >= 0; --i) {
+                push(args[i]);
+            }
+            if (auto* bound_ptr = dynamic_cast<BoundMethod*>(bound.get<Object*>())) {
+                allocate(bound_ptr);
+                allocate<Receiver>(dynamic_cast<Receiver*>(bound_ptr->receiver.get<Object*>()));
+            }
+            return call_value(bound, arguments_count);
         }
         return {}; // success
     }
@@ -540,21 +547,19 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                     return std::unexpected(RuntimeError("Expected class instance value."));
                 }
                 if (auto *instance = dynamic_cast<Instance *>(*object)) {
-                    Value value = pop();
+                    Value value = peek(1);
                     std::optional<RuntimeError> error = set_instance_property(instance, name, value);
                     if (!error) {
                         return std::unexpected(*error);
                     }
                     pop(); // pop instance
-                    push(value);
                 } else if (auto* klass = dynamic_cast<Class*>(*object)) {
-                    Value value = pop();
+                    Value value = peek(1);
                     std::optional<RuntimeError> error = set_class_property(klass, name, value);
                     if (!error) {
                         return std::unexpected(*error);
                     }
                     pop(); // pop instance
-                    push(value);
                 } else {
                     return std::unexpected(RuntimeError("Expected class object or instance."));
                 }

@@ -205,6 +205,10 @@ inline void Disassembler::disassemble(const std::string& name) {
                 class_inst("FIELD");
                 break;
             }
+            case OpCode::THIS: {
+                simple_opcode("THIS");
+                break;
+            }
         }
     }
 }

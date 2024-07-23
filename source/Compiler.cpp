@@ -97,7 +97,6 @@ const std::vector<std::string> & Compiler::get_natives() {
 void Compiler::this_expr() {
     // safety: check if used in class method context
     emit(OpCode::THIS);
-
 }
 
 void Compiler::start_context(Function *function, FunctionType type) {

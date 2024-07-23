@@ -346,7 +346,7 @@ Expr Parser::expression(const Precedence precedence) {
 }
 
 Expr Parser::this_() {
-    return VariableExpr{current};
+    return ThisExpr{};
 }
 
 Expr Parser::super_() {
