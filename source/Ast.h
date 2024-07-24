@@ -150,18 +150,12 @@ struct ExprStmt {
 
 struct FieldStmt {
     std::unique_ptr<VarStmt> variable;
-    bool is_private = false;
-    bool is_static = false;
-    bool is_override = false;
-    bool is_abstract = false;
+    bitflags<ClassAttributes> attributes;
 };
 
 struct MethodStmt {
     std::unique_ptr<FunctionStmt> function;
-    bool is_private = false;
-    bool is_static = false;
-    bool is_override = false;
-    bool is_abstract = false;
+    bitflags<ClassAttributes> attributes;
 };
 
 struct ClassStmt {

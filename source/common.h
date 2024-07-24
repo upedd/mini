@@ -1,5 +1,6 @@
 #ifndef COMMON_H
 #define COMMON_H
+#include <bitset>
 #include <cassert>
 #include <expected>
 
@@ -74,6 +75,44 @@ public:
     ~scope_exit() { fn(); }
 private:
     Fn fn;
+};
+
+template<typename T>
+class bitflags {
+public:
+    // Inspiration: https://m-peko.github.io/craft-cpp/posts/different-ways-to-define-binary-flags/
+
+    static_assert(std::is_enum_v<T>, "Flags can only be specialzed for enums.");
+
+    // turn flag on
+    constexpr bitflags& operator+=(const T& rhs) {
+        storage.set(static_cast<std::size_t>(rhs));
+        return *this; // return the result by reference
+    }
+
+    // turn flag off
+    constexpr bitflags& operator-=(const T& rhs) {
+        storage.reset(static_cast<std::size_t>(rhs));
+        return *this; // return the result by reference
+    }
+
+    [[nodiscard]] constexpr bool operator[](const T& rhs) {
+        return storage.test(static_cast<std::size_t>(rhs));
+    }
+private:
+    std::bitset<T::size> storage;
+};
+
+// TODO: find better place for this!
+enum class ClassAttributes {
+    PRIVATE,
+    STATIC,
+    OVERRIDE,
+    ABSTRACT,
+    GETTER,
+    SETTER,
+    OPERATOR,
+    size // tracks ClassAttributes size. Must be at end!
 };
 
 #endif //COMMON_H

@@ -286,46 +286,50 @@ Stmt Parser::class_declaration(bool is_class_abstract) {
     std::vector<std::unique_ptr<FieldStmt> > fields;
     std::unique_ptr<ConstructorStmt> constructor_handle;
     while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
-        bool is_private = false, is_static = false, is_override = false, is_abstract = false;
+        bitflags<ClassAttributes> attributes;
         // maybe order independant
         if (match(Token::Type::PRIVATE)) {
-            is_private = true;
+            attributes += ClassAttributes::PRIVATE;
         }
         if (match(Token::Type::STATIC)) {
-            is_static = true;
+            attributes += ClassAttributes::STATIC;
         }
         if (match(Token::Type::OVERRDIE)) {
-            is_override = true;
+            attributes += ClassAttributes::OVERRIDE;
         }
         if (match(Token::Type::ABSTRACT)) {
             if (!is_class_abstract) {
                 error(current, "Abstract methods can be only declared in abstract classes.");
             }
-            is_abstract = true;
+            attributes += ClassAttributes::ABSTRACT;
+        }
+        if (match(Token::Type::GET)) {
+            attributes += ClassAttributes::GETTER;
+        }
+        if (match(Token::Type::SET)) {
+            attributes += ClassAttributes::SETTER;
         }
         consume(Token::Type::IDENTIFIER, "Expected identifier.");
         if (current.get_lexeme(lexer.get_source()) == "init") {
             // constructor call
             constructor_handle = std::make_unique<ConstructorStmt>(constructor_statement());
         } else if (check(Token::Type::SEMICOLON) || check(Token::Type::EQUAL)) {
-            if (is_abstract) {
+            if (attributes[ClassAttributes::ABSTRACT]) {
                 fields.push_back(
-                    std::make_unique<FieldStmt>(std::make_unique<VarStmt>(abstract_field(current)), is_private, is_static, is_override, is_abstract));
+                    std::make_unique<FieldStmt>(std::make_unique<VarStmt>(abstract_field(current)), attributes));
             } else {
                 auto var_stmt = std::make_unique<VarStmt>(var_declaration_after_name(current));
                 fields.push_back(
-                    std::make_unique<FieldStmt>(std::move(var_stmt), is_private, is_static, is_override, is_abstract));
+                    std::make_unique<FieldStmt>(std::move(var_stmt), attributes));
             }
         } else {
-            if (is_abstract) {
+            if (attributes[ClassAttributes::ABSTRACT]) {
                 methods.push_back(
-                    std::make_unique<MethodStmt>(std::make_unique<FunctionStmt>(abstract_method(current)), is_private,
-                                                 is_static, is_override, is_abstract));
+                    std::make_unique<MethodStmt>(std::make_unique<FunctionStmt>(abstract_method(current)), attributes));
             } else {
                 auto function_stmt = std::make_unique<FunctionStmt>(function_declaration_after_name(current));
                 methods.push_back(
-                    std::make_unique<MethodStmt>(std::move(function_stmt), is_private, is_static, is_override,
-                                                 is_abstract));
+                    std::make_unique<MethodStmt>(std::move(function_stmt), attributes));
             }
         }
     }

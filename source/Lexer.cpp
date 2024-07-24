@@ -203,6 +203,10 @@ Token Lexer::keyword_or_identifier() {
         return make_token(Token::Type::ABSTRACT);
     } else if (current == "override") {
         return make_token(Token::Type::OVERRDIE);
+    } else if (current == "get") {
+        return make_token(Token::Type::GET);
+    } else if (current == "set") {
+        return make_token(Token::Type::SET);
     }
     return make_token(Token::Type::IDENTIFIER);
 }

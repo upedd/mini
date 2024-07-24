@@ -535,7 +535,7 @@ void Compiler::constructor(const ConstructorStmt &stmt, const std::vector<std::u
     // default initialize fields
     for (auto &field: fields) {
         // ast builder
-        if (field->is_static || field->is_abstract) continue;
+        if (field->attributes[ClassAttributes::STATIC] || field->attributes[ClassAttributes::ABSTRACT]) continue;
         visit_expr(*field->variable->value);
         emit(OpCode::THIS);
         int property_name = current_function()->add_constant(field->variable->name.get_lexeme(source));
