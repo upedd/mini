@@ -104,6 +104,8 @@ public:
         int break_idx = -1;
         int continue_idx = -1;
         int return_slot = -1;
+
+        int constructor_argument_count = 0;
     private:
         ScopeType type;
         std::string name;
@@ -116,6 +118,7 @@ public:
 
     struct ResolvedClass {
         std::unordered_map<std::string, FieldInfo> fields;
+        int constructor_argument_count = 0;
     };
 
     struct Context {
@@ -188,9 +191,10 @@ private:
     void function_declaration(const FunctionStmt &stmt);
     void function(const FunctionStmt &stmt, FunctionType type);
 
-    void constructor(const ConstructorStmt &stmt, const std::vector<std::unique_ptr<FieldStmt>> &fields);
+    void constructor(const ConstructorStmt &stmt, const std::vector<std::unique_ptr<FieldStmt>> &fields, bool has_superclass, int
+                     superclass_arguments_count);
 
-    void default_constructor(const std::vector<std::unique_ptr<FieldStmt>> & fields);
+    void default_constructor(const std::vector<std::unique_ptr<FieldStmt>> &fields, bool has_superclass);
 
     void class_declaration(const ClassStmt &stmt);
     void expr_statement(const ExprStmt &stmt);

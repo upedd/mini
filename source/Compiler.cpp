@@ -181,7 +181,7 @@ void Compiler::pop_out_of_scopes(int depth) {
 
 void Compiler::end_scope() {
     if (current_scope().get_type() == ScopeType::CLASS) {
-        current_context().resolved_classes[current_scope().get_name()] = ResolvedClass(current_scope().get_fields());
+        current_context().resolved_classes[current_scope().get_name()] = ResolvedClass(current_scope().get_fields(), current_scope().constructor_argument_count);
     }
     pop_out_of_scopes(1);
     current_context().scopes.pop_back();
@@ -490,7 +490,7 @@ void Compiler::function(const FunctionStmt &stmt, FunctionType type) {
     }
 }
 
-void Compiler::constructor(const ConstructorStmt& stmt, const std::vector<std::unique_ptr<FieldStmt>>& fields) {
+void Compiler::constructor(const ConstructorStmt& stmt, const std::vector<std::unique_ptr<FieldStmt>>& fields, bool has_superclass, int superclass_arguments_count) {
     // refactor: tons of overlap with function generator
 
     // TODO: check name
@@ -505,13 +505,26 @@ void Compiler::constructor(const ConstructorStmt& stmt, const std::vector<std::u
     }
 
     if (stmt.has_super) {
+        if (!has_superclass) {
+            assert(false && "No superclass to be constructed");
+        }
         for (const ExprHandle& expr : stmt.super_arguments) {
             visit_expr(*expr);
         }
         // maybe better way to do this instead of this superinstruction?
         emit(OpCode::CALL_SUPER_CONSTRUCTOR, stmt.super_arguments.size());
         emit(OpCode::POP); // discard constructor response
+    } else if (has_superclass) {
+         if (superclass_arguments_count == 0) {
+            // default superclass construct
+            emit(OpCode::CALL_SUPER_CONSTRUCTOR, stmt.super_arguments.size());
+            emit(OpCode::POP); // discard constructor response
+        } else {
+            assert(false && "expected superconstructor call");
+        }
     }
+
+
 
     // default initialize fields
     for (auto& field : fields) {
@@ -542,13 +555,19 @@ void Compiler::constructor(const ConstructorStmt& stmt, const std::vector<std::u
     }
 }
 
-void Compiler::default_constructor(const std::vector<std::unique_ptr<FieldStmt>> &fields) {
+void Compiler::default_constructor(const std::vector<std::unique_ptr<FieldStmt>> &fields, bool has_superclass) {
     // TODO: ideally in future default constructor has just default parameters!
     auto *function = new Function("constructor", 0);
     functions.push_back(function);
     start_context(function, FunctionType::CONSTRUCTOR);
     begin_scope(ScopeType::BLOCK); // doesn't context already start a new scope therefor it is reduntant
     current_scope().define(""); // reserve slot for receiver
+
+    if (has_superclass) {
+        // default superclass construct
+        emit(OpCode::CALL_SUPER_CONSTRUCTOR, 0);
+        emit(OpCode::POP); // discard constructor response
+    }
 
     // default initialize fields
     for (auto& field : fields) {
@@ -673,9 +692,13 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
     }
 
     if (stmt.constructor) {
-        constructor(*stmt.constructor, stmt.fields);
+        current_scope().constructor_argument_count = stmt.constructor->parameters.size();
+        constructor(*stmt.constructor, stmt.fields, static_cast<bool>(stmt.super_class), current_context().resolved_classes[stmt.super_class->get_lexeme(source)].constructor_argument_count);
     } else {
-        default_constructor(stmt.fields);
+        if (stmt.super_class && current_context().resolved_classes[stmt.super_class->get_lexeme(source)].constructor_argument_count != 0) {
+            assert(false && "Class must implement constructor because it needs to call superclass constructor");
+        }
+        default_constructor(stmt.fields, static_cast<bool>(stmt.super_class));
     }
     emit(OpCode::CONSTRUCTOR);
 
