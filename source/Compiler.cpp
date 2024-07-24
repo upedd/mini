@@ -460,7 +460,6 @@ void Compiler::continue_expr(const ContinueExpr& expr) {
 }
 
 
-// TODO: add stack tracking to functions and classes
 void Compiler::function(const FunctionStmt &stmt, FunctionType type) {
     auto function_name = stmt.name.get_lexeme(source);
     auto *function = new Function(function_name, stmt.params.size());
@@ -511,6 +510,7 @@ void Compiler::constructor(const ConstructorStmt& stmt, const std::vector<std::u
         }
         // maybe better way to do this instead of this superinstruction?
         emit(OpCode::CALL_SUPER_CONSTRUCTOR, stmt.super_arguments.size());
+        emit(OpCode::SUPER_CONSTRUCT);
     }
 
     // default initialize fields

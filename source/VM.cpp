@@ -662,7 +662,10 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 if (auto error = call_value(bound_value, argumnents_count)) {
                     return std::unexpected(*error);
                 }
-                // TODO: split instruction in two parts!
+                break;
+            }
+            case OpCode::SUPER_CONSTRUCT: {
+                Receiver* receiver = *get_current_receiver();
                 Instance* super_instance = dynamic_cast<Instance*>(pop().get<Object*>());
                 receiver->instance->super_instances = super_instance->super_instances;
                 receiver->instance->super_instances.push_back(super_instance);
