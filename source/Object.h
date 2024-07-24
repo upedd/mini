@@ -161,6 +161,26 @@ private:
 struct ClassValue {
     Value value;
     bitflags<ClassAttributes> attributes;
+    bool is_computed = false; // if is computed don't look at this attributes?
+};
+
+class ComputedProperty : public Object {
+public:
+    std::size_t get_size() override {
+        return sizeof(ComputedProperty);
+    }
+
+    std::string to_string() override {
+        return std::format("<ComputedPropety({}, {})>"); // TODO: implement
+    }
+
+    void mark_references(GarbageCollector &gc) override {
+        gc.mark(get.value);
+        gc.mark(set.value);
+    }
+
+    ClassValue get;
+    ClassValue set;
 };
 
 class Class;

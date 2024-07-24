@@ -586,7 +586,19 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                     method = peek();
                 }
                 Class *klass = dynamic_cast<Class *>(peek(attributes[ClassAttributes::ABSTRACT] ? 0 : 1).get<Object *>());
-                klass->methods[name] = {.value = method, .attributes = attributes};
+                // TODO: refactor!
+                if (attributes[ClassAttributes::GETTER]) {
+                    klass->fields[name].is_computed = true;
+                    auto* computed_property = dynamic_cast<ComputedProperty *>(klass->fields[name].value.get<Object*>());
+                    computed_property->get = {.value = method, .attributes = attributes};
+                } else if (attributes[ClassAttributes::SETTER]) {
+                    klass->fields[name].is_computed = true;
+                    auto* computed_property = dynamic_cast<ComputedProperty *>(klass->fields[name].value.get<Object*>());
+                    computed_property->set = {.value = method, .attributes = attributes};
+                } else {
+                    klass->methods[name] = {.value = method, .attributes = attributes};
+                }
+
                 if (!attributes[ClassAttributes::ABSTRACT]) {
                     pop();
                 }

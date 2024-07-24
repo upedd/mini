@@ -190,16 +190,18 @@ FunctionStmt Parser::function_declaration() {
     return function_declaration_after_name(current);
 }
 
-FunctionStmt Parser::function_declaration_after_name(const Token name) {
-    consume(Token::Type::LEFT_PAREN, "Expected '(' after function name");
+FunctionStmt Parser::function_declaration_after_name(const Token name, bool skip_params) {
     std::vector<Token> parameters;
-    if (!check(Token::Type::RIGHT_PAREN)) {
-        do {
-            consume(Token::Type::IDENTIFIER, "Expected identifier");
-            parameters.push_back(current);
-        } while (match(Token::Type::COMMA));
+    if (!skip_params) {
+        consume(Token::Type::LEFT_PAREN, "Expected '(' after function name");
+        if (!check(Token::Type::RIGHT_PAREN)) {
+            do {
+                consume(Token::Type::IDENTIFIER, "Expected identifier");
+                parameters.push_back(current);
+            } while (match(Token::Type::COMMA));
+        }
+        consume(Token::Type::RIGHT_PAREN, "Expected ')' after function parameters");
     }
-    consume(Token::Type::RIGHT_PAREN, "Expected ')' after function parameters");
     consume(Token::Type::LEFT_BRACE, "Expected '{' before function body");
     auto body = block();
     return FunctionStmt{
@@ -313,7 +315,7 @@ Stmt Parser::class_declaration(bool is_class_abstract) {
         if (current.get_lexeme(lexer.get_source()) == "init") {
             // constructor call
             constructor_handle = std::make_unique<ConstructorStmt>(constructor_statement());
-        } else if (check(Token::Type::SEMICOLON) || check(Token::Type::EQUAL)) {
+        } else if ((check(Token::Type::SEMICOLON) || check(Token::Type::EQUAL)) && !attributes[ClassAttributes::SETTER] && !attributes[ClassAttributes::GETTER]) {
             if (attributes[ClassAttributes::ABSTRACT]) {
                 fields.push_back(
                     std::make_unique<FieldStmt>(std::make_unique<VarStmt>(abstract_field(current)), attributes));
@@ -323,11 +325,14 @@ Stmt Parser::class_declaration(bool is_class_abstract) {
                     std::make_unique<FieldStmt>(std::move(var_stmt), attributes));
             }
         } else {
+            bool skip_params = attributes[ClassAttributes::GETTER] && check(Token::Type::LEFT_BRACE);
+            // TODO: fix abstract getters and setters!
+            // TODO: validate get and setters function have expected number of arguments
             if (attributes[ClassAttributes::ABSTRACT]) {
                 methods.push_back(
                     std::make_unique<MethodStmt>(std::make_unique<FunctionStmt>(abstract_method(current)), attributes));
             } else {
-                auto function_stmt = std::make_unique<FunctionStmt>(function_declaration_after_name(current));
+                auto function_stmt = std::make_unique<FunctionStmt>(function_declaration_after_name(current, skip_params));
                 methods.push_back(
                     std::make_unique<MethodStmt>(std::move(function_stmt), attributes));
             }

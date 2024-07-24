@@ -60,7 +60,7 @@ private:
 
     FunctionStmt function_declaration();
 
-    FunctionStmt function_declaration_after_name(Token name);
+    FunctionStmt function_declaration_after_name(const Token name, bool skip_params = false);
 
     ConstructorStmt constructor_statement();
 
