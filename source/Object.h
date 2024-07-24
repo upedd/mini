@@ -290,7 +290,7 @@ public:
         if (properties.contains(name) && !properties[name].is_static && !properties[name].is_private) {
             return properties[name];
         }
-        for (auto* super_instance : std::views::reverse(super_instances)) {
+        for (auto* super_instance : super_instances) {
             if (super_instance->properties.contains(name) && !super_instance->properties[name].is_static && !super_instance->properties[name].is_private) {
                 return super_instance->properties[name];
             }
@@ -309,7 +309,7 @@ public:
 
     std::optional<Instance*> get_super() {
         if (super_instances.empty()) return {};
-        return super_instances.back();
+        return super_instances[0];
     }
     Class* klass;
     std::vector<Instance*> super_instances;

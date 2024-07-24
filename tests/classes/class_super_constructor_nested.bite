@@ -1,0 +1,36 @@
+class Foo {
+    x;
+    init(x) {
+        this.x = x;
+    }
+}
+
+class Bar : Foo {
+    y;
+    init(x, y) : super(x) {
+        this.y = y;
+    }
+}
+
+class Baz : Bar {
+    z;
+    init(x, y, z) : super(x, y) {
+        this.z = z;
+    }
+}
+
+native print;
+
+let instance = Baz(1, 2, 3);
+print(instance.x);
+print(instance.y);
+print(instance.z);
+
+let instance2 = Baz(4, 5, 6);
+print(instance2.x);
+print(instance2.y);
+print(instance2.z);
+
+print(instance.x);
+print(instance.y);
+print(instance.z);

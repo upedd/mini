@@ -1,0 +1,25 @@
+abstract class Foo {
+    abstract foo();
+}
+
+abstract class Bar : Foo {
+    abstract bar();
+    baz() {
+        return foo() + bar();
+    }
+}
+
+class Baz : Bar {
+    override foo() {
+        return 10;
+    }
+
+    override bar() {
+        return 5;
+    }
+}
+
+native print;
+
+let instance = Baz();
+print(instance.baz());

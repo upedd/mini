@@ -679,7 +679,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 push(instance);
                 allocate(instance);
 
-                receiver->instance->super_instances = instance->super_instances;
+                //receiver->instance->super_instances = instance->super_instances;
                 receiver->instance->super_instances.push_back(instance);
 
                 auto bound = bind_method(superclass->constructor, superclass, receiver->instance);
