@@ -535,7 +535,7 @@ void Compiler::constructor(const ConstructorStmt &stmt, const std::vector<std::u
     // default initialize fields
     for (auto &field: fields) {
         // ast builder
-        if (field->attributes[ClassAttributes::STATIC] || field->attributes[ClassAttributes::ABSTRACT]) continue;
+        if (field->attributes[ClassAttributes::STATIC] || field->attributes[ClassAttributes::ABSTRACT] || field->attributes[ClassAttributes::GETTER] || field->attributes[ClassAttributes::SETTER]) continue;
         visit_expr(*field->variable->value);
         emit(OpCode::THIS);
         int property_name = current_function()->add_constant(field->variable->name.get_lexeme(source));
@@ -578,7 +578,7 @@ void Compiler::default_constructor(const std::vector<std::unique_ptr<FieldStmt> 
     // default initialize fields
     for (auto &field: fields) {
         // ast builder
-        if (field->attributes[ClassAttributes::STATIC] || field->attributes[ClassAttributes::ABSTRACT]) continue;
+        if (field->attributes[ClassAttributes::STATIC] || field->attributes[ClassAttributes::ABSTRACT] || field->attributes[ClassAttributes::GETTER] || field->attributes[ClassAttributes::SETTER]) continue;
         visit_expr(*field->variable->value);
         emit(OpCode::THIS);
         int property_name = current_function()->add_constant(field->variable->name.get_lexeme(source));
@@ -677,8 +677,20 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
     // hoist methods
     for (auto &method: stmt.methods) {
         std::string method_name = method->function->name.get_lexeme(source);
+        // TODO: rework!
+        if (method->attributes[ClassAttributes::GETTER]) {
+            method_name = std::string("get_") + method_name;
+        }
+        if (method->attributes[ClassAttributes::SETTER]) {
+            method_name = std::string("set_") + method_name;
+        }
         bool is_overriding = false;
-        if (current_scope().has_field(method_name)) {
+        if (current_fields.contains(method_name)) {
+            // TODO: better error handling!!!
+            assert(false && "Field redefnintion is disallowed.");
+        }
+
+        if (!current_fields.contains(method_name) && current_scope().has_field(method_name)) {
             if (!current_scope().get_field_info(method_name).attributes[ClassAttributes::PRIVATE] &&
                 !current_scope().get_field_info(method_name).attributes[ClassAttributes::STATIC]) {
                 // non-private!
@@ -690,10 +702,7 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
         if (!is_overriding && method->attributes[ClassAttributes::OVERRIDE]) {
             assert(false && "no member to override.");
         }
-        if (current_fields.contains(method_name)) {
-            // TODO: better error handling!!!
-            assert(false && "Field redefnintion is disallowed.");
-        }
+
         current_scope().add_field(method_name, FieldInfo(method->attributes));
         current_fields.insert(method_name);
     }

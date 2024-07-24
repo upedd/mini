@@ -231,15 +231,24 @@ Value VM::bind_method(const Value& method, Class* klass, Instance* instance) {
 }
 
 
-Value VM::value_or_bound_method(Instance* instance, const ClassValue& value, bool& is_computed_property, bool is_get) {
+Value VM::get_value_or_bound_method(Instance* instance, const ClassValue& value, bool& is_computed_property) {
     if (value.is_computed) {
         // TODO validate!
         is_computed_property = true;
-        ComputedProperty* property = dynamic_cast<ComputedProperty *>(value.value.get<Object*>());
-        ClassMethod method = is_get ? property->get : property->set;
-        return bind_method(method.value.value, method.owner, instance);
+        auto* property = dynamic_cast<ComputedProperty *>(value.value.get<Object*>());
+        return bind_method(property->get.value.value, property->get.owner, instance);
     }
     return value.value;
+}
+
+std::optional<Value> VM::set_value_or_get_bound_method(Instance* instance, ClassValue& property, const Value& value) {
+    if (property.is_computed) {
+        // TODO validate!
+        auto* computed = dynamic_cast<ComputedProperty *>(property.value.get<Object*>());
+        return bind_method(computed->set.value.value, computed->set.owner, instance);
+    }
+    property.value = value;
+    return {};
 }
 
 std::expected<Value, VM::RuntimeError> VM::get_instance_property(Instance *instance, const std::string &name, bool& is_computed_property) {
@@ -256,13 +265,13 @@ std::expected<Value, VM::RuntimeError> VM::get_instance_property(Instance *insta
         }
         // try static property
         if (auto class_property = receiver.value()->klass->resolve_static_property(name)) {
-            return value_or_bound_method(instance, class_property->get(), is_computed_property, true);
+            return get_value_or_bound_method(instance, class_property->get(), is_computed_property);
         }
 
         if (auto super_instnace = receiver.value()->instance->get_super_instance_by_class(receiver.value()->klass)) {
             // private property
             if (auto class_property = super_instnace.value()->resolve_private_property(name)) {
-                return value_or_bound_method(instance, class_property->get(), is_computed_property, true);
+                return get_value_or_bound_method(instance, class_property->get(), is_computed_property);
             }
         }
     }
@@ -271,7 +280,7 @@ std::expected<Value, VM::RuntimeError> VM::get_instance_property(Instance *insta
         if (std::optional<RuntimeError> error = validate_instance_access(instance, *class_property)) {
             return std::unexpected(*error);
         }
-        return value_or_bound_method(instance, class_property->get(), is_computed_property, true);
+        return get_value_or_bound_method(instance, class_property->get(), is_computed_property);
     }
 
     if (auto class_method = instance->klass->resolve_dynamic_method(name)) {
@@ -319,28 +328,38 @@ std::expected<Value, VM::RuntimeError> VM::get_super_property(Instance *super_in
     return std::unexpected(RuntimeError("Property must be declared on class."));
 }
 
-std::optional<VM::RuntimeError> VM::set_instance_property(Instance *instance, const std::string &name,
-                                                          const Value &value) {
+std::variant<std::monostate, VM::RuntimeError, Value> VM::set_instance_property(
+    Instance *instance, const std::string &name,
+    const Value &value) {
     std::optional<Receiver*> receiver = get_current_receiver();
     if (receiver) {
         // try static property
         if (auto class_property = receiver.value()->klass->resolve_static_property(name)) {
-            class_property.value().get().value = value;
+            if (auto bound = set_value_or_get_bound_method(instance, class_property.value(), value)) {
+                return *bound;
+            }
+            return {};
         }
 
         if (auto super_instnace = receiver.value()->instance->get_super_instance_by_class(receiver.value()->klass)) {
             // private property
             if (auto class_property = super_instnace.value()->resolve_private_property(name)) {
-                class_property.value().get().value = value;
+                if (auto bound = set_value_or_get_bound_method(instance, class_property.value(), value)) {
+                    return *bound;
+                }
+                return {};
             }
         }
     }
     // members properties
     if (auto class_property = instance->resolve_dynamic_property(name)) {
         if (std::optional<RuntimeError> error = validate_instance_access(instance, *class_property)) {
-            return error;
+            return *error;
         }
-        class_property.value().get().value = value;
+        if (auto bound = set_value_or_get_bound_method(instance, class_property.value(), value)) {
+            return *bound;
+        }
+        return {};
     }
 
     return RuntimeError("Property must be declared on class.");
@@ -579,11 +598,32 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 }
                 if (auto *instance = dynamic_cast<Instance *>(*object)) {
                     Value value = peek(1);
-                    std::optional<RuntimeError> error = set_instance_property(instance, name, value);
-                    if (!error) {
-                        return std::unexpected(*error);
+
+                    auto response  = set_instance_property(instance, name, value);
+                    if (std::holds_alternative<RuntimeError>(response)) {
+                        return std::unexpected(std::get<RuntimeError>(response));
                     }
-                    pop(); // pop instance
+                    if (std::holds_alternative<Value>(response)) {
+                        pop(); // pop instance;
+                        auto property = std::get<Value>(response);
+                        push(property);
+                        // gc rewrite!
+                        if (property.is<Object*>()) {
+                            if (auto* bound = dynamic_cast<BoundMethod*>(property.get<Object*>())) {
+                                allocate(bound);
+                                allocate<Receiver>(dynamic_cast<Receiver*>(bound->receiver.get<Object*>()));
+                            }
+                        }
+                        pop(); // pop bound for now
+                        pop(); // pop value
+                        push(property); // push bound
+                        push(value); // push argument
+                        if (auto error = call_value(property, 1)) {
+                            return std::unexpected(*error);
+                        }
+                    } else {
+                        pop(); // pop instance
+                    }
                 } else if (auto* klass = dynamic_cast<Class*>(*object)) {
                     Value value = peek(1);
                     std::optional<RuntimeError> error = set_class_property(klass, name, value);
