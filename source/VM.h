@@ -62,7 +62,9 @@ public:
 
     Value bind_method(const Value &method, Class *klass, Instance *instance);
 
-    std::expected<Value, VM::RuntimeError> get_instance_property(Instance *instance, const std::string &name);
+    Value value_or_bound_method(Instance *instance, const ClassValue &value, bool &is_computed_property, bool is_get);
+
+    std::expected<Value, VM::RuntimeError> get_instance_property(Instance *instance, const std::string &name, bool &is_computed_property);
 
     std::expected<Value, VM::RuntimeError> get_class_property(Class *klass, const std::string &name);
 

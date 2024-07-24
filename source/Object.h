@@ -163,6 +163,13 @@ struct ClassValue {
     bitflags<ClassAttributes> attributes;
     bool is_computed = false; // if is computed don't look at this attributes?
 };
+class Class;
+
+struct ClassMethod {
+    ClassValue value;
+    Class *owner = nullptr;
+};
+
 
 class ComputedProperty : public Object {
 public:
@@ -171,24 +178,20 @@ public:
     }
 
     std::string to_string() override {
-        return std::format("<ComputedPropety({}, {})>"); // TODO: implement
+        return std::format("<ComputedPropety()>"); // TODO: implement
     }
 
     void mark_references(GarbageCollector &gc) override {
-        gc.mark(get.value);
-        gc.mark(set.value);
+        gc.mark(get.value.value);
+        gc.mark(set.value.value);
     }
 
-    ClassValue get;
-    ClassValue set;
+    ClassMethod get;
+    ClassMethod set;
 };
 
-class Class;
 
-struct ClassMethod {
-    ClassValue value;
-    Class *owner = nullptr;
-};
+
 
 class Class final : public Object {
 public:

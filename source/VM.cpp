@@ -230,7 +230,19 @@ Value VM::bind_method(const Value& method, Class* klass, Instance* instance) {
     return bound;
 }
 
-std::expected<Value, VM::RuntimeError> VM::get_instance_property(Instance *instance, const std::string &name) {
+
+Value VM::value_or_bound_method(Instance* instance, const ClassValue& value, bool& is_computed_property, bool is_get) {
+    if (value.is_computed) {
+        // TODO validate!
+        is_computed_property = true;
+        ComputedProperty* property = dynamic_cast<ComputedProperty *>(value.value.get<Object*>());
+        ClassMethod method = is_get ? property->get : property->set;
+        return bind_method(method.value.value, method.owner, instance);
+    }
+    return value.value;
+}
+
+std::expected<Value, VM::RuntimeError> VM::get_instance_property(Instance *instance, const std::string &name, bool& is_computed_property) {
     // private or static members get resolved first
     std::optional<Receiver*> receiver = get_current_receiver();
     if (receiver) {
@@ -244,13 +256,13 @@ std::expected<Value, VM::RuntimeError> VM::get_instance_property(Instance *insta
         }
         // try static property
         if (auto class_property = receiver.value()->klass->resolve_static_property(name)) {
-            return class_property.value().get().value;
+            return value_or_bound_method(instance, class_property->get(), is_computed_property, true);
         }
 
         if (auto super_instnace = receiver.value()->instance->get_super_instance_by_class(receiver.value()->klass)) {
             // private property
             if (auto class_property = super_instnace.value()->resolve_private_property(name)) {
-                return class_property.value().get().value;
+                return value_or_bound_method(instance, class_property->get(), is_computed_property, true);
             }
         }
     }
@@ -259,7 +271,7 @@ std::expected<Value, VM::RuntimeError> VM::get_instance_property(Instance *insta
         if (std::optional<RuntimeError> error = validate_instance_access(instance, *class_property)) {
             return std::unexpected(*error);
         }
-        return class_property->get().value;
+        return value_or_bound_method(instance, class_property->get(), is_computed_property, true);
     }
 
     if (auto class_method = instance->klass->resolve_dynamic_method(name)) {
@@ -277,7 +289,6 @@ std::expected<Value, VM::RuntimeError> VM::get_class_property(Class *klass, cons
         if (std::optional<RuntimeError> error = validate_class_access(klass, class_property.value())) {
             return std::unexpected(*error);
         }
-        return class_property->get().value;
     }
 
     if (auto class_method = klass->resolve_static_method(name)) {
@@ -525,25 +536,33 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                     return std::unexpected(RuntimeError("Expected class instance value."));
                 }
                 if (auto *instance = dynamic_cast<Instance *>(*object)) {
-                    std::expected<Value, RuntimeError> property = get_instance_property(instance, name);
+                    pop();
+                    bool is_computed_property = false;
+                    std::expected<Value, RuntimeError> property = get_instance_property(instance, name, is_computed_property);
                     if (!property) {
                         return std::unexpected(property.error());
                     }
-                    pop();
+
                     push(*property);
                     // this will wait for gc refactoring
                     if (property->is<Object*>()) {
                         if (auto* bound = dynamic_cast<BoundMethod*>(property->get<Object*>())) {
                             allocate(bound);
                             allocate<Receiver>(dynamic_cast<Receiver*>(bound->receiver.get<Object*>()));
+
+                            if (is_computed_property) {
+                                if (auto error = call_value(bound, 0)) {
+                                    return std::unexpected(*error);
+                                }
+                            }
                         }
                     }
                 } else if (auto* klass = dynamic_cast<Class*>(*object)) {
+                    pop();
                     std::expected<Value, RuntimeError> property = get_class_property(klass, name);
                     if (!property) {
                         return std::unexpected(property.error());
                     }
-                    pop();
                     push(*property);
                 } else {
                     return std::unexpected(RuntimeError("Expected class object or instance."));
@@ -588,13 +607,24 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 Class *klass = dynamic_cast<Class *>(peek(attributes[ClassAttributes::ABSTRACT] ? 0 : 1).get<Object *>());
                 // TODO: refactor!
                 if (attributes[ClassAttributes::GETTER]) {
-                    klass->fields[name].is_computed = true;
+                    if (!klass->fields[name].is_computed) {
+                        klass->fields[name].is_computed = true;
+                        auto* property = new ComputedProperty {};
+                        klass->fields[name].value = property;
+                        allocate<ComputedProperty>(property);
+                    }
                     auto* computed_property = dynamic_cast<ComputedProperty *>(klass->fields[name].value.get<Object*>());
-                    computed_property->get = {.value = method, .attributes = attributes};
+                    computed_property->get = ClassMethod {.value =  {.value = method, .attributes = attributes}, .owner = klass};
                 } else if (attributes[ClassAttributes::SETTER]) {
+                    if (!klass->fields[name].is_computed) {
+                        klass->fields[name].is_computed = true;
+                        auto* property = new ComputedProperty {};
+                        klass->fields[name].value = property;
+                        allocate<ComputedProperty>(property);
+                    }
                     klass->fields[name].is_computed = true;
                     auto* computed_property = dynamic_cast<ComputedProperty *>(klass->fields[name].value.get<Object*>());
-                    computed_property->set = {.value = method, .attributes = attributes};
+                    computed_property->set = ClassMethod {.value =  {.value = method, .attributes = attributes}, .owner = klass};
                 } else {
                     klass->methods[name] = {.value = method, .attributes = attributes};
                 }
