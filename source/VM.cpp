@@ -71,23 +71,25 @@ std::optional<VM::RuntimeError> VM::call_value(const Value &value, const int arg
         auto *instance = new Instance(klass);
         push(instance);
         allocate(instance);
-
-        for (auto* superclass : klass->superclasses) {
-            instance->super_instances.push_back(new Instance(superclass));
-            allocate(instance->super_instances.back());
-        }
-
         auto bound = bind_method(klass->constructor, klass, instance);
         push(bound);
-        for (int i = arguments_count - 1; i >= 0; --i) {
-            push(args[i]);
-        }
-        // TODO: refactor when gc is refactored!
+        // TODO: temp fix
+        // work around gc and fix duplicate function returns
         if (auto* bound_ptr = dynamic_cast<BoundMethod*>(bound.get<Object*>())) {
             allocate(bound_ptr);
             allocate<Receiver>(dynamic_cast<Receiver*>(bound_ptr->receiver.get<Object*>()));
         }
-        return call_value(bound, arguments_count); // success
+
+        std::swap(stack[stack_index - 1], stack[stack_index - 2]);
+        pop();
+
+        for (int i = arguments_count - 1; i >= 0; --i) {
+            push(args[i]);
+        }
+        // TODO: refactor when gc is refactored!
+
+        auto res = call_value(bound, arguments_count); // success
+        return res;
     }
     if (auto *closure = dynamic_cast<Closure *>(*object)) {
         if (arguments_count != closure->get_function()->get_arity()) {
@@ -626,7 +628,12 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 break;
             }
             case OpCode::THIS: {
-                push(dynamic_cast<Receiver*>(stack[frames.back().frame_pointer].get<Object*>())->instance);
+                Receiver* receiver = *get_current_receiver();
+                if (receiver->instance != nullptr) {
+                    push(receiver->instance);
+                } else {
+                    push(receiver->klass);
+                }
                 break;
             }
             case OpCode::CONSTRUCTOR: {

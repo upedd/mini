@@ -104,7 +104,7 @@ void Compiler::start_context(Function *function, FunctionType type) {
     current_context().scopes.emplace_back(ScopeType::BLOCK, 0); // TODO: should be function?
 }
 
-#define COMPILER_PRINT_BYTECODE
+//#define COMPILER_PRINT_BYTECODE
 
 void Compiler::end_context() {
 #ifdef COMPILER_PRINT_BYTECODE
@@ -542,6 +542,41 @@ void Compiler::constructor(const ConstructorStmt& stmt, const std::vector<std::u
     }
 }
 
+void Compiler::default_constructor(const std::vector<std::unique_ptr<FieldStmt>> &fields) {
+    // TODO: ideally in future default constructor has just default parameters!
+    auto *function = new Function("constructor", 0);
+    functions.push_back(function);
+    start_context(function, FunctionType::CONSTRUCTOR);
+    begin_scope(ScopeType::BLOCK); // doesn't context already start a new scope therefor it is reduntant
+    current_scope().define(""); // reserve slot for receiver
+
+    // default initialize fields
+    for (auto& field : fields) {
+        // ast builder
+        if (field->is_static) continue;
+        visit_expr(*field->variable->value);
+        emit(OpCode::THIS);
+        int property_name = current_function()->add_constant(field->variable->name.get_lexeme(source));
+        emit(OpCode::SET_PROPERTY, property_name);
+        emit(OpCode::POP); // pop value;
+    }
+
+    emit_default_return();
+    end_scope();
+
+    function->set_upvalue_count(current_context().upvalues.size());
+    // we need to emit those upvalues in enclosing context (context where function is called)
+    std::vector<Upvalue> function_upvalues = std::move(current_context().upvalues);
+    end_context();
+
+    int constant = current_function()->add_constant(function);
+    emit(OpCode::CLOSURE, constant);
+
+    for (const Upvalue &upvalue: function_upvalues) {
+        emit(upvalue.is_local);
+        emit(upvalue.index);
+    }
+}
 
 
 void Compiler::class_declaration(const ClassStmt &stmt) {
@@ -637,11 +672,12 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
         current_scope().pop_temporary();
     }
 
-    // default construtor to default intialize members!!!
     if (stmt.constructor) {
         constructor(*stmt.constructor, stmt.fields);
-        emit(OpCode::CONSTRUCTOR);
+    } else {
+        default_constructor(stmt.fields);
     }
+    emit(OpCode::CONSTRUCTOR);
 
     emit(OpCode::POP);
     current_scope().pop_temporary();
