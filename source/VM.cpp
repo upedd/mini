@@ -202,10 +202,10 @@ std::optional<Receiver*> VM::get_current_receiver() const {
 
 std::optional<VM::RuntimeError> VM::validate_instance_access(Instance* accessor, const ClassValue& class_value) const {
     std::optional<Receiver*> receiver = get_current_receiver();
-    if (class_value.is_private && (!receiver || (*receiver)->instance != accessor)) {
+    if (class_value.attributes[ClassAttributes::PRIVATE] && (!receiver || (*receiver)->instance != accessor)) {
         return RuntimeError("Private propererties can be access only inside their class definitions.");
     }
-    if (class_value.is_static && (!receiver || (*receiver)->instance != nullptr)) {
+    if (class_value.attributes[ClassAttributes::STATIC] && (!receiver || (*receiver)->instance != nullptr)) {
         return RuntimeError("Static propererties cannot be accesed on class instances.");
     }
     return {};
@@ -213,10 +213,10 @@ std::optional<VM::RuntimeError> VM::validate_instance_access(Instance* accessor,
 
 std::optional<VM::RuntimeError> VM::validate_class_access(Class* accessor, const ClassValue& class_value) const {
     std::optional<Receiver*> receiver = get_current_receiver();
-    if (class_value.is_private && (!receiver || (*receiver)->klass != accessor)) {
+    if (class_value.attributes[ClassAttributes::PRIVATE] && (!receiver || (*receiver)->klass != accessor)) {
         return RuntimeError("Private propererties can be access only inside their class definitions.");
     }
-    if (class_value.is_static && receiver && (*receiver)->instance != nullptr) {
+    if (class_value.attributes[ClassAttributes::STATIC] && receiver && (*receiver)->instance != nullptr) {
         return RuntimeError("Static propererties cannot be accesed on class instances.");
     }
     return {};
@@ -579,18 +579,15 @@ std::expected<Value, VM::RuntimeError> VM::run() {
             }
             case OpCode::METHOD: {
                 int constant_idx = fetch();
-                int attributes = fetch();
-                bool is_private = attributes & 1;
-                bool is_static = attributes & 2;
-                bool is_abstract = attributes & 4;
+                auto attributes = bitflags<ClassAttributes>(fetch());
                 auto name = get_constant(constant_idx).get<std::string>();
                 Value method;
-                if (!is_abstract) {
+                if (!attributes[ClassAttributes::ABSTRACT]) {
                     method = peek();
                 }
-                Class *klass = dynamic_cast<Class *>(peek(is_abstract ? 0 : 1).get<Object *>());
-                klass->methods[name] = {.value = method, .is_private = is_private, .is_static = is_static, .is_abstract = is_abstract};
-                if (!is_abstract) {
+                Class *klass = dynamic_cast<Class *>(peek(attributes[ClassAttributes::ABSTRACT] ? 0 : 1).get<Object *>());
+                klass->methods[name] = {.value = method, .attributes = attributes};
+                if (!attributes[ClassAttributes::ABSTRACT]) {
                     pop();
                 }
                 break;
@@ -631,18 +628,15 @@ std::expected<Value, VM::RuntimeError> VM::run() {
             }
             case OpCode::FIELD: {
                 int constant_idx = fetch();
-                int attributes = fetch();
-                bool is_private = attributes & 1;
-                bool is_static = attributes & 2;
-                bool is_abstract = attributes & 4;
+                auto attributes = bitflags<ClassAttributes>(fetch());
                 auto name = get_constant(constant_idx).get<std::string>();
                 Value value;
-                if (is_static) {
+                if (attributes[ClassAttributes::STATIC]) {
                     value = peek();
                 }
-                Class *klass = dynamic_cast<Class *>(peek(is_static ? 1 : 0).get<Object *>());
-                klass->fields[name] = {.value = value, .is_private = is_private, .is_static = is_static, .is_abstract = is_abstract};
-                if (is_static) {
+                Class *klass = dynamic_cast<Class *>(peek(attributes[ClassAttributes::STATIC] ? 1 : 0).get<Object *>());
+                klass->fields[name] = {.value = value, .attributes = attributes};
+                if (attributes[ClassAttributes::STATIC]) {
                     pop();
                 }
                 break;

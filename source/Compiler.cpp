@@ -578,7 +578,7 @@ void Compiler::default_constructor(const std::vector<std::unique_ptr<FieldStmt> 
     // default initialize fields
     for (auto &field: fields) {
         // ast builder
-        if (field->is_static || field->is_abstract) continue;
+        if (field->attributes[ClassAttributes::STATIC] || field->attributes[ClassAttributes::ABSTRACT]) continue;
         visit_expr(*field->variable->value);
         emit(OpCode::THIS);
         int property_name = current_function()->add_constant(field->variable->name.get_lexeme(source));
@@ -645,35 +645,32 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
     // TODO: disallow init keyword!
     for (auto &field: stmt.fields) {
         std::string field_name = field->variable->name.get_lexeme(source);
-        if (field->is_static) {
+        if (field->attributes[ClassAttributes::STATIC]) {
             visit_expr(*field->variable->value);
         }
         int idx = current_function()->add_constant(field_name);
         emit(OpCode::FIELD, idx);
-        emit(field->is_private | (field->is_static << 1) | (field->is_abstract << 2));
+        emit(field->attributes.to_ullong()); // size check?
         if (current_fields.contains(field_name)) {
             // TODO: better error handling!!!
             assert(false && "Field redefnintion is disallowed.");
         }
         bool is_overriding = false;
         if (current_scope().has_field(field_name)) {
-            if (!current_scope().get_field_info(field_name).is_private && !current_scope().get_field_info(field_name).
-                is_static) {
+            if (!current_scope().get_field_info(field_name).attributes[ClassAttributes::PRIVATE] &&
+                !current_scope().get_field_info(field_name).attributes[ClassAttributes::STATIC]) {
                 // non-private!
                 is_overriding = true;
-                if (!field->is_override)
+                if (!field->attributes[ClassAttributes::OVERRIDE])
                     assert(false && "override expected");
             }
         }
-        if (!is_overriding && field->is_override)
+        if (!is_overriding && field->attributes[ClassAttributes::OVERRIDE])
             assert(false && "no member to override.");
-        if (field->is_static) {
+        if (field->attributes[ClassAttributes::STATIC]) {
             current_scope().pop_temporary();
         }
-        current_scope().add_field(field->variable->name.get_lexeme(source), {
-                                      .is_private = field->is_private, .is_static = field->is_static,
-                                      .is_override = field->is_override, .is_abstract = field->is_abstract
-                                  });
+        current_scope().add_field(field->variable->name.get_lexeme(source), FieldInfo(field->attributes));
         current_fields.insert(field_name);
     }
 
@@ -682,43 +679,40 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
         std::string method_name = method->function->name.get_lexeme(source);
         bool is_overriding = false;
         if (current_scope().has_field(method_name)) {
-            if (!current_scope().get_field_info(method_name).is_private && !current_scope().get_field_info(method_name).
-                is_static) {
+            if (!current_scope().get_field_info(method_name).attributes[ClassAttributes::PRIVATE] &&
+                !current_scope().get_field_info(method_name).attributes[ClassAttributes::STATIC]) {
                 // non-private!
                 is_overriding = true;
-                if (!method->is_override)
+                if (!method->attributes[ClassAttributes::OVERRIDE])
                     assert(false && "override expected");
             }
         }
-        if (!is_overriding && method->is_override) {
+        if (!is_overriding && method->attributes[ClassAttributes::OVERRIDE]) {
             assert(false && "no member to override.");
         }
         if (current_fields.contains(method_name)) {
             // TODO: better error handling!!!
             assert(false && "Field redefnintion is disallowed.");
         }
-        current_scope().add_field(method_name, {
-                                      .is_private = method->is_private, .is_static = method->is_static,
-                                      .is_override = method->is_override, .is_abstract = method->is_abstract
-                                  });
+        current_scope().add_field(method_name, FieldInfo(method->attributes));
         current_fields.insert(method_name);
     }
 
     for (auto &method: stmt.methods) {
         std::string name = method->function->name.get_lexeme(source);
-        if (!method->is_abstract) {
+        if (!method->attributes[ClassAttributes::ABSTRACT]) {
             function(*method->function, FunctionType::METHOD);
         }
         int idx = current_function()->add_constant(name);
         emit(OpCode::METHOD, idx);
-        emit(method->is_private | (method->is_static << 1) | (method->is_abstract << 2));
+        emit(method->attributes.to_ullong()); // check size?
         current_scope().pop_temporary();
     }
 
     // check if all abstract classes are overriden
     if (!stmt.is_abstract && stmt.super_class) {
         for (auto &field: current_context().resolved_classes[stmt.super_class->get_lexeme(source)].fields) {
-            if (field.second.is_abstract && !current_fields.contains(field.first)) {
+            if (field.second.attributes[ClassAttributes::ABSTRACT] && !current_fields.contains(field.first)) {
                 assert(false && "Expected abstract override");
             }
         }

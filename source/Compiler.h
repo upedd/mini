@@ -43,10 +43,7 @@ public:
     };
 
     struct FieldInfo {
-        bool is_private = false;
-        bool is_static = false;
-        bool is_override = false;
-        bool is_abstract = false;
+        bitflags<ClassAttributes> attributes;
     };
 
     // Break this scope into classes because it is too monolithic
