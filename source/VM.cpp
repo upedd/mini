@@ -231,7 +231,11 @@ Value VM::bind_method(const Value& method, Class* klass, Instance* instance) {
 }
 
 
-Value VM::get_value_or_bound_method(Instance* instance, const ClassValue& value, bool& is_computed_property) {
+std::expected<Value, VM::RuntimeError> VM::get_value_or_bound_method(Instance *instance, const ClassValue &value,
+                                                                     bool &is_computed_property) {
+    if (!value.attributes[ClassAttributes::GETTER]) {
+        return std::unexpected(RuntimeError("Getter not defined for property."));
+    }
     if (value.is_computed) {
         // TODO validate!
         is_computed_property = true;
@@ -241,7 +245,11 @@ Value VM::get_value_or_bound_method(Instance* instance, const ClassValue& value,
     return value.value;
 }
 
-std::optional<Value> VM::set_value_or_get_bound_method(Instance* instance, ClassValue& property, const Value& value) {
+std::variant<std::monostate, Value, VM::RuntimeError> VM::set_value_or_get_bound_method(
+    Instance *instance, ClassValue &property, const Value &value) {
+    if (!property.attributes[ClassAttributes::GETTER]) {
+        return RuntimeError("Setter not defined for property.");
+    }
     if (property.is_computed) {
         // TODO validate!
         auto* computed = dynamic_cast<ComputedProperty *>(property.value.get<Object*>());
@@ -335,8 +343,12 @@ std::variant<std::monostate, VM::RuntimeError, Value> VM::set_instance_property(
     if (receiver) {
         // try static property
         if (auto class_property = receiver.value()->klass->resolve_static_property(name)) {
-            if (auto bound = set_value_or_get_bound_method(instance, class_property.value(), value)) {
-                return *bound;
+            auto bound = set_value_or_get_bound_method(instance, class_property.value(), value);
+            if (std::holds_alternative<RuntimeError>(bound)) {
+                return std::get<RuntimeError>(bound);
+            }
+            if (std::holds_alternative<Value>(bound)) {
+                return std::get<Value>(bound);
             }
             return {};
         }
@@ -344,8 +356,12 @@ std::variant<std::monostate, VM::RuntimeError, Value> VM::set_instance_property(
         if (auto super_instnace = receiver.value()->instance->get_super_instance_by_class(receiver.value()->klass)) {
             // private property
             if (auto class_property = super_instnace.value()->resolve_private_property(name)) {
-                if (auto bound = set_value_or_get_bound_method(instance, class_property.value(), value)) {
-                    return *bound;
+                auto bound = set_value_or_get_bound_method(instance, class_property.value(), value);
+                if (std::holds_alternative<RuntimeError>(bound)) {
+                    return std::get<RuntimeError>(bound);
+                }
+                if (std::holds_alternative<Value>(bound)) {
+                    return std::get<Value>(bound);
                 }
                 return {};
             }
@@ -356,8 +372,12 @@ std::variant<std::monostate, VM::RuntimeError, Value> VM::set_instance_property(
         if (std::optional<RuntimeError> error = validate_instance_access(instance, *class_property)) {
             return *error;
         }
-        if (auto bound = set_value_or_get_bound_method(instance, class_property.value(), value)) {
-            return *bound;
+        auto bound = set_value_or_get_bound_method(instance, class_property.value(), value);
+        if (std::holds_alternative<RuntimeError>(bound)) {
+            return std::get<RuntimeError>(bound);
+        }
+        if (std::holds_alternative<Value>(bound)) {
+            return std::get<Value>(bound);
         }
         return {};
     }
@@ -655,6 +675,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                     }
                     auto* computed_property = dynamic_cast<ComputedProperty *>(klass->fields[name].value.get<Object*>());
                     computed_property->get = ClassMethod {.value =  {.value = method, .attributes = attributes}, .owner = klass};
+                    klass->fields[name].attributes += ClassAttributes::GETTER;
                 } else if (attributes[ClassAttributes::SETTER]) {
                     if (!klass->fields[name].is_computed) {
                         klass->fields[name].is_computed = true;
@@ -665,6 +686,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                     klass->fields[name].is_computed = true;
                     auto* computed_property = dynamic_cast<ComputedProperty *>(klass->fields[name].value.get<Object*>());
                     computed_property->set = ClassMethod {.value =  {.value = method, .attributes = attributes}, .owner = klass};
+                    klass->fields[name].attributes += ClassAttributes::SETTER;
                 } else {
                     klass->methods[name] = {.value = method, .attributes = attributes};
                 }

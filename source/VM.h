@@ -62,10 +62,12 @@ public:
 
     Value bind_method(const Value &method, Class *klass, Instance *instance);
 
-    Value get_value_or_bound_method(Instance *instance, const ClassValue &value, bool &is_computed_property);
+    std::expected<Value, VM::RuntimeError> get_value_or_bound_method(Instance *instance, const ClassValue &value,
+                                                                     bool &is_computed_property);
 
-    std::optional<Value> set_value_or_get_bound_method(Instance *instance, ClassValue &property,
-                                                       const Value &value);
+    std::variant<std::monostate, Value, VM::RuntimeError> set_value_or_get_bound_method(
+        Instance *instance, ClassValue &property,
+        const Value &value);
 
     std::expected<Value, VM::RuntimeError> get_instance_property(Instance *instance, const std::string &name, bool &is_computed_property);
 
