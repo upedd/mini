@@ -60,7 +60,7 @@ public:
     std::optional<VM::RuntimeError> validate_instance_access(Instance *accessor, const ClassValue &class_value) const;
     std::optional<VM::RuntimeError> validate_class_access(Class *accessor, const ClassValue &class_value) const;
 
-    Value bind_method(const ClassValue &method, Class *klass, Instance *instance);
+    Value bind_method(const Value &method, Class *klass, Instance *instance);
 
     std::expected<Value, VM::RuntimeError> get_instance_property(Instance *instance, const std::string &name);
 

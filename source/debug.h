@@ -209,6 +209,14 @@ inline void Disassembler::disassemble(const std::string& name) {
                 simple_opcode("THIS");
                 break;
             }
+            case OpCode::CONSTRUCTOR: {
+                simple_opcode("CONSTRUCTOR");
+                break;
+            }
+            case OpCode::CALL_SUPER_CONSTRUCTOR: {
+                arg_inst("CALL_SUPER_CONSTRUCTOR");
+                break;
+            }
         }
     }
 }

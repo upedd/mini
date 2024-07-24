@@ -217,8 +217,10 @@ inline std::string stmt_to_string(const Stmt &stmt, std::string_view source) {
                           },
                           [source](const FieldStmt &) {
                               return std::string("field");
+                          },
+                          [](const ConstructorStmt &stmt) {
+                              return std::string("constructor"); // TODO: implement!
                           }
-
                       }, stmt);
 }
 
@@ -302,9 +304,7 @@ inline std::string expr_to_string(const Expr &expr, std::string_view source) {
                           [](const ThisExpr &expr) {
                               return std::string("this");
                           },
-                          [](const ConstructorStmt &stmt) {
-                              return std::string("constructor"); // TODO: implement!
-                          }
+
                       }, expr);
 }
 

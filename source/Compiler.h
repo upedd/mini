@@ -188,7 +188,7 @@ private:
     void function_declaration(const FunctionStmt &stmt);
     void function(const FunctionStmt &stmt, FunctionType type);
 
-    void constructor(const ConstructorStmt &stmt, const std::vector<FieldStmt> &fields);
+    void constructor(const ConstructorStmt &stmt, const std::vector<std::unique_ptr<FieldStmt>> &fields);
 
     void class_declaration(const ClassStmt &stmt);
     void expr_statement(const ExprStmt &stmt);

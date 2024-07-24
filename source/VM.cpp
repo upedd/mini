@@ -76,21 +76,18 @@ std::optional<VM::RuntimeError> VM::call_value(const Value &value, const int arg
             instance->super_instances.push_back(new Instance(superclass));
             allocate(instance->super_instances.back());
         }
-        // TODO: handle private construtors?
-        if (klass->methods.contains("init")) {
-            auto bound = bind_method(klass->methods["init"], klass, instance);
-            // TODO: refactor!
-            push(bound);
-            for (int i = arguments_count - 1; i >= 0; --i) {
-                push(args[i]);
-            }
-            if (auto* bound_ptr = dynamic_cast<BoundMethod*>(bound.get<Object*>())) {
-                allocate(bound_ptr);
-                allocate<Receiver>(dynamic_cast<Receiver*>(bound_ptr->receiver.get<Object*>()));
-            }
-            return call_value(bound, arguments_count);
+
+        auto bound = bind_method(klass->constructor, klass, instance);
+        push(bound);
+        for (int i = arguments_count - 1; i >= 0; --i) {
+            push(args[i]);
         }
-        return {}; // success
+        // TODO: refactor when gc is refactored!
+        if (auto* bound_ptr = dynamic_cast<BoundMethod*>(bound.get<Object*>())) {
+            allocate(bound_ptr);
+            allocate<Receiver>(dynamic_cast<Receiver*>(bound_ptr->receiver.get<Object*>()));
+        }
+        return call_value(bound, arguments_count); // success
     }
     if (auto *closure = dynamic_cast<Closure *>(*object)) {
         if (arguments_count != closure->get_function()->get_arity()) {
@@ -221,8 +218,8 @@ std::optional<VM::RuntimeError> VM::validate_class_access(Class* accessor, const
 }
 
 
-Value VM::bind_method(const ClassValue& method, Class* klass, Instance* instance) {
-    auto* closure = dynamic_cast<Closure *>(method.value.get<Object*>());
+Value VM::bind_method(const Value& method, Class* klass, Instance* instance) {
+    auto* closure = dynamic_cast<Closure *>(method.get<Object*>());
     auto* receiver = new Receiver(klass, instance);
     auto* bound = new BoundMethod(receiver, closure);
     return bound;
@@ -234,11 +231,11 @@ std::expected<Value, VM::RuntimeError> VM::get_instance_property(Instance *insta
     if (receiver) {
         // try receiver private method
         if (auto class_method = receiver.value()->klass->resolve_private_method(name)) {
-            return bind_method(class_method.value().value, class_method.value().owner, instance);
+            return bind_method(class_method.value().value.value, class_method.value().owner, instance);
         }
         // try receiver static method
         if (auto class_method = receiver.value()->klass->resolve_static_method(name)) {
-            return bind_method(class_method.value().value, class_method.value().owner, nullptr);
+            return bind_method(class_method.value().value.value, class_method.value().owner, nullptr);
         }
         // try static property
         if (auto class_property = receiver.value()->klass->resolve_static_property(name)) {
@@ -264,7 +261,7 @@ std::expected<Value, VM::RuntimeError> VM::get_instance_property(Instance *insta
         if (std::optional<RuntimeError> error = validate_instance_access(instance, class_method->value)) {
             return std::unexpected(*error);
         }
-        return bind_method(class_method->value, class_method->owner, instance);
+        return bind_method(class_method->value.value, class_method->owner, instance);
     }
 
     return std::unexpected(RuntimeError("Property must be declared on class."));
@@ -282,7 +279,7 @@ std::expected<Value, VM::RuntimeError> VM::get_class_property(Class *klass, cons
         if (std::optional<RuntimeError> error = validate_class_access(klass, class_method.value().value)) {
             return std::unexpected(*error);
         }
-        return bind_method(class_method->value, class_method->owner, nullptr);
+        return bind_method(class_method->value.value, class_method->owner, nullptr);
     }
 
     return std::unexpected(RuntimeError("Property must be declared on class."));
@@ -300,7 +297,7 @@ std::expected<Value, VM::RuntimeError> VM::get_super_property(Instance *super_in
         if (std::optional<RuntimeError> error = validate_instance_access(accessor, super_method->value)) {
             return std::unexpected(*error);
         }
-        return bind_method(super_method->value, super_method->owner, accessor);
+        return bind_method(super_method->value.value, super_method->owner, accessor);
     }
 
     return std::unexpected(RuntimeError("Property must be declared on class."));
@@ -617,14 +614,58 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 bool is_private = attributes & 1;
                 bool is_static = attributes & 2;
                 auto name = get_constant(constant_idx).get<std::string>();
-                Value value = peek();
-                Class *klass = dynamic_cast<Class *>(peek(1).get<Object *>());
+                Value value;
+                if (is_static) {
+                    value = peek();
+                }
+                Class *klass = dynamic_cast<Class *>(peek(is_static ? 1 : 0).get<Object *>());
                 klass->fields[name] = {.value = value, .is_private = is_private, .is_static = is_static};
-                pop();
+                if (is_static) {
+                    pop();
+                }
                 break;
             }
             case OpCode::THIS: {
                 push(dynamic_cast<Receiver*>(stack[frames.back().frame_pointer].get<Object*>())->instance);
+                break;
+            }
+            case OpCode::CONSTRUCTOR: {
+                Value method = peek();
+                Class *klass = dynamic_cast<Class *>(peek(1).get<Object *>());
+                klass->constructor = method;
+                pop();
+                break;
+            }
+            case OpCode::CALL_SUPER_CONSTRUCTOR: {
+                int argumnents_count = fetch();
+                // should this do any runtime validation?
+                Receiver* receiver = *get_current_receiver();
+                Class* superclass = receiver->klass->get_super();
+                Value bound = bind_method(superclass->constructor, superclass, receiver->instance);
+                push(bound);
+
+                // TODO: refactor when gc will be refactored
+                if (auto* bound_ptr = dynamic_cast<BoundMethod*>(bound.get<Object*>())) {
+                    allocate(bound_ptr);
+                    allocate<Receiver>(dynamic_cast<Receiver*>(bound_ptr->receiver.get<Object*>()));
+                }
+                // TODO: refactor:
+                Value bound_value = pop();
+                std::vector<Value> args;
+                for (int i = 0; i < argumnents_count; ++i) {
+                    args.push_back(pop());
+                }
+                push(bound_value);
+                for (int i = argumnents_count - 1; i >= 0; --i) {
+                    push(args[i]);
+                }
+                if (auto error = call_value(bound_value, argumnents_count)) {
+                    return std::unexpected(*error);
+                }
+                // TODO: split instruction in two parts!
+                Instance* super_instance = dynamic_cast<Instance*>(pop().get<Object*>());
+                receiver->instance->super_instances = super_instance->super_instances;
+                receiver->instance->super_instances.push_back(super_instance);
                 break;
             }
         }

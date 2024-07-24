@@ -147,8 +147,7 @@ void Compiler::emit(OpCode op_code, bite_byte value) {
 
 void Compiler::emit_default_return() {
     if (current_context().function_type == FunctionType::CONSTRUCTOR) {
-        emit(OpCode::GET);
-        emit(std::get<Context::LocalResolution>(current_context().resolve_variable("this")).slot);
+        emit(OpCode::THIS);
     } else {
         emit(OpCode::NIL);
     }
@@ -260,6 +259,7 @@ void Compiler::visit_stmt(const Stmt &statement) {
                    [this](const NativeStmt& stmt) {native_declaration(stmt); },
                    [this](const MethodStmt&) {assert("unreachable");},
                    [this](const FieldStmt&) {assert("unreachable");},
+                       [this](const ConstructorStmt&) {assert("unreachable");}
                }, statement);
 }
 
@@ -491,33 +491,37 @@ void Compiler::function(const FunctionStmt &stmt, FunctionType type) {
     }
 }
 
-void Compiler::constructor(const ConstructorStmt& stmt, const std::vector<FieldStmt>& fields) {
+void Compiler::constructor(const ConstructorStmt& stmt, const std::vector<std::unique_ptr<FieldStmt>>& fields) {
     // refactor: tons of overlap with function generator
-    if (stmt.has_super) {
-        // refactor: ideally ast builder
-        // Call super consturctor TODO!
-    }
+
     // TODO: check name
     auto *function = new Function("constructor", stmt.parameters.size());
     functions.push_back(function);
-
     start_context(function, FunctionType::CONSTRUCTOR);
-    begin_scope(ScopeType::BLOCK);
+    begin_scope(ScopeType::BLOCK); // doesn't context already start a new scope therefor it is reduntant
     current_scope().define(""); // reserve slot for receiver
-
-    // default initialize fields
-    for (const FieldStmt& field : fields) {
-        // ast builder
-        if (field.is_static) continue;
-        visit_expr(*field.variable->value);
-        emit(OpCode::THIS);
-        int property_name = current_function()->add_constant(field.variable->name.get_lexeme(source));
-        emit(OpCode::SET_PROPERTY, property_name);
-        emit(OpCode::POP); // pop value;
-    }
 
     for (const Token &param: stmt.parameters) {
         define_variable(param.get_lexeme(source));
+    }
+
+    if (stmt.has_super) {
+        for (const ExprHandle& expr : stmt.super_arguments) {
+            visit_expr(*expr);
+        }
+        // maybe better way to do this instead of this superinstruction?
+        emit(OpCode::CALL_SUPER_CONSTRUCTOR, stmt.super_arguments.size());
+    }
+
+    // default initialize fields
+    for (auto& field : fields) {
+        // ast builder
+        if (field->is_static) continue;
+        visit_expr(*field->variable->value);
+        emit(OpCode::THIS);
+        int property_name = current_function()->add_constant(field->variable->name.get_lexeme(source));
+        emit(OpCode::SET_PROPERTY, property_name);
+        emit(OpCode::POP); // pop value;
     }
 
     visit_expr(*stmt.body);
@@ -573,9 +577,13 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
     emit(OpCode::GET, std::get<Context::LocalResolution>(current_context().resolve_variable(name)).slot);
     current_scope().mark_temporary();
 
+
+    // TODO: disallow init keyword!
     for (auto& field : stmt.fields) {
         std::string field_name = field->variable->name.get_lexeme(source);
-        visit_expr(*field->variable->value);
+        if (field->is_static) {
+            visit_expr(*field->variable->value);
+        }
         int idx = current_function()->add_constant(field_name);
         emit(OpCode::FIELD, idx);
         emit(field->is_private | (field->is_static << 1));
@@ -591,7 +599,9 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
             }
         }
         if (!is_overriding && field->is_override) assert(false && "no member to override.");
-        current_scope().pop_temporary();
+        if (field->is_static) {
+            current_scope().pop_temporary();
+        }
         current_scope().add_field(field->variable->name.get_lexeme(source), {.is_private = field->is_private, .is_static = field->is_static, .is_override = field->is_override});
         current_fields.insert(field_name);
     }
@@ -620,11 +630,17 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
 
     for (auto& method : stmt.methods) {
         std::string name = method->function->name.get_lexeme(source);
-        function(*method->function, name == "init" ? FunctionType::CONSTRUCTOR : FunctionType::METHOD);
+        function(*method->function, FunctionType::METHOD);
         int idx = current_function()->add_constant(name);
         emit(OpCode::METHOD, idx);
         emit(method->is_private | (method->is_static << 1));
         current_scope().pop_temporary();
+    }
+
+    // default construtor to default intialize members!!!
+    if (stmt.constructor) {
+        constructor(*stmt.constructor, stmt.fields);
+        emit(OpCode::CONSTRUCTOR);
     }
 
     emit(OpCode::POP);

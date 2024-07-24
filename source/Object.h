@@ -186,6 +186,7 @@ public:
         for (auto* superclass : superclasses) {
             gc.mark(superclass);
         }
+        gc.mark(constructor);
     }
 
     // resolve only current class memebers
@@ -232,10 +233,16 @@ public:
         return {};
     }
 
+    Class* get_super() {
+        // check?
+        return superclasses.back();
+    }
+
     std::string name;
     std::unordered_map<std::string, ClassValue> methods;
     std::unordered_map<std::string, ClassValue> fields;
     std::vector<Class*> superclasses;
+    Value constructor;
 };
 
 

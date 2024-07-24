@@ -220,7 +220,7 @@ ConstructorStmt Parser::constructor_statement() {
     std::vector<ExprHandle> super_arguments;
     bool has_super = false;
     // init(parameters*) : super(arguments*) [block]
-    if (match(Token::Type::SEMICOLON)) {
+    if (match(Token::Type::COLON)) {
         has_super = true;
         consume(Token::Type::SUPER, "Expected superclass constructor call after ':' ");
         // overlap with function call!!!
