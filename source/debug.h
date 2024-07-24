@@ -217,6 +217,10 @@ inline void Disassembler::disassemble(const std::string& name) {
                 arg_inst("CALL_SUPER_CONSTRUCTOR");
                 break;
             }
+            case OpCode::ABSTRACT_CLASS: {
+                constant_inst("ABSTRACT_CLASS");
+                break;
+            }
         }
     }
 }

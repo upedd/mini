@@ -164,6 +164,10 @@ std::optional<Stmt> Parser::statement() {
     if (match(Token::Type::CLASS)) {
         return class_declaration();
     }
+    if (match(Token::Type::ABSTRACT)) {
+        consume(Token::Type::CLASS, "Expected 'class' after 'abstract'.");
+        return class_declaration(true);
+    }
     if (match(Token::Type::NATIVE)) {
         return native_declaration();
     }
@@ -242,7 +246,32 @@ ConstructorStmt Parser::constructor_statement() {
     };
 }
 
-Stmt Parser::class_declaration() {
+FunctionStmt Parser::abstract_method(Token name) {
+    // overlap with function!
+    consume(Token::Type::LEFT_PAREN, "Expected '(' after function name");
+    std::vector<Token> parameters;
+    if (!check(Token::Type::RIGHT_PAREN)) {
+        do {
+            consume(Token::Type::IDENTIFIER, "Expected identifier");
+            parameters.push_back(current);
+        } while (match(Token::Type::COMMA));
+    }
+    consume(Token::Type::RIGHT_PAREN, "Expected ')' after function parameters");
+    consume(Token::Type::SEMICOLON, "Expected '{' before function declaration");
+    return FunctionStmt{
+        .name = name,
+        .params = std::move(parameters),
+        .body = nullptr
+    };
+}
+
+VarStmt Parser::abstract_field(Token name) {
+    Expr expr = match(Token::Type::EQUAL) ? expression() : LiteralExpr{nil_t};
+    consume(Token::Type::SEMICOLON, "Expected ';' after variable declaration.");
+    return VarStmt{.name = name, .value = nullptr};
+}
+
+Stmt Parser::class_declaration(bool is_class_abstract) {
     consume(Token::Type::IDENTIFIER, "Expected class name.");
     Token name = current;
 
@@ -257,7 +286,7 @@ Stmt Parser::class_declaration() {
     std::vector<std::unique_ptr<FieldStmt> > fields;
     std::unique_ptr<ConstructorStmt> constructor_handle;
     while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
-        bool is_private = false, is_static = false, is_override = false;
+        bool is_private = false, is_static = false, is_override = false, is_abstract = false;
         // maybe order independant
         if (match(Token::Type::PRIVATE)) {
             is_private = true;
@@ -268,24 +297,43 @@ Stmt Parser::class_declaration() {
         if (match(Token::Type::OVERRDIE)) {
             is_override = true;
         }
+        if (match(Token::Type::ABSTRACT)) {
+            if (!is_class_abstract) {
+                error(current, "Abstract methods can be only declared in abstract classes.");
+            }
+            is_abstract = true;
+        }
         consume(Token::Type::IDENTIFIER, "Expected identifier.");
         if (current.get_lexeme(lexer.get_source()) == "init") {
             // constructor call
             constructor_handle = std::make_unique<ConstructorStmt>(constructor_statement());
         } else if (check(Token::Type::SEMICOLON) || check(Token::Type::EQUAL)) {
-            auto var_stmt = std::make_unique<VarStmt>(var_declaration_after_name(current));
-            fields.push_back(std::make_unique<FieldStmt>(std::move(var_stmt), is_private, is_static, is_override));
+            if (is_abstract) {
+                fields.push_back(
+                    std::make_unique<FieldStmt>(std::make_unique<VarStmt>(abstract_field(current)), is_private, is_static, is_override, is_abstract));
+            } else {
+                auto var_stmt = std::make_unique<VarStmt>(var_declaration_after_name(current));
+                fields.push_back(
+                    std::make_unique<FieldStmt>(std::move(var_stmt), is_private, is_static, is_override, is_abstract));
+            }
         } else {
-            auto function_stmt = std::make_unique<FunctionStmt>(function_declaration_after_name(current));
-            methods.push_back(
-                std::make_unique<MethodStmt>(std::move(function_stmt), is_private, is_static, is_override));
+            if (is_abstract) {
+                methods.push_back(
+                    std::make_unique<MethodStmt>(std::make_unique<FunctionStmt>(abstract_method(current)), is_private,
+                                                 is_static, is_override, is_abstract));
+            } else {
+                auto function_stmt = std::make_unique<FunctionStmt>(function_declaration_after_name(current));
+                methods.push_back(
+                    std::make_unique<MethodStmt>(std::move(function_stmt), is_private, is_static, is_override,
+                                                 is_abstract));
+            }
         }
     }
     consume(Token::Type::RIGHT_BRACE, "Expected '}' after class body.");
 
     return ClassStmt{
         .name = name, .constructor = std::move(constructor_handle), .methods = std::move(methods),
-        .fields = std::move(fields), .super_class = super_class
+        .fields = std::move(fields), .super_class = super_class, .is_abstract = is_class_abstract
     };
 }
 

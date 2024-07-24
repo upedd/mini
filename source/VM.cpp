@@ -62,6 +62,9 @@ std::optional<VM::RuntimeError> VM::call_value(const Value &value, const int arg
     }
 
     if (auto *klass = dynamic_cast<Class *>(*object)) {
+        if (klass->is_abstract) {
+            return RuntimeError("Cannot instantiate abstract class");
+        }
         // TODO: do this some other way as it definitely breaks gc
         std::vector<Value> args;
         for (int i = 0; i < arguments_count; ++i) {
@@ -504,6 +507,16 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 allocate(klass);
                 break;
             }
+            case OpCode::ABSTRACT_CLASS: {
+                // overlap?
+                int constant_idx = fetch();
+                auto name = get_constant(constant_idx).get<std::string>();
+                auto *klass = new Class(name);
+                klass->is_abstract = true;
+                push(klass);
+                allocate(klass);
+                break;
+            }
             case OpCode::GET_PROPERTY: {
                 std::optional<Object*> object = peek().as<Object*>();
                 int constant_idx = fetch();
@@ -569,11 +582,17 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 int attributes = fetch();
                 bool is_private = attributes & 1;
                 bool is_static = attributes & 2;
+                bool is_abstract = attributes & 4;
                 auto name = get_constant(constant_idx).get<std::string>();
-                Value method = peek();
-                Class *klass = dynamic_cast<Class *>(peek(1).get<Object *>());
-                klass->methods[name] = {.value = method, .is_private = is_private, .is_static = is_static};
-                pop();
+                Value method;
+                if (!is_abstract) {
+                    method = peek();
+                }
+                Class *klass = dynamic_cast<Class *>(peek(is_abstract ? 0 : 1).get<Object *>());
+                klass->methods[name] = {.value = method, .is_private = is_private, .is_static = is_static, .is_abstract = is_abstract};
+                if (!is_abstract) {
+                    pop();
+                }
                 break;
             }
             case OpCode::INHERIT: {
@@ -615,13 +634,14 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 int attributes = fetch();
                 bool is_private = attributes & 1;
                 bool is_static = attributes & 2;
+                bool is_abstract = attributes & 4;
                 auto name = get_constant(constant_idx).get<std::string>();
                 Value value;
                 if (is_static) {
                     value = peek();
                 }
                 Class *klass = dynamic_cast<Class *>(peek(is_static ? 1 : 0).get<Object *>());
-                klass->fields[name] = {.value = value, .is_private = is_private, .is_static = is_static};
+                klass->fields[name] = {.value = value, .is_private = is_private, .is_static = is_static, .is_abstract = is_abstract};
                 if (is_static) {
                     pop();
                 }

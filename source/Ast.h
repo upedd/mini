@@ -153,6 +153,7 @@ struct FieldStmt {
     bool is_private = false;
     bool is_static = false;
     bool is_override = false;
+    bool is_abstract = false;
 };
 
 struct MethodStmt {
@@ -160,6 +161,7 @@ struct MethodStmt {
     bool is_private = false;
     bool is_static = false;
     bool is_override = false;
+    bool is_abstract = false;
 };
 
 struct ClassStmt {
@@ -168,6 +170,7 @@ struct ClassStmt {
     std::vector<std::unique_ptr<MethodStmt> > methods;
     std::vector<std::unique_ptr<FieldStmt> > fields;
     std::optional<Token> super_class;
+    bool is_abstract = false;
 };
 
 struct ConstructorStmt {

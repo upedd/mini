@@ -64,7 +64,11 @@ private:
 
     ConstructorStmt constructor_statement();
 
-    Stmt class_declaration();
+    FunctionStmt abstract_method(Token name);
+
+    VarStmt abstract_field(Token name);
+
+    Stmt class_declaration(bool is_abstract = false);
 
     Stmt expr_statement();
 

@@ -155,6 +155,7 @@ struct ClassValue {
     bool is_private = false;
     bool is_static = false;
     bool is_override = false;
+    bool is_abstract = false;
 };
 
 class Class;
@@ -243,6 +244,7 @@ public:
     std::unordered_map<std::string, ClassValue> fields;
     std::vector<Class*> superclasses;
     Value constructor;
+    bool is_abstract = false;
 };
 
 
