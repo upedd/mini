@@ -5,12 +5,14 @@ class Foo {
     }
 }
 
-class Bar {
+class Bar : Foo {
     y;
     init(x, y) : super(x) {
         this.y = y;
     }
 }
+
+native print;
 
 let instance = Bar(5, 10);
 print(instance.x);

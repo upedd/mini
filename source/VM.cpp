@@ -644,38 +644,44 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 break;
             }
             case OpCode::CALL_SUPER_CONSTRUCTOR: {
-                int argumnents_count = fetch();
+                // refactor: overlap with call method
+                int arguments_count = fetch();
                 // should this do any runtime validation?
                 Receiver* receiver = *get_current_receiver();
                 Class* superclass = receiver->klass->get_super();
-                Value bound = bind_method(superclass->constructor, superclass, receiver->instance);
-                push(bound);
 
-                // TODO: refactor when gc will be refactored
+                std::vector<Value> args;
+                for (int i = 0; i < arguments_count; ++i) {
+                    args.push_back(pop());
+                }
+                //pop(); // pop class
+                auto *instance = new Instance(superclass);
+                push(instance);
+                allocate(instance);
+
+                receiver->instance->super_instances = instance->super_instances;
+                receiver->instance->super_instances.push_back(instance);
+
+                auto bound = bind_method(superclass->constructor, superclass, receiver->instance);
+                push(bound);
+                // TODO: temp fix
+                // work around gc and fix duplicate function returns
                 if (auto* bound_ptr = dynamic_cast<BoundMethod*>(bound.get<Object*>())) {
                     allocate(bound_ptr);
                     allocate<Receiver>(dynamic_cast<Receiver*>(bound_ptr->receiver.get<Object*>()));
                 }
-                // TODO: refactor:
-                Value bound_value = pop();
-                std::vector<Value> args;
-                for (int i = 0; i < argumnents_count; ++i) {
-                    args.push_back(pop());
-                }
-                push(bound_value);
-                for (int i = argumnents_count - 1; i >= 0; --i) {
+
+                std::swap(stack[stack_index - 1], stack[stack_index - 2]);
+                pop();
+
+                for (int i = arguments_count - 1; i >= 0; --i) {
                     push(args[i]);
                 }
-                if (auto error = call_value(bound_value, argumnents_count)) {
-                    return std::unexpected(*error);
+                // TODO: refactor when gc is refactored!
+
+                if (auto res = call_value(bound, arguments_count)) {
+                    return std::unexpected(*res);
                 }
-                break;
-            }
-            case OpCode::SUPER_CONSTRUCT: {
-                Receiver* receiver = *get_current_receiver();
-                Instance* super_instance = dynamic_cast<Instance*>(pop().get<Object*>());
-                receiver->instance->super_instances = super_instance->super_instances;
-                receiver->instance->super_instances.push_back(super_instance);
                 break;
             }
         }
