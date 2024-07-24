@@ -71,18 +71,20 @@ public:
 
     std::expected<Value, VM::RuntimeError> get_instance_property(Instance *instance, const std::string &name, bool &is_computed_property);
 
-    std::expected<Value, VM::RuntimeError> get_class_property(Class *klass, const std::string &name);
+    std::expected<Value, VM::RuntimeError> get_class_property(Class *klass, const std::string &name, bool &is_computed_property);
 
-    std::expected<Value, VM::RuntimeError> get_super_property(Instance *super_instance, Instance *accessor, const std::string &name);
+    std::expected<Value, VM::RuntimeError> get_super_property(Instance *super_instance, Instance *accessor, const std::string &name, bool &is_computed_property);
 
     std::variant<std::monostate, VM::RuntimeError, Value> set_instance_property(
         Instance *instance, const std::string &name,
         const Value &value);
 
-    std::optional<VM::RuntimeError> set_class_property(Class *klass, const std::string &name, const Value &value);
+    std::variant<std::monostate, VM::RuntimeError, Value> set_class_property(
+        Class *klass, const std::string &name, const Value &value);
 
-    std::optional<VM::RuntimeError> set_super_property(Instance *super_instance, Instance *accessor,
-                                                       const std::string &name, const Value &value);
+    std::variant<std::monostate, VM::RuntimeError, Value> set_super_property(
+        Instance *super_instance, Instance *accessor,
+        const std::string &name, const Value &value);
 
     std::expected<Value, RuntimeError> run();
 

@@ -703,8 +703,9 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
             assert(false && "no member to override.");
         }
 
-        current_scope().add_field(method_name, FieldInfo(method->attributes));
-        current_fields.insert(method_name);
+        // TODO: rework this resolver system
+        current_scope().add_field(method->function->name.get_lexeme(source), FieldInfo(method->attributes));
+        current_fields.insert(stmt.name.get_lexeme(source));
     }
 
     for (auto &method: stmt.methods) {

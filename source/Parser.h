@@ -64,7 +64,7 @@ private:
 
     ConstructorStmt constructor_statement();
 
-    FunctionStmt abstract_method(Token name);
+    FunctionStmt abstract_method(Token name, bool skip_params);
 
     VarStmt abstract_field(Token name);
 

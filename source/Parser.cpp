@@ -248,18 +248,20 @@ ConstructorStmt Parser::constructor_statement() {
     };
 }
 
-FunctionStmt Parser::abstract_method(Token name) {
+FunctionStmt Parser::abstract_method(Token name, bool skip_params) {
     // overlap with function!
-    consume(Token::Type::LEFT_PAREN, "Expected '(' after function name");
     std::vector<Token> parameters;
-    if (!check(Token::Type::RIGHT_PAREN)) {
-        do {
-            consume(Token::Type::IDENTIFIER, "Expected identifier");
-            parameters.push_back(current);
-        } while (match(Token::Type::COMMA));
+    if (!skip_params) {
+        consume(Token::Type::LEFT_PAREN, "Expected '(' after function name");
+        if (!check(Token::Type::RIGHT_PAREN)) {
+            do {
+                consume(Token::Type::IDENTIFIER, "Expected identifier");
+                parameters.push_back(current);
+            } while (match(Token::Type::COMMA));
+        }
+        consume(Token::Type::RIGHT_PAREN, "Expected ')' after function parameters");
     }
-    consume(Token::Type::RIGHT_PAREN, "Expected ')' after function parameters");
-    consume(Token::Type::SEMICOLON, "Expected '{' before function declaration");
+    consume(Token::Type::SEMICOLON, "Expected ';' after abstract function declaration");
     return FunctionStmt{
         .name = name,
         .params = std::move(parameters),
@@ -325,12 +327,12 @@ Stmt Parser::class_declaration(bool is_class_abstract) {
                     std::make_unique<FieldStmt>(std::move(var_stmt), attributes));
             }
         } else {
-            bool skip_params = attributes[ClassAttributes::GETTER] && check(Token::Type::LEFT_BRACE);
+            bool skip_params = attributes[ClassAttributes::GETTER]; // && LEFT_BRACE to allow optional parantheses but breaks abstract parser for now
             // TODO: fix abstract getters and setters!
             // TODO: validate get and setters function have expected number of arguments
             if (attributes[ClassAttributes::ABSTRACT]) {
                 methods.push_back(
-                    std::make_unique<MethodStmt>(std::make_unique<FunctionStmt>(abstract_method(current)), attributes));
+                    std::make_unique<MethodStmt>(std::make_unique<FunctionStmt>(abstract_method(current, skip_params)), attributes));
             } else {
                 auto function_stmt = std::make_unique<FunctionStmt>(function_declaration_after_name(current, skip_params));
                 methods.push_back(
