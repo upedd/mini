@@ -794,6 +794,39 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 }
                 break;
             }
+            case OpCode::SET_SUPER: {
+                int constant_idx = fetch();
+                auto name = get_constant(constant_idx).get<std::string>();
+                Instance* accessor = dynamic_cast<Instance*>(peek().get<Object*>());
+                Value value = peek(1);
+                // TODO: i think this super keyword don't work with multiple inheritance levels!
+                auto response = set_super_property(accessor->get_super().value(), accessor, name, value);
+                if (std::holds_alternative<RuntimeError>(response)) {
+                    return std::unexpected(std::get<RuntimeError>(response));
+                }
+                if (std::holds_alternative<Value>(response)) {
+                    pop(); // pop instance;
+                    auto property = std::get<Value>(response);
+                    push(property);
+                    // gc rewrite!
+                    if (property.is<Object*>()) {
+                        if (auto* bound = dynamic_cast<BoundMethod*>(property.get<Object*>())) {
+                            allocate(bound);
+                            allocate<Receiver>(dynamic_cast<Receiver*>(bound->receiver.get<Object*>()));
+                        }
+                    }
+                    pop(); // pop bound for now
+                    pop(); // pop value
+                    push(property); // push bound
+                    push(value); // push argument
+                    if (auto error = call_value(property, 1)) {
+                        return std::unexpected(*error);
+                    }
+                } else {
+                    pop(); // pop class
+                }
+                break;
+            }
             case OpCode::GET_NATIVE: {
                 int constant_idx = fetch();
                 auto name = get_constant(constant_idx).get<std::string>();

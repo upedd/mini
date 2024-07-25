@@ -221,6 +221,9 @@ inline void Disassembler::disassemble(const std::string& name) {
                 constant_inst("ABSTRACT_CLASS");
                 break;
             }
+            case OpCode::SET_SUPER: {
+                constant_inst("SET_SUPER");
+            }
         }
     }
 }

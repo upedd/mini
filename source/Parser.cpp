@@ -720,7 +720,7 @@ Expr Parser::infix(Expr left) {
 
 Expr Parser::binary(Expr left, bool expect_lvalue) {
     if (expect_lvalue && !std::holds_alternative<VariableExpr>(left) && !std::holds_alternative<
-            GetPropertyExpr>(left)) {
+            GetPropertyExpr>(left) && !std::holds_alternative<SuperExpr>(left)) {
         error(current, "Expected lvalue as left hand side of an binary expression.");
     }
     Token::Type op = current.type;

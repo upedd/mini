@@ -1,9 +1,9 @@
 native print;
 
-class Foo {
+abstract class Foo {
     abstract get x;
 
-    abstract set z;
+    abstract set z();
 
     abstract y;
 
@@ -36,7 +36,7 @@ class Bar : Foo {
     }
 
     override set z(value) {
-        print("bar.z");
+        print("=bar.z");
     }
 }
 

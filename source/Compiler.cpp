@@ -680,19 +680,31 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
     for (auto &method: stmt.methods) {
         // TODO: much overlap with above loop
         std::string method_name = method->function->name.get_lexeme(source);
+        bool already_partially_declared = false;
         if (member_declarations.contains(method_name)) {
             // special case for getters and setters methods
-            if (member_declarations[method_name].attributes[ClassAttributes::SETTER] && method->attributes[ClassAttributes::GETTER]) continue;
-            if (member_declarations[method_name].attributes[ClassAttributes::GETTER] && method->attributes[ClassAttributes::SETTER]) continue;
-
-            assert(false && "Member redeclaration is disallowed.");
+            if (member_declarations[method_name].attributes[ClassAttributes::SETTER] && method->attributes[ClassAttributes::GETTER]) {
+                already_partially_declared = true;
+            } else if (member_declarations[method_name].attributes[ClassAttributes::GETTER] && method->attributes[ClassAttributes::SETTER]) {
+                already_partially_declared = true;
+            } else {
+                assert(false && "Member redeclaration is disallowed.");
+            }
         }
         bool should_override = false;
         if (current_scope().has_field(method_name)) {
             // if method is already declared in current scope then it comes from superclass
             auto field_info = current_scope().get_field_info(method_name);
-            // in bite we can't override static methods - we hide them
-            if (!field_info.attributes[ClassAttributes::STATIC]) should_override = true;
+
+            // special case for getters and setters methods
+            // TODO: mess
+            if ((!field_info.attributes[ClassAttributes::GETTER] && method->attributes[ClassAttributes::GETTER])
+                || (!field_info.attributes[ClassAttributes::SETTER] && method->attributes[ClassAttributes::SETTER])) {
+
+            } else if (!field_info.attributes[ClassAttributes::STATIC]) {
+                // in bite we can't override static methods - we hide them
+                should_override = true;
+            }
         }
         if (should_override && !method->attributes[ClassAttributes::OVERRIDE]) {
             assert(false && "override attribute expected");
@@ -700,7 +712,13 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
         if (!should_override && method->attributes[ClassAttributes::OVERRIDE]) {
             assert(false && "no member to override.");
         }
-        member_declarations[method_name] = FieldInfo(method->attributes);
+        // TODO: this does not allow mixing private and public setters and getters!
+        if (!already_partially_declared) {
+            member_declarations[method_name] = FieldInfo(method->attributes);
+        } else {
+            member_declarations[method_name].attributes += method->attributes[ClassAttributes::GETTER] ? ClassAttributes::GETTER : ClassAttributes::SETTER;
+        }
+
     }
 
     // check if all abstract classes are overriden
@@ -974,6 +992,11 @@ void Compiler::update_lvalue(const Expr &lvalue) {
         int constant = current_function()->add_constant(name);
         visit_expr(*property_expr.left);
         emit(OpCode::SET_PROPERTY, constant);
+    } else if (std::holds_alternative<SuperExpr>(lvalue)) {
+        const auto& super_expr = std::get<SuperExpr>(lvalue);
+        int constant = current_function()->add_constant(super_expr.method.get_lexeme(source));
+        emit(OpCode::THIS);
+        emit(OpCode::SET_SUPER, constant);
     } else {
         assert("Expected lvalue.");
     }
