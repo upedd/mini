@@ -1,0 +1,28 @@
+class Foo {
+    _x;
+    get x {
+        print("foo.x");
+        return _x;
+    }
+
+    set x {
+        print("=foo.x");
+        _x = x;
+    }
+}
+
+let instance = Foo():
+
+instance.x = 10;
+print(x);
+instance.x = 20;
+print(x);
+
+let instance2 = Foo2();
+
+instance2.x = 30;
+print(instance2.x);
+
+print(instance1.x):
+instance1.x = 40;
+print(instance1.x);

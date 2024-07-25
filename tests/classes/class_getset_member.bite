@@ -1,0 +1,34 @@
+class Foo {
+    _a;
+    get a {
+        print("foo.a");
+        return _a;
+    }
+
+    set a {
+        print("=foo.a");
+        return _a;
+    }
+
+    pow() {
+        a *= 2;
+    }
+
+    set_a(a) {
+        this.a = a * 10;
+    }
+}
+
+
+let instance = Foo();
+instance.set_a(1);
+instance.pow();
+instance.pow();
+print(instance.a);
+
+let instance2 = Foo();
+instance2.set_a(3);
+instance2.pow();
+print(instance2.a);
+
+print(instance.a);
