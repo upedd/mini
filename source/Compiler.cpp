@@ -100,6 +100,9 @@ void Compiler::this_expr() {
     emit(OpCode::THIS);
 }
 
+void Compiler::object_expression(const ObjectExpr &expr) {
+}
+
 void Compiler::start_context(Function *function, FunctionType type) {
     context_stack.emplace_back(function, type);
     current_context().scopes.emplace_back(ScopeType::BLOCK, 0); // TODO: should be function?
@@ -683,9 +686,11 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
         bool already_partially_declared = false;
         if (member_declarations.contains(method_name)) {
             // special case for getters and setters methods
-            if (member_declarations[method_name].attributes[ClassAttributes::SETTER] && method->attributes[ClassAttributes::GETTER]) {
+            if (member_declarations[method_name].attributes[ClassAttributes::SETTER] && method->attributes[
+                    ClassAttributes::GETTER]) {
                 already_partially_declared = true;
-            } else if (member_declarations[method_name].attributes[ClassAttributes::GETTER] && method->attributes[ClassAttributes::SETTER]) {
+            } else if (member_declarations[method_name].attributes[ClassAttributes::GETTER] && method->attributes[
+                           ClassAttributes::SETTER]) {
                 already_partially_declared = true;
             } else {
                 assert(false && "Member redeclaration is disallowed.");
@@ -700,7 +705,6 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
             // TODO: mess
             if ((!field_info.attributes[ClassAttributes::GETTER] && method->attributes[ClassAttributes::GETTER])
                 || (!field_info.attributes[ClassAttributes::SETTER] && method->attributes[ClassAttributes::SETTER])) {
-
             } else if (!field_info.attributes[ClassAttributes::STATIC]) {
                 // in bite we can't override static methods - we hide them
                 should_override = true;
@@ -716,9 +720,10 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
         if (!already_partially_declared) {
             member_declarations[method_name] = FieldInfo(method->attributes);
         } else {
-            member_declarations[method_name].attributes += method->attributes[ClassAttributes::GETTER] ? ClassAttributes::GETTER : ClassAttributes::SETTER;
+            member_declarations[method_name].attributes += method->attributes[ClassAttributes::GETTER]
+                                                               ? ClassAttributes::GETTER
+                                                               : ClassAttributes::SETTER;
         }
-
     }
 
     // check if all abstract classes are overriden
@@ -728,10 +733,12 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
                 if (!member_declarations.contains(name)) {
                     assert(false && "Expected abstract override");
                 }
-                if (info.attributes[ClassAttributes::GETTER] && !member_declarations[name].attributes[ClassAttributes::GETTER]) {
+                if (info.attributes[ClassAttributes::GETTER] && !member_declarations[name].attributes[
+                        ClassAttributes::GETTER]) {
                     assert(false && "Expected abstract override for getter");
                 }
-                if (info.attributes[ClassAttributes::SETTER] && !member_declarations[name].attributes[ClassAttributes::SETTER]) {
+                if (info.attributes[ClassAttributes::SETTER] && !member_declarations[name].attributes[
+                        ClassAttributes::SETTER]) {
                     assert(false && "Expected abstract override for setter");
                 }
             }
@@ -831,7 +838,8 @@ void Compiler::visit_expr(const Expr &expression) {
                    [this](const WhileExpr &expr) { while_expr(expr); },
                    [this](const ForExpr &expr) { for_expr(expr); },
                    [this](const ReturnExpr &expr) { retrun_expression(expr); },
-                   [this](const ThisExpr &expr) { this_expr(); }
+                   [this](const ThisExpr &expr) { this_expr(); },
+                   [this](const ObjectExpr &expr) { object_expression(expr); }
                }, expression);
 }
 
@@ -993,7 +1001,7 @@ void Compiler::update_lvalue(const Expr &lvalue) {
         visit_expr(*property_expr.left);
         emit(OpCode::SET_PROPERTY, constant);
     } else if (std::holds_alternative<SuperExpr>(lvalue)) {
-        const auto& super_expr = std::get<SuperExpr>(lvalue);
+        const auto &super_expr = std::get<SuperExpr>(lvalue);
         int constant = current_function()->add_constant(super_expr.method.get_lexeme(source));
         emit(OpCode::THIS);
         emit(OpCode::SET_SUPER, constant);

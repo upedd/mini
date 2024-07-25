@@ -68,7 +68,7 @@ struct Token {
         CONTINUE,
         NONE,
         MATCH,
-        RETURN, SUPER, LET, WHILE, TILDE, NATIVE ,FOR, LABEL, COLON, PRIVATE, STATIC, ABSTRACT, OVERRDIE,
+        RETURN, SUPER, LET, WHILE, TILDE, NATIVE ,FOR, LABEL, COLON, PRIVATE, STATIC, ABSTRACT, OVERRDIE, OBJECT,
         END // NOTE: Type END must always be last element in this enum.
     };
 
@@ -250,6 +250,8 @@ inline std::string Token::type_to_string(Type type) {
             return "COLON";
         case Type::OVERRDIE:
             return "OVERRIDE";
+        case Type::OBJECT:
+            return "OBJECT";
     }
     return "INVALID_TOKEN";
 }

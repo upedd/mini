@@ -27,6 +27,7 @@ struct WhileExpr;
 struct ForExpr;
 struct ReturnExpr;
 struct ThisExpr;
+struct ObjectExpr;
 
 struct ExprStmt;
 struct VarStmt;
@@ -38,7 +39,8 @@ struct MethodStmt;
 struct ConstructorStmt;
 
 using Expr = std::variant<LiteralExpr, StringLiteral, UnaryExpr, BinaryExpr, VariableExpr, CallExpr, GetPropertyExpr,
-    SuperExpr, BlockExpr, IfExpr, LoopExpr, BreakExpr, ContinueExpr, WhileExpr, ForExpr, ReturnExpr, ThisExpr>;
+    SuperExpr, BlockExpr, IfExpr, LoopExpr, BreakExpr, ContinueExpr, WhileExpr, ForExpr, ReturnExpr, ThisExpr,
+    ObjectExpr>;
 using ExprHandle = std::unique_ptr<Expr>;
 
 using Stmt = std::variant<VarStmt, ExprStmt, FunctionStmt, ClassStmt, NativeStmt, FieldStmt, MethodStmt,
@@ -127,6 +129,13 @@ struct ReturnExpr {
 
 
 struct ThisExpr {
+};
+
+struct ObjectExpr {
+    std::vector<std::unique_ptr<MethodStmt> > methods;
+    std::vector<std::unique_ptr<FieldStmt> > fields;
+    std::optional<Token> super_class;
+    std::vector<ExprHandle> superclass_arguments;
 };
 
 inline ExprHandle make_expr_handle(Expr expr) {
@@ -301,7 +310,9 @@ inline std::string expr_to_string(const Expr &expr, std::string_view source) {
                           [](const ThisExpr &expr) {
                               return std::string("this");
                           },
-
+                          [](const ObjectExpr &expr) {
+                              return std::string("object"); // TODO: implement!
+                          },
                       }, expr);
 }
 

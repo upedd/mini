@@ -55,6 +55,7 @@ bool Parser::check(const Token::Type type) const {
     return next.type == type;
 }
 
+
 void Parser::consume(const Token::Type type, const std::string_view message) {
     if (check(type)) {
         advance();
@@ -275,78 +276,135 @@ VarStmt Parser::abstract_field(Token name) {
     return VarStmt{.name = name, .value = nullptr};
 }
 
-Stmt Parser::class_declaration(bool is_class_abstract) {
+// refactor: use across whole parser
+std::vector<ExprHandle> Parser::arguments_list() {
+    std::vector<ExprHandle> arguments;
+    do {
+        arguments.emplace_back(make_expr_handle(expression()));
+    } while (match(Token::Type::COMMA));
+    consume(Token::Type::RIGHT_PAREN, "Expected ')' after arguments.");
+    return std::move(arguments);
+}
+
+bitflags<ClassAttributes> Parser::member_attributes(StructureType outer_type) {
+    // TODO: better error reporting. current setup relies too much on good order of atributes
+    bitflags<ClassAttributes> attributes;
+    if (match(Token::Type::PRIVATE)) {
+        attributes += ClassAttributes::PRIVATE;
+    }
+    if (match(Token::Type::STATIC)) {
+        attributes += ClassAttributes::STATIC;
+    }
+    if (match(Token::Type::OVERRDIE)) {
+        if (attributes[ClassAttributes::STATIC]) error(current, "Overrides cannot be static");
+        if (attributes[ClassAttributes::PRIVATE]) error(current, "Overrides cannot be private");
+        attributes += ClassAttributes::OVERRIDE;
+    }
+    if (match(Token::Type::ABSTRACT)) {
+        if (outer_type != StructureType::ABSTRACT_CLASS) {
+            error(current, "Abstract methods can be only declared in abstract classes.");
+        }
+        if (attributes[ClassAttributes::STATIC]) error(current, "Abstract members cannot be static");
+        if (attributes[ClassAttributes::PRIVATE]) error(current, "Abstract members cannot be private");
+        attributes += ClassAttributes::ABSTRACT;
+    }
+    if (match(Token::Type::GET)) {
+        attributes += ClassAttributes::GETTER;
+    }
+    if (match(Token::Type::SET)) {
+        attributes += ClassAttributes::SETTER;
+    }
+    return std::move(attributes);
+}
+
+Parser::StructureMembers Parser::structure_body(StructureType type) {
+    // refactor: still kinda messy?
+    StructureMembers members;
+    while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
+        bitflags<ClassAttributes> attributes = member_attributes(type);
+        consume(Token::Type::IDENTIFIER, "Expected identifier.");
+        Token name = current;
+        if (name.get_lexeme(lexer.get_source()) == "init") {
+            if (type == StructureType::OBJECT) error(current, "Constructors cannot be defined inside of objects.");
+            // constructor call
+            members.constructor = std::make_unique<ConstructorStmt>(constructor_statement());
+        } else if ((check(Token::Type::SEMICOLON) || check(Token::Type::EQUAL)) && !attributes[ClassAttributes::SETTER]
+                   && !attributes[ClassAttributes::GETTER]) {
+            attributes += ClassAttributes::GETTER;
+            attributes += ClassAttributes::SETTER;
+            if (attributes[ClassAttributes::ABSTRACT]) {
+                members.fields.push_back(std::make_unique<FieldStmt>(
+                    std::make_unique<VarStmt>(abstract_field(name)), attributes
+                ));
+            } else {
+                members.fields.push_back(std::make_unique<FieldStmt>(
+                    std::make_unique<VarStmt>(var_declaration_after_name(name)), attributes
+                ));
+            }
+        } else {
+            // TODO: validate get and setters function have expected number of arguments
+            if (attributes[ClassAttributes::ABSTRACT]) {
+                bool skip_params = attributes[ClassAttributes::GETTER];
+                members.methods.push_back(std::make_unique<MethodStmt>(
+                    std::make_unique<FunctionStmt>(abstract_method(current, skip_params)),
+                    attributes
+                ));
+            } else {
+                bool skip_params = attributes[ClassAttributes::GETTER] && !check(Token::Type::LEFT_BRACE);
+                members.methods.push_back(std::make_unique<MethodStmt>(
+                    std::make_unique<FunctionStmt>(function_declaration_after_name(current, skip_params)),
+                    attributes
+                ));
+            }
+        }
+    }
+    return std::move(members);
+}
+
+Expr Parser::object_expression() {
+    // superclass list
+    std::optional<Token> superclass;
+    std::vector<ExprHandle> superclass_arguments;
+    if (match(Token::Type::COLON)) {
+        consume(Token::Type::IDENTIFIER, "Expected superclass name.");
+        superclass = current;
+
+        if (match(Token::Type::LEFT_PAREN)) {
+            superclass_arguments = arguments_list();
+        }
+    }
+
+    consume(Token::Type::LEFT_BRACE, "Expected '{' after object body");
+    StructureMembers members = structure_body(StructureType::OBJECT);
+    consume(Token::Type::RIGHT_BRACE, "Expected '}' after object body.");
+    return ObjectExpr {
+        .methods = std::move(members.methods),
+        .fields = std::move(members.fields),
+        .super_class = superclass,
+        .superclass_arguments = std::move(superclass_arguments)
+    };
+}
+
+Stmt Parser::class_declaration(bool is_abstract) {
     consume(Token::Type::IDENTIFIER, "Expected class name.");
     Token name = current;
 
-    std::optional<Token> super_class{};
+    std::optional<Token> super_class;
     if (match(Token::Type::COLON)) {
         consume(Token::Type::IDENTIFIER, "Expected superclass name.");
         super_class = current;
     }
     consume(Token::Type::LEFT_BRACE, "Expected '{' before class body.");
-
-    std::vector<std::unique_ptr<MethodStmt> > methods;
-    std::vector<std::unique_ptr<FieldStmt> > fields;
-    std::unique_ptr<ConstructorStmt> constructor_handle;
-    while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
-        bitflags<ClassAttributes> attributes;
-        // maybe order independant
-        if (match(Token::Type::PRIVATE)) {
-            attributes += ClassAttributes::PRIVATE;
-        }
-        if (match(Token::Type::STATIC)) {
-            attributes += ClassAttributes::STATIC;
-        }
-        if (match(Token::Type::OVERRDIE)) {
-            attributes += ClassAttributes::OVERRIDE;
-        }
-        if (match(Token::Type::ABSTRACT)) {
-            if (!is_class_abstract) {
-                error(current, "Abstract methods can be only declared in abstract classes.");
-            }
-            attributes += ClassAttributes::ABSTRACT;
-        }
-        if (match(Token::Type::GET)) {
-            attributes += ClassAttributes::GETTER;
-        }
-        if (match(Token::Type::SET)) {
-            attributes += ClassAttributes::SETTER;
-        }
-        consume(Token::Type::IDENTIFIER, "Expected identifier.");
-        if (current.get_lexeme(lexer.get_source()) == "init") {
-            // constructor call
-            constructor_handle = std::make_unique<ConstructorStmt>(constructor_statement());
-        } else if ((check(Token::Type::SEMICOLON) || check(Token::Type::EQUAL)) && !attributes[ClassAttributes::SETTER] && !attributes[ClassAttributes::GETTER]) {
-            attributes += ClassAttributes::GETTER;
-            attributes += ClassAttributes::SETTER;
-            if (attributes[ClassAttributes::ABSTRACT]) {
-                fields.push_back(
-                    std::make_unique<FieldStmt>(std::make_unique<VarStmt>(abstract_field(current)), attributes));
-            } else {
-                auto var_stmt = std::make_unique<VarStmt>(var_declaration_after_name(current));
-                fields.push_back(
-                    std::make_unique<FieldStmt>(std::move(var_stmt), attributes));
-            }
-        } else {
-            bool skip_params = attributes[ClassAttributes::GETTER]; // && LEFT_BRACE to allow optional parantheses but breaks abstract parser for now
-            // TODO: fix abstract getters and setters!
-            // TODO: validate get and setters function have expected number of arguments
-            if (attributes[ClassAttributes::ABSTRACT]) {
-                methods.push_back(
-                    std::make_unique<MethodStmt>(std::make_unique<FunctionStmt>(abstract_method(current, skip_params)), attributes));
-            } else {
-                auto function_stmt = std::make_unique<FunctionStmt>(function_declaration_after_name(current, skip_params));
-                methods.push_back(
-                    std::make_unique<MethodStmt>(std::move(function_stmt), attributes));
-            }
-        }
-    }
+    StructureMembers members = structure_body(is_abstract ? StructureType::ABSTRACT_CLASS : StructureType::CLASS);
     consume(Token::Type::RIGHT_BRACE, "Expected '}' after class body.");
 
-    return ClassStmt{
-        .name = name, .constructor = std::move(constructor_handle), .methods = std::move(methods),
-        .fields = std::move(fields), .super_class = super_class, .is_abstract = is_class_abstract
+    return ClassStmt {
+        .name = name,
+        .constructor = std::move(members.constructor),
+        .methods = std::move(members.methods),
+        .fields = std::move(members.fields),
+        .super_class = super_class,
+        .is_abstract = is_abstract
     };
 }
 
@@ -433,6 +491,7 @@ Parser::Precedence Parser::get_precendece(Token::Type token) {
         case Token::Type::FOR:
         case Token::Type::LABEL:
         case Token::Type::RETURN:
+        case Token::Type::OBJECT:
         default:
             return Precedence::NONE;
     }
@@ -575,6 +634,7 @@ Expr Parser::labeled_expression() {
     return {};
 }
 
+
 std::optional<Expr> Parser::prefix() {
     switch (current.type) {
         case Token::Type::INTEGER:
@@ -617,6 +677,8 @@ std::optional<Expr> Parser::prefix() {
             return labeled_expression();
         case Token::Type::RETURN:
             return return_expression();
+        case Token::Type::OBJECT:
+            return object_expression();
         default: return {};
     }
 }

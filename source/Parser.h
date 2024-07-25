@@ -68,6 +68,11 @@ private:
 
     VarStmt abstract_field(Token name);
 
+    std::vector<ExprHandle> arguments_list();
+
+
+
+
     Stmt class_declaration(bool is_abstract = false);
 
     Stmt expr_statement();
@@ -114,6 +119,23 @@ private:
     Expr while_expression(std::optional<Token> label = {});
 
     Expr labeled_expression();
+
+    Expr object_expression();
+
+    enum class StructureType {
+        CLASS,
+        OBJECT,
+        ABSTRACT_CLASS
+    };
+
+    struct StructureMembers {
+        std::vector<std::unique_ptr<MethodStmt>> methods;
+        std::vector<std::unique_ptr<FieldStmt>> fields;
+        std::unique_ptr<ConstructorStmt> constructor;
+    };
+
+    StructureMembers structure_body(StructureType type);
+    bitflags<ClassAttributes> member_attributes(StructureType outer_type);
 
     std::optional<Expr> prefix();
 

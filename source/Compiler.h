@@ -161,6 +161,8 @@ public:
 
     void this_expr();
 
+    void object_expression(const ObjectExpr& expr);
+
 private:
     void start_context(Function *function, FunctionType type);
     void end_context();
