@@ -808,9 +808,6 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 if (attributes[ClassAttributes::STATIC]) {
                     value = peek();
                 }
-                // should this be here or in compiler?
-                attributes += ClassAttributes::GETTER;
-                attributes += ClassAttributes::SETTER;
                 Class *klass = dynamic_cast<Class *>(peek(attributes[ClassAttributes::STATIC] ? 1 : 0).get<Object *>());
                 klass->fields[name] = {.value = value, .attributes = attributes};
                 if (attributes[ClassAttributes::STATIC]) {

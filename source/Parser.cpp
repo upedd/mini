@@ -318,6 +318,8 @@ Stmt Parser::class_declaration(bool is_class_abstract) {
             // constructor call
             constructor_handle = std::make_unique<ConstructorStmt>(constructor_statement());
         } else if ((check(Token::Type::SEMICOLON) || check(Token::Type::EQUAL)) && !attributes[ClassAttributes::SETTER] && !attributes[ClassAttributes::GETTER]) {
+            attributes += ClassAttributes::GETTER;
+            attributes += ClassAttributes::SETTER;
             if (attributes[ClassAttributes::ABSTRACT]) {
                 fields.push_back(
                     std::make_unique<FieldStmt>(std::make_unique<VarStmt>(abstract_field(current)), attributes));

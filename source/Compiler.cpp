@@ -535,7 +535,7 @@ void Compiler::constructor(const ConstructorStmt &stmt, const std::vector<std::u
     // default initialize fields
     for (auto &field: fields) {
         // ast builder
-        if (field->attributes[ClassAttributes::STATIC] || field->attributes[ClassAttributes::ABSTRACT] || field->attributes[ClassAttributes::GETTER] || field->attributes[ClassAttributes::SETTER]) continue;
+        if (field->attributes[ClassAttributes::STATIC] || field->attributes[ClassAttributes::ABSTRACT]) continue;
         visit_expr(*field->variable->value);
         emit(OpCode::THIS);
         int property_name = current_function()->add_constant(field->variable->name.get_lexeme(source));
@@ -578,7 +578,7 @@ void Compiler::default_constructor(const std::vector<std::unique_ptr<FieldStmt> 
     // default initialize fields
     for (auto &field: fields) {
         // ast builder
-        if (field->attributes[ClassAttributes::STATIC] || field->attributes[ClassAttributes::ABSTRACT] || field->attributes[ClassAttributes::GETTER] || field->attributes[ClassAttributes::SETTER]) continue;
+        if (field->attributes[ClassAttributes::STATIC] || field->attributes[ClassAttributes::ABSTRACT]) continue;
         visit_expr(*field->variable->value);
         emit(OpCode::THIS);
         int property_name = current_function()->add_constant(field->variable->name.get_lexeme(source));
@@ -620,8 +620,7 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
     emit(OpCode::NIL);
     define_variable("$scope_return");
 
-    //std::unordered_map<std::string, FieldInfo>* super_fields = nullptr;
-    std::unordered_set<std::string> current_fields;
+
     if (stmt.super_class) {
         std::string super_class_name = stmt.super_class->get_lexeme(source);
         emit(OpCode::GET,
@@ -632,8 +631,7 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
         assert(current_context().resolved_classes.contains(super_class_name));
         auto super_fields = current_context().resolved_classes[super_class_name].fields;
         for (auto &field: super_fields) {
-            // TODO: private fields should not even be included!
-            //if (field.second.is_private) continue;
+            if (field.second.attributes[ClassAttributes::PRIVATE]) continue;
             current_scope().add_field(field.first, field.second);
         }
     }
@@ -641,8 +639,13 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
     emit(OpCode::GET, std::get<Context::LocalResolution>(current_context().resolve_variable(name)).slot);
     current_scope().mark_temporary();
 
+    // Tracks fields declared in current class body
+    std::unordered_map<std::string, FieldInfo> member_declarations;
 
     // TODO: disallow init keyword!
+    // TODO: better error handling
+    // TODO: should all be moved to some sort of resolving step
+    // TODO: should check for invalid attributes combinations
     for (auto &field: stmt.fields) {
         std::string field_name = field->variable->name.get_lexeme(source);
         if (field->attributes[ClassAttributes::STATIC]) {
@@ -651,81 +654,84 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
         int idx = current_function()->add_constant(field_name);
         emit(OpCode::FIELD, idx);
         emit(field->attributes.to_ullong()); // size check?
-        if (current_fields.contains(field_name)) {
-            // TODO: better error handling!!!
-            assert(false && "Field redefnintion is disallowed.");
+        if (member_declarations.contains(field_name)) {
+            assert(false && "Member redeclaration is disallowed.");
         }
-        bool is_overriding = false;
+        bool should_override = false;
         if (current_scope().has_field(field_name)) {
-            if (!current_scope().get_field_info(field_name).attributes[ClassAttributes::PRIVATE] &&
-                !current_scope().get_field_info(field_name).attributes[ClassAttributes::STATIC]) {
-                // non-private!
-                is_overriding = true;
-                if (!field->attributes[ClassAttributes::OVERRIDE])
-                    assert(false && "override expected");
-            }
+            // if field is already declared in current scope then it comes from superclass
+            auto field_info = current_scope().get_field_info(field_name);
+            // in bite we can't override static fields - we hide them
+            if (!field_info.attributes[ClassAttributes::STATIC]) should_override = true;
         }
-        if (!is_overriding && field->attributes[ClassAttributes::OVERRIDE])
+        if (should_override && !field->attributes[ClassAttributes::OVERRIDE]) {
+            assert(false && "override attribute expected");
+        }
+        if (!should_override && field->attributes[ClassAttributes::OVERRIDE]) {
             assert(false && "no member to override.");
+        }
         if (field->attributes[ClassAttributes::STATIC]) {
             current_scope().pop_temporary();
         }
-        current_scope().add_field(field->variable->name.get_lexeme(source), FieldInfo(field->attributes));
-        current_fields.insert(field_name);
+        member_declarations[field_name] = FieldInfo(field->attributes);
     }
 
     // hoist methods
     for (auto &method: stmt.methods) {
+        // TODO: much overlap with above loop
         std::string method_name = method->function->name.get_lexeme(source);
-        // TODO: rework!
-        if (method->attributes[ClassAttributes::GETTER]) {
-            method_name = std::string("get_") + method_name;
-        }
-        if (method->attributes[ClassAttributes::SETTER]) {
-            method_name = std::string("set_") + method_name;
-        }
-        bool is_overriding = false;
-        if (current_fields.contains(method_name)) {
-            // TODO: better error handling!!!
-            assert(false && "Field redefnintion is disallowed.");
-        }
+        if (member_declarations.contains(method_name)) {
+            // special case for getters and setters methods
+            if (member_declarations[method_name].attributes[ClassAttributes::SETTER] && method->attributes[ClassAttributes::GETTER]) continue;
+            if (member_declarations[method_name].attributes[ClassAttributes::GETTER] && method->attributes[ClassAttributes::SETTER]) continue;
 
-        if (!current_fields.contains(method_name) && current_scope().has_field(method_name)) {
-            if (!current_scope().get_field_info(method_name).attributes[ClassAttributes::PRIVATE] &&
-                !current_scope().get_field_info(method_name).attributes[ClassAttributes::STATIC]) {
-                // non-private!
-                is_overriding = true;
-                if (!method->attributes[ClassAttributes::OVERRIDE])
-                    assert(false && "override expected");
-            }
+            assert(false && "Member redeclaration is disallowed.");
         }
-        if (!is_overriding && method->attributes[ClassAttributes::OVERRIDE]) {
+        bool should_override = false;
+        if (current_scope().has_field(method_name)) {
+            // if method is already declared in current scope then it comes from superclass
+            auto field_info = current_scope().get_field_info(method_name);
+            // in bite we can't override static methods - we hide them
+            if (!field_info.attributes[ClassAttributes::STATIC]) should_override = true;
+        }
+        if (should_override && !method->attributes[ClassAttributes::OVERRIDE]) {
+            assert(false && "override attribute expected");
+        }
+        if (!should_override && method->attributes[ClassAttributes::OVERRIDE]) {
             assert(false && "no member to override.");
         }
-
-        // TODO: rework this resolver system
-        current_scope().add_field(method->function->name.get_lexeme(source), FieldInfo(method->attributes));
-        current_fields.insert(stmt.name.get_lexeme(source));
-    }
-
-    for (auto &method: stmt.methods) {
-        std::string name = method->function->name.get_lexeme(source);
-        if (!method->attributes[ClassAttributes::ABSTRACT]) {
-            function(*method->function, FunctionType::METHOD);
-        }
-        int idx = current_function()->add_constant(name);
-        emit(OpCode::METHOD, idx);
-        emit(method->attributes.to_ullong()); // check size?
-        current_scope().pop_temporary();
+        member_declarations[method_name] = FieldInfo(method->attributes);
     }
 
     // check if all abstract classes are overriden
     if (!stmt.is_abstract && stmt.super_class) {
-        for (auto &field: current_context().resolved_classes[stmt.super_class->get_lexeme(source)].fields) {
-            if (field.second.attributes[ClassAttributes::ABSTRACT] && !current_fields.contains(field.first)) {
-                assert(false && "Expected abstract override");
+        for (auto &[name, info]: current_scope().get_fields()) {
+            if (info.attributes[ClassAttributes::ABSTRACT]) {
+                if (!member_declarations.contains(name)) {
+                    assert(false && "Expected abstract override");
+                }
+                if (info.attributes[ClassAttributes::GETTER] && !member_declarations[name].attributes[ClassAttributes::GETTER]) {
+                    assert(false && "Expected abstract override for getter");
+                }
+                if (info.attributes[ClassAttributes::SETTER] && !member_declarations[name].attributes[ClassAttributes::SETTER]) {
+                    assert(false && "Expected abstract override for setter");
+                }
             }
         }
+    }
+
+    // add declared members to current scope
+    current_scope().get_fields().insert(member_declarations.begin(), member_declarations.end());
+
+    for (auto &method: stmt.methods) {
+        std::string method_name = method->function->name.get_lexeme(source);
+        if (!method->attributes[ClassAttributes::ABSTRACT]) {
+            function(*method->function, FunctionType::METHOD);
+        }
+        int idx = current_function()->add_constant(method_name);
+        emit(OpCode::METHOD, idx);
+        emit(method->attributes.to_ullong()); // check size?
+        current_scope().pop_temporary();
     }
 
     if (stmt.constructor) {
@@ -748,9 +754,6 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
     end_scope();
     emit(OpCode::POP);
     current_scope().pop_temporary();
-    // if (stmt.super_name) {
-    //     end_scope();
-    // }
 }
 
 void Compiler::expr_statement(const ExprStmt &stmt) {
