@@ -1,0 +1,14 @@
+bar.x
+10
+=bar.y
+bar.y
+20
+=bar.z
+bar.z
+30
+=bar.y
+=bar.z
+bar.x
+10
+bar.y
+20

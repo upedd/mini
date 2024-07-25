@@ -1,3 +1,5 @@
+native print;
+
 class Foo {
     _a;
     get a {

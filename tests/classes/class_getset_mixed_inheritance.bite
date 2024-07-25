@@ -1,0 +1,28 @@
+native print;
+
+class Foo {
+    x = 10;
+
+    print_x() {
+        print(x);
+    }
+}
+
+class Bar : Foo {
+    _x;
+    override get x {
+        print("bar.x");
+        return _x;
+    }
+
+    override set x(value) {
+        print("=bar.x");
+        print(value);
+        _x = x;
+    }
+}
+
+let instance = Bar();
+instance.print_x();
+instance.x = 20;
+instance.print_x();

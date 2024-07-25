@@ -1,0 +1,49 @@
+native print;
+
+class Foo {
+    abstract get x;
+
+    abstract set z;
+
+    abstract y;
+
+    display() {
+        y = 40;
+        z = 30;
+        print(x);
+        print(y);
+    }
+}
+
+class Bar : Foo {
+    override get x {
+        print("bar.x");
+        return 10;
+    }
+
+    override get y {
+        print("bar.y");
+        return 20;
+    }
+
+    override set y(value) {
+        print("=bar.y");
+    }
+
+    get z {
+        print("bar.z");
+        return 30;
+    }
+
+    override set z(value) {
+        print("bar.z");
+    }
+}
+
+let instance = Bar();
+print(instance.x);
+instance.y = 10;
+print(instance.y);
+instance.z = 20;
+print(instance.z);
+instance.display();

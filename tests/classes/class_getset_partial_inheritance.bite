@@ -17,10 +17,6 @@ class Bar : Foo {
         return 20;
     }
 
-    override set x {
-        print("=bar.x");
-    }
-
     get_super_x() {
         return super.x;
     }
