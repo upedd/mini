@@ -284,7 +284,7 @@ std::expected<Value, VM::RuntimeError> VM::get_instance_property(Instance *insta
         }
     }
     // members properties
-    if (auto class_property = instance->resolve_dynamic_property(name)) {
+    if (auto class_property = instance->resolve_dynamic_property(name, ClassAttributes::GETTER)) {
         if (std::optional<RuntimeError> error = validate_instance_access(instance, *class_property)) {
             return std::unexpected(*error);
         }
@@ -320,7 +320,7 @@ std::expected<Value, VM::RuntimeError> VM::get_class_property(Class *klass, cons
 }
 
 std::expected<Value, VM::RuntimeError> VM::get_super_property(Instance *super_instance, Instance* accessor, const std::string &name, bool& is_computed_property) {
-    if (auto super_property = super_instance->resolve_dynamic_property(name)) {
+    if (auto super_property = super_instance->resolve_dynamic_property(name, ClassAttributes::GETTER)) {
         if (std::optional<RuntimeError> error = validate_instance_access(accessor, super_property.value())) {
             return std::unexpected(*error);
         }
@@ -369,7 +369,7 @@ std::variant<std::monostate, VM::RuntimeError, Value> VM::set_instance_property(
         }
     }
     // members properties
-    if (auto class_property = instance->resolve_dynamic_property(name)) {
+    if (auto class_property = instance->resolve_dynamic_property(name, ClassAttributes::SETTER)) {
         if (std::optional<RuntimeError> error = validate_instance_access(instance, *class_property)) {
             return *error;
         }
@@ -408,7 +408,7 @@ std::variant<std::monostate, VM::RuntimeError, Value> VM::set_class_property(
 // TODO: this is unused for now!
 std::variant<std::monostate, VM::RuntimeError, Value> VM::set_super_property(
     Instance *super_instance, Instance *accessor, const std::string &name, const Value &value) {
-    if (auto super_property = super_instance->resolve_dynamic_property(name)) {
+    if (auto super_property = super_instance->resolve_dynamic_property(name, ClassAttributes::SETTER)) {
         if (std::optional<RuntimeError> error = validate_instance_access(accessor, super_property.value())) {
             return *error;
         }

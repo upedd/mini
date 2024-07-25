@@ -317,15 +317,15 @@ public:
         return {};
     }
 
-    std::optional<std::reference_wrapper<ClassValue> > resolve_dynamic_property(const std::string &name) {
+    std::optional<std::reference_wrapper<ClassValue> > resolve_dynamic_property(const std::string &name, std::optional<ClassAttributes> attribute_to_match = {}) {
         if (properties.contains(name) && !properties[name].attributes[ClassAttributes::STATIC] && !properties[name].
-            attributes[ClassAttributes::PRIVATE]) {
+            attributes[ClassAttributes::PRIVATE] && (!attribute_to_match || properties[name].attributes[*attribute_to_match])) {
             return properties[name];
         }
         for (auto *super_instance: super_instances) {
             if (super_instance->properties.contains(name) && !super_instance->properties[name].attributes[
                     ClassAttributes::STATIC] && !super_instance->properties[name].attributes[
-                    ClassAttributes::PRIVATE]) {
+                    ClassAttributes::PRIVATE] && (!attribute_to_match || super_instance->properties[name].attributes[*attribute_to_match])) {
                 return super_instance->properties[name];
             }
         }

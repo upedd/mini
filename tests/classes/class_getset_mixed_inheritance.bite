@@ -18,7 +18,7 @@ class Bar : Foo {
     override set x(value) {
         print("=bar.x");
         print(value);
-        _x = x;
+        _x = value;
     }
 }
 

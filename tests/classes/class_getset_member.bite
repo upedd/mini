@@ -7,9 +7,9 @@ class Foo {
         return _a;
     }
 
-    set a {
+    set a(value) {
         print("=foo.a");
-        return _a;
+        _a = value;
     }
 
     pow() {

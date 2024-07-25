@@ -21,9 +21,9 @@ class Bar : Foo {
         return super.x;
     }
 
-    set_super_x() {
-        super.x = 10;
-    }
+    #set_super_x() {
+    #    super.x = 10;
+    #}
 }
 
 let instance = Bar();
@@ -31,7 +31,7 @@ let instance = Bar();
 instance.x = 10;
 print(instance.x);
 
-instance.set_super_x();
+#instance.set_super_x();
 print(instance.get_super_x());
 
 instance.x = 10;

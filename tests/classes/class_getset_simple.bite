@@ -1,3 +1,5 @@
+native print;
+
 class Foo {
     _x;
     get x {
@@ -5,24 +7,24 @@ class Foo {
         return _x;
     }
 
-    set x {
+    set x(value) {
         print("=foo.x");
-        _x = x;
+        _x = value;
     }
 }
 
-let instance = Foo():
+let instance = Foo();
 
 instance.x = 10;
-print(x);
+print(instance.x);
 instance.x = 20;
-print(x);
+print(instance.x);
 
-let instance2 = Foo2();
+let instance2 = Foo();
 
 instance2.x = 30;
 print(instance2.x);
 
-print(instance1.x):
-instance1.x = 40;
-print(instance1.x);
+print(instance.x);
+instance.x = 40;
+print(instance.x);
