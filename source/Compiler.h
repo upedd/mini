@@ -161,6 +161,9 @@ public:
 
     void this_expr();
 
+    void object_constructor(const std::vector<std::unique_ptr<FieldStmt>> &fields, bool has_superclass, const std::vector<ExprHandle> &
+                            superclass_arguments);
+
     void object_expression(const ObjectExpr& expr);
 
 private:
