@@ -572,6 +572,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 int constant_idx = fetch();
                 auto name = get_constant(constant_idx).get<std::string>();
                 auto *klass = new Class(name);
+                klass->class_object = dynamic_cast<Instance*>(pop().get<Object*>());
                 push(klass);
                 allocate(klass);
                 break;
@@ -581,6 +582,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 int constant_idx = fetch();
                 auto name = get_constant(constant_idx).get<std::string>();
                 auto *klass = new Class(name);
+                klass->class_object = dynamic_cast<Instance*>(pop().get<Object*>());
                 klass->is_abstract = true;
                 push(klass);
                 allocate(klass);
@@ -906,10 +908,10 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 break;
             }
         }
-        for (int i = 0; i < stack_index; ++i) {
-            std::cout << '[' << stack[i].to_string() << "] ";
-        }
-        std::cout << '\n';
+        // for (int i = 0; i < stack_index; ++i) {
+        //     std::cout << '[' << stack[i].to_string() << "] ";
+        // }
+        // std::cout << '\n';
     }
 #undef BINARY_OPERATION
 }

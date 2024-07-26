@@ -336,7 +336,10 @@ Parser::StructureMembers Parser::structure_body(StructureType type) {
         bitflags<ClassAttributes> attributes = member_attributes(type);
         consume(Token::Type::IDENTIFIER, "Expected identifier.");
         Token name = current;
-        if (name.get_lexeme(lexer.get_source()) == "init") {
+        if (check(Token::Type::OBJECT)) {
+            if (type == StructureType::OBJECT) error(current, "Class objects cannot be defined inside of objects.");
+            members.class_object = std::make_unique<ObjectExpr>(object_expression());
+        } else if (name.get_lexeme(lexer.get_source()) == "init") {
             if (type == StructureType::OBJECT) error(current, "Constructors cannot be defined inside of objects.");
             // constructor call
             members.constructor = std::make_unique<ConstructorStmt>(constructor_statement());
@@ -373,7 +376,7 @@ Parser::StructureMembers Parser::structure_body(StructureType type) {
     return std::move(members);
 }
 
-Expr Parser::object_expression() {
+ObjectExpr Parser::object_expression() {
     // superclass list
     std::optional<Token> superclass;
     std::vector<ExprHandle> superclass_arguments;
@@ -415,6 +418,7 @@ Stmt Parser::class_declaration(bool is_abstract) {
         .constructor = std::move(members.constructor),
         .methods = std::move(members.methods),
         .fields = std::move(members.fields),
+        .class_object = std::move(members.class_object),
         .super_class = super_class,
         .is_abstract = is_abstract
     };

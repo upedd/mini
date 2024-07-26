@@ -831,6 +831,12 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
     // TODO: refactor!
     std::string name = stmt.name.get_lexeme(source);
     uint8_t name_constant = current_function()->add_constant(name);
+
+    if (stmt.class_object) {
+        visit_expr(*stmt.class_object);
+    } else {
+        emit(OpCode::NIL);
+    }
     if (stmt.is_abstract) {
         emit(OpCode::ABSTRACT_CLASS, name_constant);
     } else {

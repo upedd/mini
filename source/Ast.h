@@ -171,8 +171,9 @@ struct MethodStmt {
 struct ClassStmt {
     Token name;
     std::unique_ptr<ConstructorStmt> constructor;
-    std::vector<std::unique_ptr<MethodStmt> > methods;
-    std::vector<std::unique_ptr<FieldStmt> > fields;
+    std::vector<std::unique_ptr<MethodStmt>> methods;
+    std::vector<std::unique_ptr<FieldStmt>> fields;
+    std::unique_ptr<ObjectExpr> class_object;
     std::optional<Token> super_class;
     bool is_abstract = false;
 };

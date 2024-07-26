@@ -191,7 +191,7 @@ public:
 };
 
 
-
+class Instance;
 
 class Class final : public Object {
 public:
@@ -275,6 +275,7 @@ public:
     std::unordered_map<std::string, ClassValue> methods;
     std::unordered_map<std::string, ClassValue> fields;
     std::vector<Class *> superclasses;
+    Instance* class_object;
     Value constructor;
     bool is_abstract = false;
 };
@@ -347,7 +348,7 @@ public:
     }
 
     Class *klass;
-    std::vector<Instance *> super_instances;
+    std::vector<Instance*> super_instances;
     std::unordered_map<std::string, ClassValue> properties;
 };
 
