@@ -1,0 +1,28 @@
+native print;
+
+class Foo {
+    x = 10;
+    y;
+    init(y) {
+        this.y = y;
+    }
+
+    add() {
+        return x + y;
+    }
+
+    display() {
+        print(add());
+    }
+}
+
+object Bar : Foo(20) {
+    override add() {
+        return x * y;
+    }
+}
+
+Bar.display();
+Bar.x = 3;
+Bar.y = 4;
+Bar.display();

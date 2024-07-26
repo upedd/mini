@@ -1,0 +1,36 @@
+native print;
+
+object Foo {
+    bar() {
+        print(foo());
+    }
+
+    foo() {
+        return x;
+    }
+
+    x = 10;
+
+    _y;
+    get y {
+        print("Foo.y");
+        return _y;
+    }
+    set y(value) {
+        print("=Foo.y");
+        _y = value;
+    }
+}
+
+print(Foo.x);
+print(Foo.foo());
+Foo.bar();
+Foo.x = 20;
+print(Foo.x);
+print(Foo.foo());
+Foo.bar();
+
+Foo.y = 10;
+print(Foo.y);
+Foo.y = 20;
+print(Foo.y);

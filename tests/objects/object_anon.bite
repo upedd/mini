@@ -1,0 +1,51 @@
+native print;
+
+abstract class Foo {
+    x = 10;
+    y;
+    init(y) {
+        this.y = y;
+    }
+
+    abstract add();
+
+    display() {
+        print(add());
+    }
+}
+
+fun call_display(obj) {
+    obj.display();
+}
+
+fun modify_and_call_display(x, y, obj) {
+    obj.x = x;
+    obj.y = y;
+    call_display(obj);
+}
+
+let bar = object : Foo(20) {
+    override add() {
+        return x * y;
+    }
+};
+
+call_display(bar);
+bar.x = 3;
+bar.y = 4;
+call_display(bar);
+modify_and_call_display(2, 7, bar);
+print(bar.x);
+print(bar.y);
+
+call_display(object : Foo(5) {
+                 override add() {
+                     return x - y;
+                 }
+             });
+
+modify_and_call_display(4, 3, object : Foo(5) {
+                 override add() {
+                     return x - y;
+                 }
+             });
