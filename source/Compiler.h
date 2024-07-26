@@ -166,6 +166,8 @@ public:
 
     void object_expression(const ObjectExpr& expr);
 
+    void object_statement(const ObjectStmt & stmt);
+
 private:
     void start_context(Function *function, FunctionType type);
     void end_context();

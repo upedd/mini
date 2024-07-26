@@ -259,6 +259,7 @@ void Compiler::visit_stmt(const Stmt &statement) {
                    [this](const ExprStmt &stmt) { expr_statement(stmt); },
                    [this](const ClassStmt &stmt) { class_declaration(stmt); },
                    [this](const NativeStmt &stmt) { native_declaration(stmt); },
+                   [this](const ObjectStmt& stmt) {object_statement(stmt);},
                    [this](const MethodStmt &) { assert("unreachable"); },
                    [this](const FieldStmt &) { assert("unreachable"); },
                    [this](const ConstructorStmt &) { assert("unreachable"); }
@@ -818,6 +819,12 @@ void Compiler::object_expression(const ObjectExpr &expr) {
     emit(OpCode::CALL, 0);
     emit(OpCode::SET, std::get<Context::LocalResolution>(current_context().resolve_variable("$scope_return")).slot);
     end_scope();
+}
+
+void Compiler::object_statement(const ObjectStmt &stmt) {
+    visit_expr(*stmt.object);
+    current_scope().pop_temporary();
+    define_variable(stmt.name.get_lexeme(source));
 }
 
 void Compiler::class_declaration(const ClassStmt &stmt) {

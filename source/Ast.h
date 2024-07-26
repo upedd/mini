@@ -37,6 +37,7 @@ struct NativeStmt;
 struct FieldStmt;
 struct MethodStmt;
 struct ConstructorStmt;
+struct ObjectStmt;
 
 using Expr = std::variant<LiteralExpr, StringLiteral, UnaryExpr, BinaryExpr, VariableExpr, CallExpr, GetPropertyExpr,
     SuperExpr, BlockExpr, IfExpr, LoopExpr, BreakExpr, ContinueExpr, WhileExpr, ForExpr, ReturnExpr, ThisExpr,
@@ -44,7 +45,7 @@ using Expr = std::variant<LiteralExpr, StringLiteral, UnaryExpr, BinaryExpr, Var
 using ExprHandle = std::unique_ptr<Expr>;
 
 using Stmt = std::variant<VarStmt, ExprStmt, FunctionStmt, ClassStmt, NativeStmt, FieldStmt, MethodStmt,
-    ConstructorStmt>;
+    ConstructorStmt, ObjectStmt>;
 using StmtHandle = std::unique_ptr<Stmt>;
 
 struct UnaryExpr {
@@ -187,6 +188,11 @@ struct NativeStmt {
     Token name;
 };
 
+struct ObjectStmt {
+    Token name;
+    ExprHandle object;
+};
+
 inline std::string expr_to_string(const Expr &expr, std::string_view source);
 
 inline std::string stmt_to_string(const Stmt &stmt, std::string_view source) {
@@ -226,6 +232,9 @@ inline std::string stmt_to_string(const Stmt &stmt, std::string_view source) {
                           },
                           [](const ConstructorStmt &stmt) {
                               return std::string("constructor"); // TODO: implement!
+                          },
+                          [](const ObjectStmt &stmt) {
+                              return std::string("object"); // TODO: implement!
                           }
                       }, stmt);
 }

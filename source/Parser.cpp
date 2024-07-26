@@ -153,6 +153,15 @@ Expr Parser::return_expression() {
     return ReturnExpr{std::move(expr)};
 }
 
+Stmt Parser::object_declaration() {
+    consume(Token::Type::IDENTIFIER, "Expected object name.");
+    Token name = current;
+    return ObjectStmt {
+        .name = name,
+        .object = make_expr_handle(object_expression())
+    };
+}
+
 std::optional<Stmt> Parser::statement() {
     auto exit = scope_exit([this] { if (panic_mode) synchronize(); });
 
@@ -171,6 +180,9 @@ std::optional<Stmt> Parser::statement() {
     }
     if (match(Token::Type::NATIVE)) {
         return native_declaration();
+    }
+    if (match(Token::Type::OBJECT)) {
+        return object_declaration();
     }
     return {};
 }

@@ -52,6 +52,8 @@ private:
 
     Expr return_expression();
 
+    Stmt object_declaration();
+
     std::optional<Stmt> statement();
 
     Stmt var_declaration();
