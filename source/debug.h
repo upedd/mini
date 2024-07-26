@@ -224,9 +224,6 @@ inline void Disassembler::disassemble(const std::string& name) {
             case OpCode::SET_SUPER: {
                 constant_inst("SET_SUPER");
             }
-            case OpCode::OBJECT: {
-                simple_opcode("OBJECT");
-            }
         }
     }
 }

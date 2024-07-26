@@ -199,6 +199,9 @@ private:
 
     void default_constructor(const std::vector<std::unique_ptr<FieldStmt>> &fields, bool has_superclass);
 
+    void class_core(int class_slot, std::optional<Token> super_class, const std::vector<std::unique_ptr<MethodStmt>> &methods, const std::
+                    vector<std::unique_ptr<FieldStmt>> &fields, bool is_abstract);
+
     void class_declaration(const ClassStmt &stmt);
     void expr_statement(const ExprStmt &stmt);
     void native_declaration(const NativeStmt& stmt);

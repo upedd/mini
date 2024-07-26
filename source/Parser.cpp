@@ -350,7 +350,7 @@ Parser::StructureMembers Parser::structure_body(StructureType type) {
                     attributes
                 ));
             } else {
-                bool skip_params = attributes[ClassAttributes::GETTER] && !check(Token::Type::LEFT_BRACE);
+                bool skip_params = attributes[ClassAttributes::GETTER] && !check(Token::Type::LEFT_PAREN);
                 members.methods.push_back(std::make_unique<MethodStmt>(
                     std::make_unique<FunctionStmt>(function_declaration_after_name(current, skip_params)),
                     attributes

@@ -100,9 +100,6 @@ void Compiler::this_expr() {
     emit(OpCode::THIS);
 }
 
-
-
-
 void Compiler::start_context(Function *function, FunctionType type) {
     context_stack.emplace_back(function, type);
     current_context().scopes.emplace_back(ScopeType::BLOCK, 0); // TODO: should be function?
@@ -606,19 +603,15 @@ void Compiler::default_constructor(const std::vector<std::unique_ptr<FieldStmt> 
     }
 }
 
-void Compiler::object_expression(const ObjectExpr &expr) {
-    // TODO: refactor!
-    emit(OpCode::OBJECT);
+// TODO: refactor!!! this whole class parsing part is a total mess!
 
-    begin_scope(ScopeType::CLASS, "");
-    emit(OpCode::OBJECT);
-    define_variable("object");
-
-    if (expr.super_class) {
-        std::string super_class_name = expr.super_class->get_lexeme(source);
+// refactor: maybe could use Parser::StructrueMembers and type?
+void Compiler::class_core(int class_slot, std::optional<Token> super_class, const std::vector<std::unique_ptr<MethodStmt>>& methods, const std::vector<std::unique_ptr<FieldStmt>>& fields, bool is_abstract) {
+    if (super_class) {
+        std::string super_class_name = super_class->get_lexeme(source);
         emit(OpCode::GET,
              std::get<Context::LocalResolution>(current_context().resolve_variable(super_class_name)).slot);
-        emit(OpCode::GET, std::get<Context::LocalResolution>(current_context().resolve_variable("object")).slot);
+        emit(OpCode::GET, class_slot);
         emit(OpCode::INHERIT);
         emit(OpCode::POP);
         assert(current_context().resolved_classes.contains(super_class_name));
@@ -629,157 +622,7 @@ void Compiler::object_expression(const ObjectExpr &expr) {
         }
     }
 
-    emit(OpCode::GET, std::get<Context::LocalResolution>(current_context().resolve_variable("object")).slot);
-    current_scope().mark_temporary();
-
-    // Tracks fields declared in current class body
-    std::unordered_map<std::string, FieldInfo> member_declarations;
-
-    for (auto &field: expr.fields) {
-        std::string field_name = field->variable->name.get_lexeme(source);
-        int idx = current_function()->add_constant(field_name);
-        //field->attributes += ClassAttributes::STATIC; // TODO: check!
-        visit_expr(*field->variable->value);
-        emit(OpCode::FIELD, idx);
-        emit(field->attributes.to_ullong()); // size check?
-        if (member_declarations.contains(field_name)) {
-            assert(false && "Member redeclaration is disallowed.");
-        }
-        bool should_override = false;
-        if (current_scope().has_field(field_name)) {
-            // if field is already declared in current scope then it comes from superclass
-            should_override = true;
-        }
-        if (should_override && !field->attributes[ClassAttributes::OVERRIDE]) {
-            assert(false && "override attribute expected");
-        }
-        if (!should_override && field->attributes[ClassAttributes::OVERRIDE]) {
-            assert(false && "no member to override.");
-        }
-        member_declarations[field_name] = FieldInfo(field->attributes);
-    }
-
-    // hoist methods
-    for (auto &method: expr.methods) {
-        // TODO: much overlap with above loop
-        std::string method_name = method->function->name.get_lexeme(source);
-        bool already_partially_declared = false;
-        if (member_declarations.contains(method_name)) {
-            // special case for getters and setters methods
-            if (member_declarations[method_name].attributes[ClassAttributes::SETTER] && method->attributes[
-                    ClassAttributes::GETTER]) {
-                already_partially_declared = true;
-            } else if (member_declarations[method_name].attributes[ClassAttributes::GETTER] && method->attributes[
-                           ClassAttributes::SETTER]) {
-                already_partially_declared = true;
-            } else {
-                assert(false && "Member redeclaration is disallowed.");
-            }
-        }
-        bool should_override = false;
-        if (current_scope().has_field(method_name)) {
-            // if method is already declared in current scope then it comes from superclass
-            auto field_info = current_scope().get_field_info(method_name);
-
-            // special case for getters and setters methods
-            // TODO: mess
-            if ((!field_info.attributes[ClassAttributes::GETTER] && method->attributes[ClassAttributes::GETTER])
-                || (!field_info.attributes[ClassAttributes::SETTER] && method->attributes[ClassAttributes::SETTER])) {
-            } else {
-                should_override = true;
-            }
-        }
-        if (should_override && !method->attributes[ClassAttributes::OVERRIDE]) {
-            assert(false && "override attribute expected");
-        }
-        if (!should_override && method->attributes[ClassAttributes::OVERRIDE]) {
-            assert(false && "no member to override.");
-        }
-        // TODO: this does not allow mixing private and public setters and getters!
-        if (!already_partially_declared) {
-            member_declarations[method_name] = FieldInfo(method->attributes);
-        } else {
-            member_declarations[method_name].attributes += method->attributes[ClassAttributes::GETTER]
-                                                               ? ClassAttributes::GETTER
-                                                               : ClassAttributes::SETTER;
-        }
-    }
-
-    // check if all abstract classes are overriden
-    if (expr.super_class) {
-        for (auto &[name, info]: current_scope().get_fields()) {
-            if (info.attributes[ClassAttributes::ABSTRACT]) {
-                if (!member_declarations.contains(name)) {
-                    assert(false && "Expected abstract override");
-                }
-                if (info.attributes[ClassAttributes::GETTER] && !member_declarations[name].attributes[
-                        ClassAttributes::GETTER]) {
-                    assert(false && "Expected abstract override for getter");
-                }
-                if (info.attributes[ClassAttributes::SETTER] && !member_declarations[name].attributes[
-                        ClassAttributes::SETTER]) {
-                    assert(false && "Expected abstract override for setter");
-                }
-            }
-        }
-    }
-
-    // add declared members to current scope
-    current_scope().get_fields().insert(member_declarations.begin(), member_declarations.end());
-
-    for (auto &method: expr.methods) {
-        std::string method_name = method->function->name.get_lexeme(source);
-        function(*method->function, FunctionType::METHOD);
-        int idx = current_function()->add_constant(method_name);
-        emit(OpCode::METHOD, idx);
-        emit(method->attributes.to_ullong()); // check size?
-        current_scope().pop_temporary();
-    }
-
-    object_constructor(TODO, TODO, TODO);
-    emit(OpCode::CONSTRUCTOR);
-
-    emit(OpCode::POP);
-    current_scope().pop_temporary();
-    // TODO: non-expression scope?
-    end_scope();
-    emit(OpCode::POP);
-    current_scope().pop_temporary();
-}
-
-void Compiler::class_declaration(const ClassStmt &stmt) {
-    // TODO: refactor!
-    std::string name = stmt.name.get_lexeme(source);
-    uint8_t name_constant = current_function()->add_constant(name);
-    if (stmt.is_abstract) {
-        emit(OpCode::ABSTRACT_CLASS, name_constant);
-    } else {
-        emit(OpCode::CLASS, name_constant);
-    }
-    current_scope().define(name);
-
-    begin_scope(ScopeType::CLASS, name);
-    // TODO: non-expression scope?
-    emit(OpCode::NIL);
-    define_variable("$scope_return");
-
-
-    if (stmt.super_class) {
-        std::string super_class_name = stmt.super_class->get_lexeme(source);
-        emit(OpCode::GET,
-             std::get<Context::LocalResolution>(current_context().resolve_variable(super_class_name)).slot);
-        emit(OpCode::GET, std::get<Context::LocalResolution>(current_context().resolve_variable(name)).slot);
-        emit(OpCode::INHERIT);
-        emit(OpCode::POP);
-        assert(current_context().resolved_classes.contains(super_class_name));
-        auto super_fields = current_context().resolved_classes[super_class_name].fields;
-        for (auto &field: super_fields) {
-            if (field.second.attributes[ClassAttributes::PRIVATE]) continue;
-            current_scope().add_field(field.first, field.second);
-        }
-    }
-
-    emit(OpCode::GET, std::get<Context::LocalResolution>(current_context().resolve_variable(name)).slot);
+    emit(OpCode::GET, class_slot);
     current_scope().mark_temporary();
 
     // Tracks fields declared in current class body
@@ -789,7 +632,7 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
     // TODO: better error handling
     // TODO: should all be moved to some sort of resolving step
     // TODO: should check for invalid attributes combinations
-    for (auto &field: stmt.fields) {
+    for (auto &field: fields) {
         std::string field_name = field->variable->name.get_lexeme(source);
         if (field->attributes[ClassAttributes::STATIC]) {
             visit_expr(*field->variable->value);
@@ -820,7 +663,7 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
     }
 
     // hoist methods
-    for (auto &method: stmt.methods) {
+    for (auto &method: methods) {
         // TODO: much overlap with above loop
         std::string method_name = method->function->name.get_lexeme(source);
         bool already_partially_declared = false;
@@ -867,7 +710,7 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
     }
 
     // check if all abstract classes are overriden
-    if (!stmt.is_abstract && stmt.super_class) {
+    if (!is_abstract && super_class) {
         for (auto &[name, info]: current_scope().get_fields()) {
             if (info.attributes[ClassAttributes::ABSTRACT]) {
                 if (!member_declarations.contains(name)) {
@@ -888,7 +731,7 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
     // add declared members to current scope
     current_scope().get_fields().insert(member_declarations.begin(), member_declarations.end());
 
-    for (auto &method: stmt.methods) {
+    for (auto &method: methods) {
         std::string method_name = method->function->name.get_lexeme(source);
         if (!method->attributes[ClassAttributes::ABSTRACT]) {
             function(*method->function, FunctionType::METHOD);
@@ -898,6 +741,102 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
         emit(method->attributes.to_ullong()); // check size?
         current_scope().pop_temporary();
     }
+}
+
+// overlaps
+void Compiler::object_constructor(const std::vector<std::unique_ptr<FieldStmt>> &fields, bool has_superclass, const std::vector<ExprHandle> &
+                                  superclass_arguments) {
+    auto *function = new Function("constructor", 0);
+    functions.push_back(function);
+    start_context(function, FunctionType::CONSTRUCTOR);
+    begin_scope(ScopeType::BLOCK); // doesn't context already start a new scope therefor it is reduntant
+    current_scope().define(""); // reserve slot for receiver
+
+    if (has_superclass) {
+        for (const ExprHandle &expr: superclass_arguments) {
+            visit_expr(*expr);
+        }
+        // maybe better way to do this instead of this superinstruction?
+        emit(OpCode::CALL_SUPER_CONSTRUCTOR, superclass_arguments.size());
+        emit(OpCode::POP); // discard constructor response
+    }
+
+    // default initialize fields
+    for (auto &field: fields) {
+        // ast builder
+        if (field->attributes[ClassAttributes::STATIC] || field->attributes[ClassAttributes::ABSTRACT]) continue;
+        visit_expr(*field->variable->value);
+        emit(OpCode::THIS);
+        int property_name = current_function()->add_constant(field->variable->name.get_lexeme(source));
+        emit(OpCode::SET_PROPERTY, property_name);
+        emit(OpCode::POP); // pop value;
+    }
+    emit_default_return();
+    end_scope();
+
+    function->set_upvalue_count(current_context().upvalues.size());
+    // we need to emit those upvalues in enclosing context (context where function is called)
+    std::vector<Upvalue> function_upvalues = std::move(current_context().upvalues);
+    end_context();
+
+    int constant = current_function()->add_constant(function);
+    emit(OpCode::CLOSURE, constant);
+
+    for (const Upvalue &upvalue: function_upvalues) {
+        emit(upvalue.is_local);
+        emit(upvalue.index);
+    }
+}
+
+void Compiler::object_expression(const ObjectExpr &expr) {
+    // TODO: refactor!
+    begin_scope(ScopeType::BLOCK);
+    emit(OpCode::NIL);
+    define_variable("$scope_return");
+    std::string name = "object"; // todo: check!
+    uint8_t name_constant = current_function()->add_constant(name);
+    emit(OpCode::CLASS, name_constant);
+    current_scope().define(name);
+
+    begin_scope(ScopeType::CLASS, name);
+    // TODO: non-expression scope?
+    emit(OpCode::NIL);
+    define_variable("$scope_return");
+
+    class_core(std::get<Context::LocalResolution>(current_context().resolve_variable(name)).slot, expr.super_class, expr.methods, expr.fields, false);
+
+    object_constructor(expr.fields, expr.super_class.has_value(), expr.superclass_arguments);
+    emit(OpCode::CONSTRUCTOR);
+
+    emit(OpCode::POP);
+    current_scope().pop_temporary();
+    // TODO: non-expression scope?
+    end_scope();
+    emit(OpCode::POP);
+    current_scope().pop_temporary();
+    // constructing object logic goes here!
+    emit(OpCode::CALL, 0);
+    emit(OpCode::SET, std::get<Context::LocalResolution>(current_context().resolve_variable("$scope_return")).slot);
+    end_scope();
+}
+
+void Compiler::class_declaration(const ClassStmt &stmt) {
+    // TODO: refactor!
+    std::string name = stmt.name.get_lexeme(source);
+    uint8_t name_constant = current_function()->add_constant(name);
+    if (stmt.is_abstract) {
+        emit(OpCode::ABSTRACT_CLASS, name_constant);
+    } else {
+        emit(OpCode::CLASS, name_constant);
+    }
+    current_scope().define(name);
+
+    begin_scope(ScopeType::CLASS, name);
+    // TODO: non-expression scope?
+    emit(OpCode::NIL);
+    define_variable("$scope_return");
+
+    class_core(std::get<Context::LocalResolution>(current_context().resolve_variable(name)).slot, stmt.super_class, stmt.methods, stmt.fields, stmt.is_abstract);
 
     if (stmt.constructor) {
         current_scope().constructor_argument_count = stmt.constructor->parameters.size();
