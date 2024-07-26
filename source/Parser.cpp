@@ -304,11 +304,7 @@ bitflags<ClassAttributes> Parser::member_attributes(StructureType outer_type) {
     if (match(Token::Type::PRIVATE)) {
         attributes += ClassAttributes::PRIVATE;
     }
-    if (match(Token::Type::STATIC)) {
-        attributes += ClassAttributes::STATIC;
-    }
     if (match(Token::Type::OVERRDIE)) {
-        if (attributes[ClassAttributes::STATIC]) error(current, "Overrides cannot be static");
         if (attributes[ClassAttributes::PRIVATE]) error(current, "Overrides cannot be private");
         attributes += ClassAttributes::OVERRIDE;
     }
@@ -316,7 +312,6 @@ bitflags<ClassAttributes> Parser::member_attributes(StructureType outer_type) {
         if (outer_type != StructureType::ABSTRACT_CLASS) {
             error(current, "Abstract methods can be only declared in abstract classes.");
         }
-        if (attributes[ClassAttributes::STATIC]) error(current, "Abstract members cannot be static");
         if (attributes[ClassAttributes::PRIVATE]) error(current, "Abstract members cannot be private");
         attributes += ClassAttributes::ABSTRACT;
     }

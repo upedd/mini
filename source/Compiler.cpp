@@ -536,7 +536,7 @@ void Compiler::constructor(const ConstructorStmt &stmt, const std::vector<std::u
     // default initialize fields
     for (auto &field: fields) {
         // ast builder
-        if (field->attributes[ClassAttributes::STATIC] || field->attributes[ClassAttributes::ABSTRACT]) continue;
+        if (field->attributes[ClassAttributes::ABSTRACT]) continue;
         visit_expr(*field->variable->value);
         emit(OpCode::THIS);
         int property_name = current_function()->add_constant(field->variable->name.get_lexeme(source));
@@ -579,7 +579,7 @@ void Compiler::default_constructor(const std::vector<std::unique_ptr<FieldStmt> 
     // default initialize fields
     for (auto &field: fields) {
         // ast builder
-        if (field->attributes[ClassAttributes::STATIC] || field->attributes[ClassAttributes::ABSTRACT]) continue;
+        if ( field->attributes[ClassAttributes::ABSTRACT]) continue;
         visit_expr(*field->variable->value);
         emit(OpCode::THIS);
         int property_name = current_function()->add_constant(field->variable->name.get_lexeme(source));
@@ -635,9 +635,6 @@ void Compiler::class_core(int class_slot, std::optional<Token> super_class, cons
     // TODO: should check for invalid attributes combinations
     for (auto &field: fields) {
         std::string field_name = field->variable->name.get_lexeme(source);
-        if (field->attributes[ClassAttributes::STATIC]) {
-            visit_expr(*field->variable->value);
-        }
         int idx = current_function()->add_constant(field_name);
         emit(OpCode::FIELD, idx);
         emit(field->attributes.to_ullong()); // size check?
@@ -647,18 +644,13 @@ void Compiler::class_core(int class_slot, std::optional<Token> super_class, cons
         bool should_override = false;
         if (current_scope().has_field(field_name)) {
             // if field is already declared in current scope then it comes from superclass
-            auto field_info = current_scope().get_field_info(field_name);
-            // in bite we can't override static fields - we hide them
-            if (!field_info.attributes[ClassAttributes::STATIC]) should_override = true;
+            should_override = true;
         }
         if (should_override && !field->attributes[ClassAttributes::OVERRIDE]) {
             assert(false && "override attribute expected");
         }
         if (!should_override && field->attributes[ClassAttributes::OVERRIDE]) {
             assert(false && "no member to override.");
-        }
-        if (field->attributes[ClassAttributes::STATIC]) {
-            current_scope().pop_temporary();
         }
         member_declarations[field_name] = FieldInfo(field->attributes);
     }
@@ -689,8 +681,7 @@ void Compiler::class_core(int class_slot, std::optional<Token> super_class, cons
             // TODO: mess
             if ((!field_info.attributes[ClassAttributes::GETTER] && method->attributes[ClassAttributes::GETTER])
                 || (!field_info.attributes[ClassAttributes::SETTER] && method->attributes[ClassAttributes::SETTER])) {
-            } else if (!field_info.attributes[ClassAttributes::STATIC]) {
-                // in bite we can't override static methods - we hide them
+            } else {
                 should_override = true;
             }
         }
@@ -765,7 +756,7 @@ void Compiler::object_constructor(const std::vector<std::unique_ptr<FieldStmt>> 
     // default initialize fields
     for (auto &field: fields) {
         // ast builder
-        if (field->attributes[ClassAttributes::STATIC] || field->attributes[ClassAttributes::ABSTRACT]) continue;
+        if (field->attributes[ClassAttributes::ABSTRACT]) continue;
         visit_expr(*field->variable->value);
         emit(OpCode::THIS);
         int property_name = current_function()->add_constant(field->variable->name.get_lexeme(source));

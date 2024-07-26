@@ -114,7 +114,6 @@ private:
 // TODO: find better place for this!
 enum class ClassAttributes {
     PRIVATE,
-    STATIC,
     OVERRIDE,
     ABSTRACT,
     GETTER,

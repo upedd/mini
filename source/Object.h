@@ -190,7 +190,6 @@ public:
     ClassMethod set;
 };
 
-
 class Instance;
 
 class Class final : public Object {
@@ -227,25 +226,13 @@ public:
         return {{methods[name], this}};
     }
 
-    std::optional<ClassMethod> resolve_static_method(const std::string &name) {
-        if (methods.contains(name) && methods[name].attributes[ClassAttributes::STATIC]) {
-            return {{methods[name], this}};
-        }
-        for (auto *superclass: std::views::reverse(superclasses)) {
-            if (superclass->methods.contains(name) && superclass->methods[name].attributes[ClassAttributes::STATIC]) {
-                return {{superclass->methods[name], this}};
-            }
-        }
-        return {};
-    }
-
     std::optional<ClassMethod> resolve_dynamic_method(const std::string &name) {
-        if (methods.contains(name) && !methods[name].attributes[ClassAttributes::STATIC] && !methods[name].attributes[
+        if (methods.contains(name) && !methods[name].attributes[
                 ClassAttributes::PRIVATE]) {
             return {{methods[name], this}};
         }
         for (auto *superclass: std::views::reverse(superclasses)) {
-            if (superclass->methods.contains(name) && !superclass->methods[name].attributes[ClassAttributes::STATIC] &&
+            if (superclass->methods.contains(name) &&
                 !superclass->methods[name].attributes[ClassAttributes::PRIVATE]) {
                 return {{superclass->methods[name], this}};
             }
@@ -253,20 +240,7 @@ public:
         return {};
     }
 
-    std::optional<std::reference_wrapper<ClassValue> > resolve_static_property(const std::string &name) {
-        if (fields.contains(name) && fields[name].attributes[ClassAttributes::STATIC]) {
-            return fields[name];
-        }
-        for (auto *super_instance: std::views::reverse(superclasses)) {
-            if (super_instance->fields.contains(name) && super_instance->fields[name].attributes[
-                    ClassAttributes::STATIC]) {
-                return super_instance->fields[name];
-            }
-        }
-        return {};
-    }
-
-    Class *get_super() {
+    Class* get_super() {
         // check?
         return superclasses.back();
     }
@@ -274,7 +248,7 @@ public:
     std::string name;
     std::unordered_map<std::string, ClassValue> methods;
     std::unordered_map<std::string, ClassValue> fields;
-    std::vector<Class *> superclasses;
+    std::vector<Class*> superclasses;
     Instance* class_object;
     Value constructor;
     bool is_abstract = false;
@@ -287,9 +261,7 @@ public:
         // default intialize properties
         // should this be here or in vm?
         for (auto &[name, value]: klass->fields) {
-            if (!value.attributes[ClassAttributes::STATIC]) {
-                properties[name] = value;
-            }
+            properties[name] = value;
         }
     }
 
@@ -319,13 +291,12 @@ public:
     }
 
     std::optional<std::reference_wrapper<ClassValue> > resolve_dynamic_property(const std::string &name, std::optional<ClassAttributes> attribute_to_match = {}) {
-        if (properties.contains(name) && !properties[name].attributes[ClassAttributes::STATIC] && !properties[name].
+        if (properties.contains(name) && !properties[name].
             attributes[ClassAttributes::PRIVATE] && (!attribute_to_match || properties[name].attributes[*attribute_to_match])) {
             return properties[name];
         }
         for (auto *super_instance: super_instances) {
             if (super_instance->properties.contains(name) && !super_instance->properties[name].attributes[
-                    ClassAttributes::STATIC] && !super_instance->properties[name].attributes[
                     ClassAttributes::PRIVATE] && (!attribute_to_match || super_instance->properties[name].attributes[*attribute_to_match])) {
                 return super_instance->properties[name];
             }

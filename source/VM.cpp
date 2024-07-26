@@ -205,9 +205,6 @@ std::optional<VM::RuntimeError> VM::validate_instance_access(Instance* accessor,
     if (class_value.attributes[ClassAttributes::PRIVATE] && (!receiver || (*receiver)->instance != accessor)) {
         return RuntimeError("Private propererties can be access only inside their class definitions.");
     }
-    if (class_value.attributes[ClassAttributes::STATIC] && (!receiver || (*receiver)->instance != nullptr)) {
-        return RuntimeError("Static propererties cannot be accesed on class instances.");
-    }
     return {};
 }
 
@@ -215,9 +212,6 @@ std::optional<VM::RuntimeError> VM::validate_class_access(Class* accessor, const
     std::optional<Receiver*> receiver = get_current_receiver();
     if (class_value.attributes[ClassAttributes::PRIVATE] && (!receiver || (*receiver)->klass != accessor)) {
         return RuntimeError("Private propererties can be access only inside their class definitions.");
-    }
-    if (class_value.attributes[ClassAttributes::STATIC] && receiver && (*receiver)->instance != nullptr) {
-        return RuntimeError("Static propererties cannot be accesed on class instances.");
     }
     return {};
 }
@@ -267,15 +261,6 @@ std::expected<Value, VM::RuntimeError> VM::get_instance_property(Instance *insta
         if (auto class_method = receiver.value()->klass->resolve_private_method(name)) {
             return bind_method(class_method.value().value.value, class_method.value().owner, instance);
         }
-        // try receiver static method
-        if (auto class_method = receiver.value()->klass->resolve_static_method(name)) {
-            return bind_method(class_method.value().value.value, class_method.value().owner, nullptr);
-        }
-        // try static property
-        if (auto class_property = receiver.value()->klass->resolve_static_property(name)) {
-            return get_value_or_bound_method(instance, class_property->get(), is_computed_property);
-        }
-
         if (auto super_instnace = receiver.value()->instance->get_super_instance_by_class(receiver.value()->klass)) {
             // private property
             if (auto class_property = super_instnace.value()->resolve_private_property(name)) {
@@ -302,20 +287,7 @@ std::expected<Value, VM::RuntimeError> VM::get_instance_property(Instance *insta
 }
 
 std::expected<Value, VM::RuntimeError> VM::get_class_property(Class *klass, const std::string &name, bool& is_computed_property) {
-    if (auto class_property = klass->resolve_static_property(name)) {
-        if (std::optional<RuntimeError> error = validate_class_access(klass, class_property.value())) {
-            return std::unexpected(*error);
-        }
-        return get_value_or_bound_method(nullptr, class_property->get(), is_computed_property);
-    }
-
-    if (auto class_method = klass->resolve_static_method(name)) {
-        if (std::optional<RuntimeError> error = validate_class_access(klass, class_method.value().value)) {
-            return std::unexpected(*error);
-        }
-        return bind_method(class_method->value.value, class_method->owner, nullptr);
-    }
-
+    // TODO?
     return std::unexpected(RuntimeError("Property must be declared on class."));
 }
 
@@ -342,17 +314,7 @@ std::variant<std::monostate, VM::RuntimeError, Value> VM::set_instance_property(
     const Value &value) {
     std::optional<Receiver*> receiver = get_current_receiver();
     if (receiver) {
-        // try static property
-        if (auto class_property = receiver.value()->klass->resolve_static_property(name)) {
-            auto bound = set_value_or_get_bound_method(instance, class_property.value(), value);
-            if (std::holds_alternative<RuntimeError>(bound)) {
-                return std::get<RuntimeError>(bound);
-            }
-            if (std::holds_alternative<Value>(bound)) {
-                return std::get<Value>(bound);
-            }
-            return {};
-        }
+
 
         if (auto super_instnace = receiver.value()->instance->get_super_instance_by_class(receiver.value()->klass)) {
             // private property
