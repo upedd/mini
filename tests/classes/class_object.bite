@@ -1,13 +1,14 @@
 class Foo {
+    object {
+        bar;
+        get_bar_plus_ten() {
+            return bar + 10;
+        }
+    }
     foo;
-    static bar;
 
     add() {
         return foo + bar;
-    }
-
-    static get_bar_plus_ten() {
-        return bar + 10;
     }
 
     add_plus_ten() {
