@@ -286,11 +286,6 @@ std::expected<Value, VM::RuntimeError> VM::get_instance_property(Instance *insta
     return std::unexpected(RuntimeError("Property must be declared on class."));
 }
 
-std::expected<Value, VM::RuntimeError> VM::get_class_property(Class *klass, const std::string &name, bool& is_computed_property) {
-    // TODO?
-    return std::unexpected(RuntimeError("Property must be declared on class."));
-}
-
 std::expected<Value, VM::RuntimeError> VM::get_super_property(Instance *super_instance, Instance* accessor, const std::string &name, bool& is_computed_property) {
     if (auto super_property = super_instance->resolve_dynamic_property(name, ClassAttributes::GETTER)) {
         if (std::optional<RuntimeError> error = validate_instance_access(accessor, super_property.value())) {
@@ -347,13 +342,6 @@ std::variant<std::monostate, VM::RuntimeError, Value> VM::set_instance_property(
 
     return RuntimeError("Property must be declared on class.");
 }
-
-std::variant<std::monostate, VM::RuntimeError, Value> VM::set_class_property(
-    Class *klass, const std::string &name, const Value &value) {
-    // TODO: remove?
-    return RuntimeError("Property must be declared on class.");
-}
-
 
 std::variant<std::monostate, VM::RuntimeError, Value> VM::set_super_property(
     Instance *super_instance, Instance *accessor, const std::string &name, const Value &value) {
@@ -522,7 +510,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 auto name = get_constant(constant_idx).get<std::string>();
                 auto *klass = new Class(name);
                 if (!peek().is<Nil>()) {
-                    klass->class_object = dynamic_cast<Instance*>(pop().get<Object*>());
+                    klass->class_object = dynamic_cast<Instance*>(peek().get<Object*>());
                 }
                 pop(); // pop class object
                 push(klass);
@@ -535,8 +523,9 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 auto name = get_constant(constant_idx).get<std::string>();
                 auto *klass = new Class(name);
                 if (!peek().is<Nil>()) {
-                    klass->class_object = dynamic_cast<Instance*>(pop().get<Object*>());
+                    klass->class_object = dynamic_cast<Instance*>(peek().get<Object*>());
                 }
+                pop();
                 klass->is_abstract = true;
                 push(klass);
                 allocate(klass);
@@ -549,7 +538,14 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 if (!object) {
                     return std::unexpected(RuntimeError("Expected class instance value."));
                 }
-                if (auto *instance = dynamic_cast<Instance *>(*object)) {
+                Instance* instance;
+                if (auto *klass = dynamic_cast<Class *>(*object)) {
+                    instance = klass->class_object;
+                } else {
+                    instance = dynamic_cast<Instance *>(*object);
+                }
+
+                if (instance) {
                     pop();
                     bool is_computed_property = false;
                     std::expected<Value, RuntimeError> property = get_instance_property(instance, name, is_computed_property);
@@ -557,27 +553,6 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                         return std::unexpected(property.error());
                     }
 
-                    push(*property);
-                    // this will wait for gc refactoring
-                    if (property->is<Object*>()) {
-                        if (auto* bound = dynamic_cast<BoundMethod*>(property->get<Object*>())) {
-                            allocate(bound);
-                            allocate<Receiver>(dynamic_cast<Receiver*>(bound->receiver.get<Object*>()));
-
-                            if (is_computed_property) {
-                                if (auto error = call_value(bound, 0)) {
-                                    return std::unexpected(*error);
-                                }
-                            }
-                        }
-                    }
-                } else if (auto* klass = dynamic_cast<Class*>(*object)) {
-                    pop();
-                    bool is_computed_property = false;
-                    std::expected<Value, RuntimeError> property = get_class_property(klass, name, is_computed_property);
-                    if (!property) {
-                        return std::unexpected(property.error());
-                    }
                     push(*property);
                     // this will wait for gc refactoring
                     if (property->is<Object*>()) {
@@ -605,7 +580,15 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 if (!object) {
                     return std::unexpected(RuntimeError("Expected class instance value."));
                 }
-                if (auto *instance = dynamic_cast<Instance *>(*object)) {
+
+                Instance* instance;
+                if (auto *klass = dynamic_cast<Class *>(*object)) {
+                    instance = klass->class_object;
+                } else {
+                    instance = dynamic_cast<Instance *>(*object);
+                }
+
+                if (instance) {
                     Value value = peek(1);
 
                     auto response  = set_instance_property(instance, name, value);
@@ -632,34 +615,6 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                         }
                     } else {
                         pop(); // pop instance
-                    }
-                } else if (auto* klass = dynamic_cast<Class*>(*object)) {
-                    Value value = peek(1);
-
-                    auto response  = set_class_property(klass, name, value);
-                    if (std::holds_alternative<RuntimeError>(response)) {
-                        return std::unexpected(std::get<RuntimeError>(response));
-                    }
-                    if (std::holds_alternative<Value>(response)) {
-                        pop(); // pop instance;
-                        auto property = std::get<Value>(response);
-                        push(property);
-                        // gc rewrite!
-                        if (property.is<Object*>()) {
-                            if (auto* bound = dynamic_cast<BoundMethod*>(property.get<Object*>())) {
-                                allocate(bound);
-                                allocate<Receiver>(dynamic_cast<Receiver*>(bound->receiver.get<Object*>()));
-                            }
-                        }
-                        pop(); // pop bound for now
-                        pop(); // pop value
-                        push(property); // push bound
-                        push(value); // push argument
-                        if (auto error = call_value(property, 1)) {
-                            return std::unexpected(*error);
-                        }
-                    } else {
-                        pop(); // pop class
                     }
                 } else {
                     return std::unexpected(RuntimeError("Expected class object or instance."));

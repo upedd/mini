@@ -328,13 +328,17 @@ Parser::StructureMembers Parser::structure_body(StructureType type) {
     // refactor: still kinda messy?
     StructureMembers members;
     while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
+        if (check(Token::Type::OBJECT)) {
+            advance();
+            if (type == StructureType::OBJECT) error(current, "Class objects cannot be defined inside of objects.");
+            members.class_object = make_expr_handle(object_expression());
+            continue;
+        }
         bitflags<ClassAttributes> attributes = member_attributes(type);
         consume(Token::Type::IDENTIFIER, "Expected identifier.");
         Token name = current;
-        if (check(Token::Type::OBJECT)) {
-            if (type == StructureType::OBJECT) error(current, "Class objects cannot be defined inside of objects.");
-            members.class_object = make_expr_handle(object_expression());
-        } else if (name.get_lexeme(lexer.get_source()) == "init") {
+
+        if (name.get_lexeme(lexer.get_source()) == "init") {
             if (type == StructureType::OBJECT) error(current, "Constructors cannot be defined inside of objects.");
             // constructor call
             members.constructor = std::make_unique<ConstructorStmt>(constructor_statement());

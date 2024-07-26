@@ -787,6 +787,7 @@ void Compiler::object_expression(const ObjectExpr &expr) {
     define_variable("$scope_return");
     std::string name = "object"; // todo: check!
     uint8_t name_constant = current_function()->add_constant(name);
+    emit(OpCode::NIL);
     emit(OpCode::CLASS, name_constant);
     current_scope().define(name);
 
@@ -827,13 +828,16 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
         visit_expr(*stmt.class_object);
     } else {
         emit(OpCode::NIL);
+        current_scope().mark_temporary();
     }
     if (stmt.is_abstract) {
         emit(OpCode::ABSTRACT_CLASS, name_constant);
     } else {
         emit(OpCode::CLASS, name_constant);
     }
+    current_scope().pop_temporary();
     current_scope().define(name);
+
 
     begin_scope(ScopeType::CLASS, name);
     // TODO: non-expression scope?

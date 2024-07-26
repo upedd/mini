@@ -20,3 +20,17 @@ void Function::add_allocated(Object *object) {
 const std::vector<Object *> Function::get_allocated() {
     return allocated_objects;
 }
+
+void Class::mark_references(GarbageCollector &gc) {
+    for (auto &value: std::views::values(methods)) {
+        gc.mark(value.value);
+    }
+    for (auto &value: std::views::values(fields)) {
+        gc.mark(value.value);
+    }
+    for (auto *superclass: superclasses) {
+        gc.mark(superclass);
+    }
+    gc.mark(constructor);
+    gc.mark(class_object);
+}

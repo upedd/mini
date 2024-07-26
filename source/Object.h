@@ -205,18 +205,7 @@ public:
         return std::format("<Class({})>", name);
     }
 
-    void mark_references(GarbageCollector &gc) override {
-        for (auto &value: std::views::values(methods)) {
-            gc.mark(value.value);
-        }
-        for (auto &value: std::views::values(fields)) {
-            gc.mark(value.value);
-        }
-        for (auto *superclass: superclasses) {
-            gc.mark(superclass);
-        }
-        gc.mark(constructor);
-    }
+    void mark_references(GarbageCollector &gc) override;
 
     // resolve only current class memebers
     std::optional<ClassMethod> resolve_private_method(const std::string &name) {
@@ -249,7 +238,7 @@ public:
     std::unordered_map<std::string, ClassValue> methods;
     std::unordered_map<std::string, ClassValue> fields;
     std::vector<Class*> superclasses;
-    Instance* class_object;
+    Instance* class_object = nullptr;
     Value constructor;
     bool is_abstract = false;
 };
