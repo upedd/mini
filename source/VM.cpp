@@ -350,24 +350,11 @@ std::variant<std::monostate, VM::RuntimeError, Value> VM::set_instance_property(
 
 std::variant<std::monostate, VM::RuntimeError, Value> VM::set_class_property(
     Class *klass, const std::string &name, const Value &value) {
-    if (auto class_property = klass->resolve_static_property(name)) {
-        if (std::optional<RuntimeError> error = validate_class_access(klass, class_property.value())) {
-            return *error;
-        }
-        auto bound = set_value_or_get_bound_method(nullptr, class_property.value(), value);
-        if (std::holds_alternative<RuntimeError>(bound)) {
-            return std::get<RuntimeError>(bound);
-        }
-        if (std::holds_alternative<Value>(bound)) {
-            return std::get<Value>(bound);
-        }
-        return {};
-    }
+    // TODO: remove?
     return RuntimeError("Property must be declared on class.");
 }
 
 
-// TODO: this is unused for now!
 std::variant<std::monostate, VM::RuntimeError, Value> VM::set_super_property(
     Instance *super_instance, Instance *accessor, const std::string &name, const Value &value) {
     if (auto super_property = super_instance->resolve_dynamic_property(name, ClassAttributes::SETTER)) {
@@ -534,7 +521,10 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 int constant_idx = fetch();
                 auto name = get_constant(constant_idx).get<std::string>();
                 auto *klass = new Class(name);
-                klass->class_object = dynamic_cast<Instance*>(pop().get<Object*>());
+                if (!peek().is<Nil>()) {
+                    klass->class_object = dynamic_cast<Instance*>(pop().get<Object*>());
+                }
+                pop(); // pop class object
                 push(klass);
                 allocate(klass);
                 break;
@@ -544,7 +534,9 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 int constant_idx = fetch();
                 auto name = get_constant(constant_idx).get<std::string>();
                 auto *klass = new Class(name);
-                klass->class_object = dynamic_cast<Instance*>(pop().get<Object*>());
+                if (!peek().is<Nil>()) {
+                    klass->class_object = dynamic_cast<Instance*>(pop().get<Object*>());
+                }
                 klass->is_abstract = true;
                 push(klass);
                 allocate(klass);
@@ -694,7 +686,6 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                     auto* computed_property = dynamic_cast<ComputedProperty *>(klass->fields[name].value.get<Object*>());
                     computed_property->get = ClassMethod {.value =  {.value = method, .attributes = attributes}, .owner = klass};
                     klass->fields[name].attributes += ClassAttributes::GETTER;
-                    if (attributes[ClassAttributes::STATIC]) klass->fields[name].attributes += ClassAttributes::STATIC;
                 } else if (attributes[ClassAttributes::SETTER]) {
                     if (!klass->fields[name].is_computed) {
                         klass->fields[name].is_computed = true;
@@ -706,8 +697,6 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                     auto* computed_property = dynamic_cast<ComputedProperty *>(klass->fields[name].value.get<Object*>());
                     computed_property->set = ClassMethod {.value =  {.value = method, .attributes = attributes}, .owner = klass};
                     klass->fields[name].attributes += ClassAttributes::SETTER;
-                    // TODO: check if both getter and setter are static
-                    if (attributes[ClassAttributes::STATIC]) klass->fields[name].attributes += ClassAttributes::STATIC;
                 } else {
                     klass->methods[name] = {.value = method, .attributes = attributes};
                 }
@@ -802,14 +791,8 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 auto attributes = bitflags<ClassAttributes>(fetch());
                 auto name = get_constant(constant_idx).get<std::string>();
                 Value value;
-                if (attributes[ClassAttributes::STATIC]) {
-                    value = peek();
-                }
-                Class *klass = dynamic_cast<Class *>(peek(attributes[ClassAttributes::STATIC] ? 1 : 0).get<Object *>());
+                Class *klass = dynamic_cast<Class *>(peek().get<Object *>());
                 klass->fields[name] = {.value = value, .attributes = attributes};
-                if (attributes[ClassAttributes::STATIC]) {
-                    pop();
-                }
                 break;
             }
             case OpCode::THIS: {

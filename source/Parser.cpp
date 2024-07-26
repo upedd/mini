@@ -333,7 +333,7 @@ Parser::StructureMembers Parser::structure_body(StructureType type) {
         Token name = current;
         if (check(Token::Type::OBJECT)) {
             if (type == StructureType::OBJECT) error(current, "Class objects cannot be defined inside of objects.");
-            members.class_object = std::make_unique<ObjectExpr>(object_expression());
+            members.class_object = make_expr_handle(object_expression());
         } else if (name.get_lexeme(lexer.get_source()) == "init") {
             if (type == StructureType::OBJECT) error(current, "Constructors cannot be defined inside of objects.");
             // constructor call

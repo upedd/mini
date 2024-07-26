@@ -134,7 +134,7 @@ private:
         std::vector<std::unique_ptr<MethodStmt>> methods;
         std::vector<std::unique_ptr<FieldStmt>> fields;
         std::unique_ptr<ConstructorStmt> constructor;
-        std::unique_ptr<ObjectExpr> class_object;
+        ExprHandle class_object;
     };
 
     StructureMembers structure_body(StructureType type);

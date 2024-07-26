@@ -197,8 +197,6 @@ Token Lexer::keyword_or_identifier() {
         return make_token(Token::Type::FOR);
     } else if (current == "private") {
         return make_token(Token::Type::PRIVATE);
-    } else if (current == "static") {
-        return make_token(Token::Type::STATIC);
     } else if (current == "abstract") {
         return make_token(Token::Type::ABSTRACT);
     } else if (current == "override") {
