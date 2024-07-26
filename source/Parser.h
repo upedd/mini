@@ -54,6 +54,8 @@ private:
 
     Stmt object_declaration();
 
+
+
     std::optional<Stmt> statement();
 
     Stmt var_declaration();
@@ -127,7 +129,8 @@ private:
     enum class StructureType {
         CLASS,
         OBJECT,
-        ABSTRACT_CLASS
+        ABSTRACT_CLASS,
+        TRAIT
     };
 
     struct StructureMembers {
@@ -139,7 +142,7 @@ private:
 
     StructureMembers structure_body(StructureType type);
     bitflags<ClassAttributes> member_attributes(StructureType outer_type);
-
+    Stmt trait_declaration();
     std::optional<Expr> prefix();
 
     Expr integer();

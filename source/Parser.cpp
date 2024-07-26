@@ -184,6 +184,9 @@ std::optional<Stmt> Parser::statement() {
     if (match(Token::Type::OBJECT)) {
         return object_declaration();
     }
+    if (match(Token::Type::TRAIT)) {
+        return trait_declaration();
+    }
     return {};
 }
 
@@ -324,6 +327,23 @@ bitflags<ClassAttributes> Parser::member_attributes(StructureType outer_type) {
     return std::move(attributes);
 }
 
+Stmt Parser::trait_declaration() {
+    consume(Token::Type::IDENTIFIER, "Expected trait name.");
+    Token name = current;
+
+    consume(Token::Type::LEFT_BRACE, "Expected '{' before trait body.");
+    StructureMembers members = structure_body(StructureType::TRAIT);
+    consume(Token::Type::RIGHT_BRACE, "Expected '}' after class body.");
+
+    return TraitStmt {
+        .name = name,
+        .methods = std::move(members.methods),
+        .fields = std::move(members.fields)
+    };
+}
+
+
+
 Parser::StructureMembers Parser::structure_body(StructureType type) {
     // refactor: still kinda messy?
     StructureMembers members;
@@ -340,35 +360,67 @@ Parser::StructureMembers Parser::structure_body(StructureType type) {
 
         if (name.get_lexeme(lexer.get_source()) == "init") {
             if (type == StructureType::OBJECT) error(current, "Constructors cannot be defined inside of objects.");
+            if (type == StructureType::TRAIT) error(current, "Constructors cannot be defined inside of traits.");
             // constructor call
             members.constructor = std::make_unique<ConstructorStmt>(constructor_statement());
         } else if ((check(Token::Type::SEMICOLON) || check(Token::Type::EQUAL)) && !attributes[ClassAttributes::SETTER]
                    && !attributes[ClassAttributes::GETTER]) {
             attributes += ClassAttributes::GETTER;
             attributes += ClassAttributes::SETTER;
-            if (attributes[ClassAttributes::ABSTRACT]) {
+            if (type == StructureType::TRAIT) {
+                if (!check(Token::Type::SEMICOLON)) error(current, "Expected ';' after trait declared field.");
                 members.fields.push_back(std::make_unique<FieldStmt>(
-                    std::make_unique<VarStmt>(abstract_field(name)), attributes
-                ));
+                        std::make_unique<VarStmt>(abstract_field(name)), attributes
+                    ));
             } else {
-                members.fields.push_back(std::make_unique<FieldStmt>(
-                    std::make_unique<VarStmt>(var_declaration_after_name(name)), attributes
-                ));
+                if (attributes[ClassAttributes::ABSTRACT]) {
+                    members.fields.push_back(std::make_unique<FieldStmt>(
+                        std::make_unique<VarStmt>(abstract_field(name)), attributes
+                    ));
+                } else {
+                    members.fields.push_back(std::make_unique<FieldStmt>(
+                        std::make_unique<VarStmt>(var_declaration_after_name(name)), attributes
+                    ));
+                }
             }
         } else {
             // TODO: validate get and setters function have expected number of arguments
-            if (attributes[ClassAttributes::ABSTRACT]) {
-                bool skip_params = attributes[ClassAttributes::GETTER];
-                members.methods.push_back(std::make_unique<MethodStmt>(
-                    std::make_unique<FunctionStmt>(abstract_method(current, skip_params)),
-                    attributes
-                ));
+            if (type == StructureType::TRAIT) {
+                bool skip_params = false; // TODO
+                std::vector<Token> parameters;
+                if (!skip_params) {
+                    consume(Token::Type::LEFT_PAREN, "Expected '(' after function name");
+                    if (!check(Token::Type::RIGHT_PAREN)) {
+                        do {
+                            consume(Token::Type::IDENTIFIER, "Expected identifier");
+                            parameters.push_back(current);
+                        } while (match(Token::Type::COMMA));
+                    }
+                    consume(Token::Type::RIGHT_PAREN, "Expected ')' after function parameters");
+                }
+                std::vector<ExprHandle> function_arguments = arguments_list();
+                if (check(Token::Type::SEMICOLON)) {
+                    advance();
+                    members.methods.push_back(std::make_unique<MethodStmt>(std::make_unique<FunctionStmt>(name, std::move(parameters), nullptr), attributes));
+                } else {
+                    consume(Token::Type::LEFT_BRACE, "Expected '{' before function body");
+                    members.methods.push_back(std::make_unique<MethodStmt>(std::make_unique<FunctionStmt>(name, std::move(parameters), make_expr_handle(block())), attributes));
+
+                }
             } else {
-                bool skip_params = attributes[ClassAttributes::GETTER] && !check(Token::Type::LEFT_PAREN);
-                members.methods.push_back(std::make_unique<MethodStmt>(
-                    std::make_unique<FunctionStmt>(function_declaration_after_name(current, skip_params)),
-                    attributes
-                ));
+                if (attributes[ClassAttributes::ABSTRACT]) {
+                    bool skip_params = attributes[ClassAttributes::GETTER];
+                    members.methods.push_back(std::make_unique<MethodStmt>(
+                        std::make_unique<FunctionStmt>(abstract_method(current, skip_params)),
+                        attributes
+                    ));
+                } else {
+                    bool skip_params = attributes[ClassAttributes::GETTER] && !check(Token::Type::LEFT_PAREN);
+                    members.methods.push_back(std::make_unique<MethodStmt>(
+                        std::make_unique<FunctionStmt>(function_declaration_after_name(current, skip_params)),
+                        attributes
+                    ));
+                }
             }
         }
     }

@@ -38,6 +38,7 @@ struct FieldStmt;
 struct MethodStmt;
 struct ConstructorStmt;
 struct ObjectStmt;
+struct TraitStmt;
 
 using Expr = std::variant<LiteralExpr, StringLiteral, UnaryExpr, BinaryExpr, VariableExpr, CallExpr, GetPropertyExpr,
     SuperExpr, BlockExpr, IfExpr, LoopExpr, BreakExpr, ContinueExpr, WhileExpr, ForExpr, ReturnExpr, ThisExpr,
@@ -45,7 +46,7 @@ using Expr = std::variant<LiteralExpr, StringLiteral, UnaryExpr, BinaryExpr, Var
 using ExprHandle = std::unique_ptr<Expr>;
 
 using Stmt = std::variant<VarStmt, ExprStmt, FunctionStmt, ClassStmt, NativeStmt, FieldStmt, MethodStmt,
-    ConstructorStmt, ObjectStmt>;
+    ConstructorStmt, ObjectStmt, TraitStmt>;
 using StmtHandle = std::unique_ptr<Stmt>;
 
 struct UnaryExpr {
@@ -192,6 +193,12 @@ struct NativeStmt {
 struct ObjectStmt {
     Token name;
     ExprHandle object;
+};
+
+struct TraitStmt {
+    Token name;
+    std::vector<std::unique_ptr<MethodStmt>> methods;
+    std::vector<std::unique_ptr<FieldStmt>> fields;
 };
 
 inline std::string expr_to_string(const Expr &expr, std::string_view source);

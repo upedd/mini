@@ -207,6 +207,8 @@ Token Lexer::keyword_or_identifier() {
         return make_token(Token::Type::SET);
     } else if (current == "object") {
         return make_token(Token::Type::OBJECT);
+    } else if (current == "trait") {
+        return make_token(Token::Type::TRAIT);
     }
     return make_token(Token::Type::IDENTIFIER);
 }
