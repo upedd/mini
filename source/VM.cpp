@@ -831,6 +831,19 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 }
                 break;
             }
+            case OpCode::GET_TRAIT: {
+                int constant_idx = fetch();
+                auto name = get_constant(constant_idx).get<std::string>();
+                Trait* trait = dynamic_cast<Trait*>(peek().get<Object*>());
+                // TODO: performance
+                for (auto& closure : trait->methods) {
+                    if (closure->get_function()->get_name() == name) {
+                        push(closure);
+                        break;
+                    }
+                }
+                break;
+            }
         }
         // for (int i = 0; i < stack_index; ++i) {
         //     std::cout << '[' << stack[i].to_string() << "] ";

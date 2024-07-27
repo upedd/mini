@@ -345,6 +345,7 @@ Stmt Parser::trait_declaration() {
 
 UsingStmt Parser::using_statement() {
     // TODO: do this better!
+    // TODO: validate errors!
     std::vector<UsingStmtItem> items;
     do {
         consume(Token::Type::IDENTIFIER, "Identifier expected");
@@ -505,7 +506,8 @@ Stmt Parser::class_declaration(bool is_abstract) {
         .fields = std::move(members.fields),
         .class_object = std::move(members.class_object),
         .super_class = super_class,
-        .is_abstract = is_abstract
+        .is_abstract = is_abstract,
+        .using_statements = std::move(members.using_statements)
     };
 }
 

@@ -69,7 +69,11 @@ public:
 
     std::size_t get_size() override {
         return sizeof(Function);
-    };
+    }
+
+    std::string get_name() {
+        return name;
+    }
 
     std::string to_string() override {
         return std::format("<Function({})>", name);

@@ -178,6 +178,7 @@ struct ClassStmt {
     ExprHandle class_object;
     std::optional<Token> super_class;
     bool is_abstract = false;
+    std::vector<std::unique_ptr<UsingStmt>> using_statements;
 };
 
 struct ConstructorStmt {

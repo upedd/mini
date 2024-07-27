@@ -263,7 +263,8 @@ void Compiler::visit_stmt(const Stmt &statement) {
                    [this](const TraitStmt& stmt) {trait_statement(stmt);},
                    [this](const MethodStmt &) { assert("unreachable"); },
                    [this](const FieldStmt &) { assert("unreachable"); },
-                   [this](const ConstructorStmt &) { assert("unreachable"); }
+                   [this](const ConstructorStmt &) { assert("unreachable"); },
+                   [this](const UsingStmt&) {}
                }, statement);
 }
 
@@ -608,7 +609,7 @@ void Compiler::default_constructor(const std::vector<std::unique_ptr<FieldStmt> 
 // TODO: refactor!!! this whole class parsing part is a total mess!
 
 // refactor: maybe could use Parser::StructrueMembers and type?
-void Compiler::class_core(int class_slot, std::optional<Token> super_class, const std::vector<std::unique_ptr<MethodStmt>>& methods, const std::vector<std::unique_ptr<FieldStmt>>& fields, bool is_abstract) {
+void Compiler::class_core(int class_slot, std::optional<Token> super_class, const std::vector<std::unique_ptr<MethodStmt>>& methods, const std::vector<std::unique_ptr<FieldStmt>>& fields, const std::vector<std::unique_ptr<UsingStmt>>& using_stmts, bool is_abstract) {
     if (super_class) {
         std::string super_class_name = super_class->get_lexeme(source);
         emit(OpCode::GET,
@@ -629,6 +630,56 @@ void Compiler::class_core(int class_slot, std::optional<Token> super_class, cons
 
     // Tracks fields declared in current class body
     std::unordered_map<std::string, FieldInfo> member_declarations;
+
+    std::unordered_set<std::string> requirements;
+    // Traits!
+    for (auto& stmt : using_stmts) {
+        for (auto& item : stmt->items) {
+            std::string item_name = item.name.get_lexeme(source);
+            emit(OpCode::GET,
+             std::get<Context::LocalResolution>(current_context().resolve_variable(item_name)).slot);
+            auto trait_fields = current_context().resolved_classes[item_name].fields;
+            for (auto& [field_name, info] : trait_fields) {
+                // check if excluded
+                bool is_excluded = false;
+                // possibly use some ranges here
+                for (auto& exclusion : item.exclusions) {
+                    if (exclusion.get_lexeme(source) == field_name) {
+                        is_excluded = true;
+                        break;
+                    }
+                }
+                if (is_excluded || info.attributes[ClassAttributes::ABSTRACT]) {
+                    requirements.insert(field_name);
+                    // warn about useless exclude?
+                    continue;
+                }
+                // should aliasing methods that are requierments be allowed?
+                std::string aliased_name = field_name;
+                for (auto& [before, after] : item.aliases) {
+                    if (before.get_lexeme(source) == field_name) {
+                        aliased_name = after.get_lexeme(source);
+                        break;
+                    }
+                }
+                if (current_scope().has_field(aliased_name)) {
+                    // if field is already declared in current scope then it comes from superclass
+                    assert(false && "Should overwrite.");
+                }
+                // better error here
+                if (member_declarations.contains(aliased_name)) {
+                    assert(false && "Member redeclaration is disallowed.");
+                }
+                member_declarations[field_name] = info;
+                int field_name_constant = current_function()->add_constant(field_name);
+                emit(OpCode::GET_TRAIT, field_name_constant);
+                int aliased_name_constant = current_function()->add_constant(field_name);
+                emit(OpCode::METHOD, aliased_name_constant);
+                emit(info.attributes.to_ullong());
+            }
+            emit(OpCode::POP);
+        }
+    }
 
     // TODO: disallow init keyword!
     // TODO: better error handling
@@ -724,6 +775,14 @@ void Compiler::class_core(int class_slot, std::optional<Token> super_class, cons
     // add declared members to current scope
     current_scope().get_fields().insert(member_declarations.begin(), member_declarations.end());
 
+    // Traits validation.
+    // Traits and abstract classes interop?
+    for (auto& requirement : requirements) {
+        if (!current_scope().has_field(requirement)) {
+            assert(false && "Failed trait requirement.");
+        }
+    }
+
     for (auto &method: methods) {
         std::string method_name = method->function->name.get_lexeme(source);
         if (!method->attributes[ClassAttributes::ABSTRACT]) {
@@ -797,7 +856,8 @@ void Compiler::object_expression(const ObjectExpr &expr) {
     emit(OpCode::NIL);
     define_variable("$scope_return");
 
-    class_core(std::get<Context::LocalResolution>(current_context().resolve_variable(name)).slot, expr.super_class, expr.methods, expr.fields, false);
+    // TODO: traits in objects.
+    class_core(std::get<Context::LocalResolution>(current_context().resolve_variable(name)).slot, expr.super_class, expr.methods, expr.fields, {}, false);
 
     object_constructor(expr.fields, expr.super_class.has_value(), expr.superclass_arguments);
     emit(OpCode::CONSTRUCTOR);
@@ -880,7 +940,7 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
     emit(OpCode::NIL);
     define_variable("$scope_return");
 
-    class_core(std::get<Context::LocalResolution>(current_context().resolve_variable(name)).slot, stmt.super_class, stmt.methods, stmt.fields, stmt.is_abstract);
+    class_core(std::get<Context::LocalResolution>(current_context().resolve_variable(name)).slot, stmt.super_class, stmt.methods, stmt.fields, stmt.using_statements, stmt.is_abstract);
 
     if (stmt.constructor) {
         current_scope().constructor_argument_count = stmt.constructor->parameters.size();
