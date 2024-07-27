@@ -68,7 +68,7 @@ struct Token {
         CONTINUE,
         NONE,
         MATCH,
-        RETURN, SUPER, LET, WHILE, TILDE, NATIVE ,FOR, LABEL, COLON, PRIVATE, ABSTRACT, OVERRDIE, OBJECT, TRAIT
+        RETURN, SUPER, LET, WHILE, TILDE, NATIVE ,FOR, LABEL, COLON, PRIVATE, ABSTRACT, OVERRDIE, OBJECT, TRAIT,
         END // NOTE: Type END must always be last element in this enum.
     };
 

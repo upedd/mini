@@ -312,6 +312,29 @@ public:
     std::unordered_map<std::string, ClassValue> properties;
 };
 
+// TODO: investigate simpler runtime representation of traits maybe as classes?
+class Trait : public Object {
+public:
+    explicit Trait(std::string name) : name(std::move(name)) {}
+
+    std::size_t get_size() override {
+       return sizeof(Trait);
+    }
+
+    std::string to_string() override {
+        return std::string("<trait>"); // TODO: implement
+    }
+
+    void mark_references(GarbageCollector &gc) override {
+        for (auto& method: methods) {
+            gc.mark(method);
+        }
+    }
+
+    std::string name;
+    std::vector<Closure*> methods;
+    std::vector<std::string> requirements;
+};
 
 /**
  * klass = class context where method is dispatched

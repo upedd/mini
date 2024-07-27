@@ -823,16 +823,36 @@ void Compiler::object_statement(const ObjectStmt &stmt) {
 void Compiler::trait_statement(const TraitStmt &stmt) {
     std::string name = stmt.name.get_lexeme(source);
     uint8_t name_constanst = current_function()->add_constant(name);
+
     emit(OpCode::TRAIT, name_constanst);
+    current_scope().define(name);
+    // non-expression scopes!
+    begin_scope(ScopeType::CLASS, name);
+    emit(OpCode::NIL);
+    current_scope().define("$scope_exit");
+    // TODO: fields support!
+    resolve_variable(name);
+    // hoist methods
     for (auto& method : stmt.methods) {
-        if (method->function->body) {
-            visit_expr(*method->function->body);
+        std::string method_name = method->function->name.get_lexeme(source);
+        if (current_scope().has_field(method_name)) {
+            assert(false && "member redeclaration is disallowed.");
         }
-
+        current_scope().add_field(method_name, FieldInfo(method->attributes));
     }
-    for (auto& field : stmt.fields) {
 
+    for (auto& method : stmt.methods) {
+        if (!method->attributes[ClassAttributes::ABSTRACT]) {
+            function(*method->function, FunctionType::METHOD);
+        }
+        int method_name_constant = current_function()->add_constant(method->function->name.get_lexeme(source));
+        emit(OpCode::TRAIT_METHOD, method_name_constant);
+        emit(method->attributes.to_ullong()); // check!
     }
+    emit(OpCode::POP); // pop instance.
+    end_scope();
+    emit(OpCode::POP);
+    current_scope().pop_temporary();
 }
 
 void Compiler::class_declaration(const ClassStmt &stmt) {

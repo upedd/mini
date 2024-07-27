@@ -807,6 +807,30 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 }
                 break;
             }
+            case OpCode::TRAIT: {
+                // TODO: trait objects?
+                int constant_idx = fetch();
+                auto name = get_constant(constant_idx).get<std::string>();
+                auto *trait = new Trait(name);
+                push(trait);
+                allocate(trait);
+                break;
+            }
+
+            case OpCode::TRAIT_METHOD: {
+                int constant_idx = fetch();
+                auto name = get_constant(constant_idx).get<std::string>();
+                bitflags<ClassAttributes> attributes(fetch());
+                if (attributes[ClassAttributes::ABSTRACT]) {
+                    Trait* trait = dynamic_cast<Trait*>(peek().get<Object*>());
+                    trait->requirements.push_back(name);
+                } else {
+                    Trait* trait = dynamic_cast<Trait*>(peek(1).get<Object*>());
+                    Closure* closure = dynamic_cast<Closure*>(pop().get<Object*>());
+                    trait->methods.push_back(closure);
+                }
+                break;
+            }
         }
         // for (int i = 0; i < stack_index; ++i) {
         //     std::cout << '[' << stack[i].to_string() << "] ";

@@ -243,6 +243,9 @@ inline std::string stmt_to_string(const Stmt &stmt, std::string_view source) {
                           },
                           [](const ObjectStmt &stmt) {
                               return std::string("object"); // TODO: implement!
+                          },
+                          [](const TraitStmt& stmt) {
+                              return std::string("trait"); // TODO: implement!
                           }
                       }, stmt);
 }

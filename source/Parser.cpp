@@ -398,8 +398,8 @@ Parser::StructureMembers Parser::structure_body(StructureType type) {
                     }
                     consume(Token::Type::RIGHT_PAREN, "Expected ')' after function parameters");
                 }
-                std::vector<ExprHandle> function_arguments = arguments_list();
                 if (check(Token::Type::SEMICOLON)) {
+                    attributes += ClassAttributes::ABSTRACT;
                     advance();
                     members.methods.push_back(std::make_unique<MethodStmt>(std::make_unique<FunctionStmt>(name, std::move(parameters), nullptr), attributes));
                 } else {

@@ -229,6 +229,10 @@ inline void Disassembler::disassemble(const std::string& name) {
                 constant_inst("TRAIT");
                 break;
             }
+            case OpCode::TRAIT_METHOD: {
+                class_inst("CLASS_METHOD");
+                break;
+            }
         }
     }
 }
