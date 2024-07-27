@@ -343,6 +343,35 @@ Stmt Parser::trait_declaration() {
 }
 
 
+UsingStmt Parser::using_statement() {
+    // TODO: do this better!
+    std::vector<UsingStmtItem> items;
+    do {
+        consume(Token::Type::IDENTIFIER, "Identifier expected");
+        Token trait_name = current;
+        std::vector<Token> exclusions;
+        std::vector<std::pair<Token, Token>> aliases;
+        if (match(Token::Type::LEFT_PAREN)) {
+            do {
+                if (match(Token::Type::EXCLUDE)) {
+                    consume(Token::Type::IDENTIFIER, "Expected identifer after 'exclude'.");
+                    exclusions.push_back(current);
+                } else { // rename
+                    consume(Token::Type::IDENTIFIER, "Expected identifer or 'exclude'.");
+                    Token before = current;
+                    consume(Token::Type::AS, "Expected 'as' after identifier.");
+                    consume(Token::Type::IDENTIFIER, "Expected identifer after 'as'.");
+                    Token after = current;
+                    aliases.emplace_back(before, after);
+                }
+            } while (match(Token::Type::COMMA));
+            consume(Token::Type::RIGHT_PAREN, "Expected ')' after using trait parameters.");
+        }
+        items.emplace_back(trait_name, std::move(exclusions), std::move(aliases));
+    } while (match(Token::Type::COMMA));
+    consume(Token::Type::SEMICOLON, "Expected ';' after using statement.");
+    return UsingStmt(std::move(items));
+}
 
 Parser::StructureMembers Parser::structure_body(StructureType type) {
     // refactor: still kinda messy?
@@ -352,6 +381,11 @@ Parser::StructureMembers Parser::structure_body(StructureType type) {
             advance();
             if (type == StructureType::OBJECT) error(current, "Class objects cannot be defined inside of objects.");
             members.class_object = make_expr_handle(object_expression());
+            continue;
+        }
+        if (check(Token::Type::USING)) {
+            advance();
+            members.using_statements.push_back(std::make_unique<UsingStmt>(using_statement()));
             continue;
         }
         bitflags<ClassAttributes> attributes = member_attributes(type);

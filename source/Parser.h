@@ -138,7 +138,10 @@ private:
         std::vector<std::unique_ptr<FieldStmt>> fields;
         std::unique_ptr<ConstructorStmt> constructor;
         ExprHandle class_object;
+        std::vector<std::unique_ptr<UsingStmt>> using_statements;
     };
+
+    UsingStmt using_statement();
 
     StructureMembers structure_body(StructureType type);
     bitflags<ClassAttributes> member_attributes(StructureType outer_type);

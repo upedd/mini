@@ -39,6 +39,7 @@ struct MethodStmt;
 struct ConstructorStmt;
 struct ObjectStmt;
 struct TraitStmt;
+struct UsingStmt;
 
 using Expr = std::variant<LiteralExpr, StringLiteral, UnaryExpr, BinaryExpr, VariableExpr, CallExpr, GetPropertyExpr,
     SuperExpr, BlockExpr, IfExpr, LoopExpr, BreakExpr, ContinueExpr, WhileExpr, ForExpr, ReturnExpr, ThisExpr,
@@ -46,7 +47,7 @@ using Expr = std::variant<LiteralExpr, StringLiteral, UnaryExpr, BinaryExpr, Var
 using ExprHandle = std::unique_ptr<Expr>;
 
 using Stmt = std::variant<VarStmt, ExprStmt, FunctionStmt, ClassStmt, NativeStmt, FieldStmt, MethodStmt,
-    ConstructorStmt, ObjectStmt, TraitStmt>;
+    ConstructorStmt, ObjectStmt, TraitStmt, UsingStmt>;
 using StmtHandle = std::unique_ptr<Stmt>;
 
 struct UnaryExpr {
@@ -201,6 +202,16 @@ struct TraitStmt {
     std::vector<std::unique_ptr<FieldStmt>> fields;
 };
 
+struct UsingStmtItem {
+    Token name;
+    std::vector<Token> exclusions;
+    std::vector<std::pair<Token, Token>> aliases;
+};
+
+struct UsingStmt {
+    std::vector<UsingStmtItem> items;
+};
+
 inline std::string expr_to_string(const Expr &expr, std::string_view source);
 
 inline std::string stmt_to_string(const Stmt &stmt, std::string_view source) {
@@ -246,6 +257,9 @@ inline std::string stmt_to_string(const Stmt &stmt, std::string_view source) {
                           },
                           [](const TraitStmt& stmt) {
                               return std::string("trait"); // TODO: implement!
+                          },
+                          [](const UsingStmt& stmt) {
+                              return std::string("using"); // TODO: implement!
                           }
                       }, stmt);
 }

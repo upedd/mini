@@ -209,6 +209,12 @@ Token Lexer::keyword_or_identifier() {
         return make_token(Token::Type::OBJECT);
     } else if (current == "trait") {
         return make_token(Token::Type::TRAIT);
+    } else if (current == "using") {
+        return make_token(Token::Type::USING);
+    } else if (current == "as") {
+        return make_token(Token::Type::AS);
+    } else if (current == "exclude") {
+        return make_token(Token::Type::EXCLUDE);
     }
     return make_token(Token::Type::IDENTIFIER);
 }
