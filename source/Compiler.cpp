@@ -260,6 +260,7 @@ void Compiler::visit_stmt(const Stmt &statement) {
                    [this](const ClassStmt &stmt) { class_declaration(stmt); },
                    [this](const NativeStmt &stmt) { native_declaration(stmt); },
                    [this](const ObjectStmt& stmt) {object_statement(stmt);},
+                   [this](const TraitStmt& stmt) {trait_statement(stmt);},
                    [this](const MethodStmt &) { assert("unreachable"); },
                    [this](const FieldStmt &) { assert("unreachable"); },
                    [this](const ConstructorStmt &) { assert("unreachable"); }
@@ -817,6 +818,21 @@ void Compiler::object_statement(const ObjectStmt &stmt) {
     visit_expr(*stmt.object);
     current_scope().pop_temporary();
     define_variable(stmt.name.get_lexeme(source));
+}
+
+void Compiler::trait_statement(const TraitStmt &stmt) {
+    std::string name = stmt.name.get_lexeme(source);
+    uint8_t name_constanst = current_function()->add_constant(name);
+    emit(OpCode::TRAIT, name_constanst);
+    for (auto& method : stmt.methods) {
+        if (method->function->body) {
+            visit_expr(*method->function->body);
+        }
+
+    }
+    for (auto& field : stmt.fields) {
+
+    }
 }
 
 void Compiler::class_declaration(const ClassStmt &stmt) {

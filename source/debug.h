@@ -223,6 +223,11 @@ inline void Disassembler::disassemble(const std::string& name) {
             }
             case OpCode::SET_SUPER: {
                 constant_inst("SET_SUPER");
+                break;
+            }
+            case OpCode::TRAIT: {
+                constant_inst("TRAIT");
+                break;
             }
         }
     }

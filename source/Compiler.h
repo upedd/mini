@@ -168,6 +168,8 @@ public:
 
     void object_statement(const ObjectStmt & stmt);
 
+    void trait_statement(const TraitStmt & stmt);
+
 private:
     void start_context(Function *function, FunctionType type);
     void end_context();
