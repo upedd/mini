@@ -139,6 +139,7 @@ struct ObjectExpr {
     std::vector<std::unique_ptr<FieldStmt> > fields;
     std::optional<Token> super_class;
     std::vector<ExprHandle> superclass_arguments;
+    std::vector<std::unique_ptr<UsingStmt>> using_stmts;
 };
 
 inline ExprHandle make_expr_handle(Expr expr) {
@@ -201,6 +202,7 @@ struct TraitStmt {
     Token name;
     std::vector<std::unique_ptr<MethodStmt>> methods;
     std::vector<std::unique_ptr<FieldStmt>> fields;
+    std::vector<std::unique_ptr<UsingStmt>> using_stmts;
 };
 
 struct UsingStmtItem {

@@ -105,7 +105,7 @@ void Compiler::start_context(Function *function, FunctionType type) {
     current_context().scopes.emplace_back(ScopeType::BLOCK, 0); // TODO: should be function?
 }
 
-//#define COMPILER_PRINT_BYTECODE
+#define COMPILER_PRINT_BYTECODE
 
 void Compiler::end_context() {
 #ifdef COMPILER_PRINT_BYTECODE
@@ -636,8 +636,7 @@ void Compiler::class_core(int class_slot, std::optional<Token> super_class, cons
     for (auto& stmt : using_stmts) {
         for (auto& item : stmt->items) {
             std::string item_name = item.name.get_lexeme(source);
-            emit(OpCode::GET,
-             std::get<Context::LocalResolution>(current_context().resolve_variable(item_name)).slot);
+
             auto trait_fields = current_context().resolved_classes[item_name].fields;
             for (auto& [field_name, info] : trait_fields) {
                 // check if excluded
@@ -670,14 +669,16 @@ void Compiler::class_core(int class_slot, std::optional<Token> super_class, cons
                 if (member_declarations.contains(aliased_name)) {
                     assert(false && "Member redeclaration is disallowed.");
                 }
-                member_declarations[field_name] = info;
+                member_declarations[aliased_name] = info;
                 int field_name_constant = current_function()->add_constant(field_name);
+                // TODO: performance
+                emit(OpCode::GET,
+             std::get<Context::LocalResolution>(current_context().resolve_variable(item_name)).slot);
                 emit(OpCode::GET_TRAIT, field_name_constant);
-                int aliased_name_constant = current_function()->add_constant(field_name);
+                int aliased_name_constant = current_function()->add_constant(aliased_name);
                 emit(OpCode::METHOD, aliased_name_constant);
                 emit(info.attributes.to_ullong());
             }
-            emit(OpCode::POP);
         }
     }
 
@@ -857,7 +858,7 @@ void Compiler::object_expression(const ObjectExpr &expr) {
     define_variable("$scope_return");
 
     // TODO: traits in objects.
-    class_core(std::get<Context::LocalResolution>(current_context().resolve_variable(name)).slot, expr.super_class, expr.methods, expr.fields, {}, false);
+    class_core(std::get<Context::LocalResolution>(current_context().resolve_variable(name)).slot, expr.super_class, expr.methods, expr.fields, expr.using_stmts, false);
 
     object_constructor(expr.fields, expr.super_class.has_value(), expr.superclass_arguments);
     emit(OpCode::CONSTRUCTOR);
@@ -892,6 +893,57 @@ void Compiler::trait_statement(const TraitStmt &stmt) {
     current_scope().define("$scope_exit");
     // TODO: fields support!
     resolve_variable(name);
+    std::unordered_set<std::string> requirements;
+    // Traits!
+    for (auto& stmt : stmt.using_stmts) {
+        for (auto& item : stmt->items) {
+            std::string item_name = item.name.get_lexeme(source);
+
+            auto trait_fields = current_context().resolved_classes[item_name].fields;
+            for (auto& [field_name, info] : trait_fields) {
+                // check if excluded
+                bool is_excluded = false;
+                // possibly use some ranges here
+                for (auto& exclusion : item.exclusions) {
+                    if (exclusion.get_lexeme(source) == field_name) {
+                        is_excluded = true;
+                        break;
+                    }
+                }
+                if (is_excluded || info.attributes[ClassAttributes::ABSTRACT]) {
+                    requirements.insert(field_name);
+                    // warn about useless exclude?
+                    continue;
+                }
+                // should aliasing methods that are requierments be allowed?
+                std::string aliased_name = field_name;
+                for (auto& [before, after] : item.aliases) {
+                    if (before.get_lexeme(source) == field_name) {
+                        aliased_name = after.get_lexeme(source);
+                        break;
+                    }
+                }
+                if (current_scope().has_field(aliased_name)) {
+                    // if field is already declared in current scope then it comes from superclass
+                    assert(false && "Should overwrite.");
+                }
+                // better error here
+                if (current_scope().has_field(aliased_name)) {
+                    assert(false && "Member redeclaration is disallowed.");
+                }
+                current_scope().add_field(aliased_name, info);
+                int field_name_constant = current_function()->add_constant(field_name);
+                // TODO: performance
+                emit(OpCode::GET,
+             std::get<Context::LocalResolution>(current_context().resolve_variable(item_name)).slot);
+                emit(OpCode::GET_TRAIT, field_name_constant);
+                int aliased_name_constant = current_function()->add_constant(aliased_name);
+                emit(OpCode::TRAIT_METHOD, aliased_name_constant);
+                emit(info.attributes.to_ullong());
+            }
+        }
+    }
+
     // hoist methods
     for (auto& method : stmt.methods) {
         std::string method_name = method->function->name.get_lexeme(source);
@@ -909,7 +961,21 @@ void Compiler::trait_statement(const TraitStmt &stmt) {
         emit(OpCode::TRAIT_METHOD, method_name_constant);
         emit(method->attributes.to_ullong()); // check!
     }
-    emit(OpCode::POP); // pop instance.
+
+    // shadowing requierments?
+    for (auto& requierment : requirements) {
+        if (!current_scope().has_field(requierment)) {
+            // pass requirements down
+            int constant_idx = current_function()->add_constant(requierment);
+            emit(OpCode::TRAIT_METHOD, constant_idx);
+            // TODO: pass attributes also!
+            bitflags<ClassAttributes> attr;
+            attr += ClassAttributes::ABSTRACT;
+            emit(attr.to_ullong());
+        }
+    }
+
+
     end_scope();
     emit(OpCode::POP);
     current_scope().pop_temporary();

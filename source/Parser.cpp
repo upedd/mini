@@ -338,7 +338,8 @@ Stmt Parser::trait_declaration() {
     return TraitStmt {
         .name = name,
         .methods = std::move(members.methods),
-        .fields = std::move(members.fields)
+        .fields = std::move(members.fields),
+        .using_stmts = std::move(members.using_statements)
     };
 }
 
@@ -482,7 +483,8 @@ ObjectExpr Parser::object_expression() {
         .methods = std::move(members.methods),
         .fields = std::move(members.fields),
         .super_class = superclass,
-        .superclass_arguments = std::move(superclass_arguments)
+        .superclass_arguments = std::move(superclass_arguments),
+        .using_stmts = std::move(members.using_statements)
     };
 }
 

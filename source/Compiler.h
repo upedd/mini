@@ -203,6 +203,8 @@ private:
 
     void default_constructor(const std::vector<std::unique_ptr<FieldStmt>> &fields, bool has_superclass);
 
+    void using_core(const std::vector<std::unique_ptr<UsingStmt>> &using_stmts);
+
     void class_core(int class_slot, std::optional<Token> super_class, const std::vector<std::unique_ptr<MethodStmt>> &methods, const std::
                     vector<std::unique_ptr<FieldStmt>> &fields, const std::vector<std::unique_ptr<UsingStmt>> &using_stmts, bool
                     is_abstract);
