@@ -2,8 +2,10 @@
 #define LEXER_H
 #include <expected>
 #include <istream>
+#include <vector>
 
 #include "Token.h"
+#include "shared/SharedContext.h"
 
 // maybe lexer should work on streams
 // should be an easy rewrite if needed.
@@ -19,7 +21,7 @@ public:
         std::string message;
     };
 
-    explicit Lexer(const std::string_view source) : source(source) {};
+    explicit Lexer(const std::string_view source, SharedContext* context) : source(source) {};
 
 
 
@@ -35,7 +37,7 @@ private:
     void skip_whitespace();
     void consume_identifier();
 
-    [[nodiscard]] Token make_token(Token::Type type) const;
+    [[nodiscard]] Token make_token(Token::Type type);
     [[nodiscard]] std::unexpected<Error> make_error(const std::string &message) const;
 
     Token keyword_or_identifier();
@@ -47,6 +49,9 @@ private:
     int start_pos = 0;
 
     std::string_view source;
+    // buffer for literals
+    std::string buffer;
+    SharedContext* context;
 };
 
 

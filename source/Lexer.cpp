@@ -103,7 +103,9 @@ std::string_view Lexer::get_source() const {
 
 char Lexer::advance() {
     if (current_pos >= source.size()) return '\0';
-    return source[current_pos++];
+    char c = source[current_pos++];
+    buffer.push_back(c);
+    return c;
 }
 
 char Lexer::current() const {
@@ -141,8 +143,10 @@ void Lexer::consume_identifier() {
     }
 }
 
-Token Lexer::make_token(Token::Type type) const {
-    return {.type = type, .source_offset = start_pos, .length = current_pos - start_pos};
+Token Lexer::make_token(Token::Type type) {
+    Token token = {.type = type, .source_offset = start_pos, .length = current_pos - start_pos, .string = context->intern(buffer)};
+    buffer.clear();
+    return token;
 }
 
 std::unexpected<Lexer::Error> Lexer::make_error(const std::string& message) const {

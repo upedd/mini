@@ -27,7 +27,7 @@ public:
 
     const std::vector<Error>& get_errors();
 
-    explicit Parser(const std::string_view source) : lexer(source) {}
+    explicit Parser(const std::string_view source, SharedContext* context) : lexer(source, context) {}
 
     std::vector<Stmt> parse();
 private:

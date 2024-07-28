@@ -30,4 +30,7 @@ add_executable(bite source/main.cpp
         source/debug.h
         source/GarbageCollector.cpp
         source/GarbageCollector.h
+        source/parser/perfect_map.h
+        source/shared/StringTable.h
+        source/shared/Context.h
 )

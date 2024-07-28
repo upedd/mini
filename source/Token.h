@@ -1,5 +1,6 @@
 #ifndef TOKEN_H
 #define TOKEN_H
+#include "shared/StringTable.h"
 
 struct Token {
     // todo: organize
@@ -74,7 +75,8 @@ struct Token {
 
     Type type = Type::NONE;
     int source_offset = 0;
-    int length = 0;
+    int length; // ideally eliminate length
+    StringTable::Handle string;
 
     static std::string type_to_string(Type type);
 

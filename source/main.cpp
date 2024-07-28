@@ -4,7 +4,6 @@
 #include <sstream>
 
 #include "Compiler.h"
-#include "debug.h"
 #include "VM.h"
 
 int main(int argc, char** argv) {
@@ -16,8 +15,9 @@ int main(int argc, char** argv) {
     std::ifstream in(argv[1]);
     std::stringstream ss;
     ss << in.rdbuf();
+    SharedContext context;
     std::string source = ss.str();
-    Compiler compiler(source);
+    Compiler compiler(source, &context);
     compiler.compile();
     auto& func = compiler.get_main();
     Disassembler disassembler(func);
