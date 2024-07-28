@@ -821,13 +821,37 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 int constant_idx = fetch();
                 auto name = get_constant(constant_idx).get<std::string>();
                 bitflags<ClassAttributes> attributes(fetch());
+                // TODO: abstract getters and setters
+                // TODO: too much duplication
                 if (attributes[ClassAttributes::ABSTRACT]) {
                     Trait* trait = dynamic_cast<Trait*>(peek().get<Object*>());
                     trait->requirements.push_back(name);
                 } else {
                     Trait* trait = dynamic_cast<Trait*>(peek(1).get<Object*>());
-                    Closure* closure = dynamic_cast<Closure*>(pop().get<Object*>());
-                    trait->methods.push_back(closure);
+                    // mess!
+                    if (attributes[ClassAttributes::GETTER]) {
+                        if (!trait->fields[name].is_computed) {
+                            trait->fields[name].is_computed = true;
+                            auto* property = new ComputedProperty {};
+                            trait->fields[name].value = property;
+                            allocate(property);
+                        }
+                        auto* computed_property = dynamic_cast<ComputedProperty *>(trait->fields[name].value.get<Object*>());
+                        computed_property->get = ClassMethod {.value = {.value = peek(), .attributes = attributes}, .owner = nullptr}; //?
+                        trait->fields[name].attributes += ClassAttributes::GETTER;
+                    } else if (attributes[ClassAttributes::SETTER]) {
+                        if (!trait->fields[name].is_computed) {
+                            trait->fields[name].is_computed = true;
+                            auto* property = new ComputedProperty {};
+                            trait->fields[name].value = property;
+                            allocate(property);
+                        }
+                        auto* computed_property = dynamic_cast<ComputedProperty *>(trait->fields[name].value.get<Object*>());
+                        computed_property->set = ClassMethod {.value = {.value = peek(), .attributes = attributes}, .owner = nullptr}; //?
+                        trait->fields[name].attributes += ClassAttributes::SETTER;
+                    } else {
+                        trait->methods[name] = ClassValue {.value = peek(), .attributes = attributes, .is_computed = false};
+                    }
                 }
                 break;
             }
@@ -836,19 +860,19 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 auto name = get_constant(constant_idx).get<std::string>();
                 Trait* trait = dynamic_cast<Trait*>(pop().get<Object*>());
                 // TODO: performance
-                for (auto& closure : trait->methods) {
-                    if (closure->get_function()->get_name() == name) {
-                        push(closure);
-                        break;
-                    }
-                }
+                // for (auto& closure : trait->methods) {
+                //     if (closure->get_function()->get_name() == name) {
+                //         push(closure);
+                //         break;
+                //     }
+                // }
                 break;
             }
         }
-        for (int i = 0; i < stack_index; ++i) {
-            std::cout << '[' << stack[i].to_string() << "] ";
-        }
-        std::cout << '\n';
+        // for (int i = 0; i < stack_index; ++i) {
+        //     std::cout << '[' << stack[i].to_string() << "] ";
+        // }
+        // std::cout << '\n';
     }
 #undef BINARY_OPERATION
 }

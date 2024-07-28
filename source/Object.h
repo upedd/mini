@@ -330,13 +330,17 @@ public:
     }
 
     void mark_references(GarbageCollector &gc) override {
-        for (auto& method: methods) {
-            gc.mark(method);
+        for (auto &method: methods | std::views::values) {
+            gc.mark(method.value);
+        }
+        for (auto &method: fields | std::views::values) {
+            gc.mark(method.value);
         }
     }
 
     std::string name;
-    std::vector<Closure*> methods;
+    std::unordered_map<std::string, ClassValue> methods;
+    std::unordered_map<std::string, ClassValue> fields;
     std::vector<std::string> requirements;
 };
 

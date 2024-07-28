@@ -923,10 +923,6 @@ void Compiler::trait_statement(const TraitStmt &stmt) {
                         break;
                     }
                 }
-                if (current_scope().has_field(aliased_name)) {
-                    // if field is already declared in current scope then it comes from superclass
-                    assert(false && "Should overwrite.");
-                }
                 // better error here
                 if (current_scope().has_field(aliased_name)) {
                     assert(false && "Member redeclaration is disallowed.");
@@ -944,13 +940,34 @@ void Compiler::trait_statement(const TraitStmt &stmt) {
         }
     }
 
+    // mess
+    for (auto& field : stmt.fields) {
+        std::string field_name = field->variable->name.get_lexeme(source);
+        if (current_scope().has_field(field_name)) {
+            assert(false && "field redeclaration is disallowed.");
+        }
+        current_scope().add_field(field_name, FieldInfo(field->attributes));
+    }
+
     // hoist methods
     for (auto& method : stmt.methods) {
         std::string method_name = method->function->name.get_lexeme(source);
+        bool partially_defined = false;
         if (current_scope().has_field(method_name)) {
-            assert(false && "member redeclaration is disallowed.");
+            if ((current_scope().get_fields()[name].attributes[ClassAttributes::GETTER] && method->attributes[ClassAttributes::SETTER]) ||
+              (current_scope().get_fields()[name].attributes[ClassAttributes::SETTER] && method->attributes[ClassAttributes::GETTER])) {
+                partially_defined = true;
+              } else {
+                  assert(false && "member redeclaration is disallowed.");
+              }
+
         }
-        current_scope().add_field(method_name, FieldInfo(method->attributes));
+        if (partially_defined) {
+            // this does not allowed visibility fields
+            current_scope().get_fields()[method_name].attributes += current_scope().get_fields()[method_name].attributes[ClassAttributes::GETTER] ? ClassAttributes::SETTER : ClassAttributes::GETTER;
+        } else {
+            current_scope().add_field(method_name, FieldInfo(method->attributes));
+        }
     }
 
     for (auto& method : stmt.methods) {

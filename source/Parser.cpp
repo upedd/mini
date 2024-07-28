@@ -404,6 +404,7 @@ Parser::StructureMembers Parser::structure_body(StructureType type) {
             attributes += ClassAttributes::GETTER;
             attributes += ClassAttributes::SETTER;
             if (type == StructureType::TRAIT) {
+                attributes += ClassAttributes::ABSTRACT;
                 if (!check(Token::Type::SEMICOLON)) error(current, "Expected ';' after trait declared field.");
                 members.fields.push_back(std::make_unique<FieldStmt>(
                         std::make_unique<VarStmt>(abstract_field(name)), attributes
@@ -422,7 +423,7 @@ Parser::StructureMembers Parser::structure_body(StructureType type) {
         } else {
             // TODO: validate get and setters function have expected number of arguments
             if (type == StructureType::TRAIT) {
-                bool skip_params = false; // TODO
+                bool skip_params = attributes[ClassAttributes::GETTER] && !check(Token::Type::LEFT_PAREN);
                 std::vector<Token> parameters;
                 if (!skip_params) {
                     consume(Token::Type::LEFT_PAREN, "Expected '(' after function name");
