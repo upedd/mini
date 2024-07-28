@@ -4,6 +4,7 @@
 #include <string_view>
 #include <vector>
 #include <ranges>
+#include <cstdint>
 
 /**
  * Compile time constructed unordered map with O(1) worst case lookup thanks to perfect hashing.

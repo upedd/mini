@@ -3,6 +3,7 @@
 #include <expected>
 
 #include "common.h"
+#include "parser/perfect_map.h"
 
 std::expected<Token, Lexer::Error> Lexer::next_token() {
     skip_whitespace();
@@ -148,6 +149,39 @@ std::unexpected<Lexer::Error> Lexer::make_error(const std::string& message) cons
     return std::unexpected<Error>({start_pos, message});
 }
 
+constexpr perfect_map<Token::Type, 30> identifiers({{
+    {"class", Token::Type::CLASS},
+    {"fun", Token::Type::FUN},
+    {"return", Token::Type::RETURN},
+    {"if", Token::Type::IF},
+    {"is", Token::Type::IS},
+    {"in", Token::Type::IN},
+    {"break", Token::Type::BREAK},
+    {"continue", Token::Type::CONTINUE},
+    {"match", Token::Type::MATCH},
+    {"true", Token::Type::TRUE},
+    {"false", Token::Type::FALSE},
+    {"else", Token::Type::ELSE},
+    {"this", Token::Type::THIS},
+    {"loop", Token::Type::LOOP},
+    {"super", Token::Type::SUPER},
+    {"nil", Token::Type::NIL},
+    {"let", Token::Type::LET},
+    {"while", Token::Type::WHILE},
+    {"native", Token::Type::NATIVE},
+    {"for", Token::Type::FOR},
+    {"private", Token::Type::PRIVATE},
+    {"abstract", Token::Type::ABSTRACT},
+    {"override", Token::Type::OVERRDIE},
+    {"get", Token::Type::GET},
+    {"set", Token::Type::SET},
+    {"object", Token::Type::OBJECT},
+    {"trait", Token::Type::TRAIT},
+    {"exclude", Token::Type::EXCLUDE},
+    {"as", Token::Type::AS},
+    {"using", Token::Type::USING}
+}});
+
 Token Lexer::keyword_or_identifier() {
     // maybe optimize like v8 https://github.com/v8/v8/blob/e77eebfe3b747fb315bd3baad09bec0953e53e68/src/parsing/scanner.cc#L1643
     // bench if worth additional complexity
@@ -155,66 +189,8 @@ Token Lexer::keyword_or_identifier() {
     int size = current_pos - start_pos;
     std::string_view current = source.substr(start_pos, size);
 
-    if (current == "class") {
-        return make_token(Token::Type::CLASS);
-    } else if (current == "fun") {
-        return make_token(Token::Type::FUN);
-    } else if (current == "return") {
-        return make_token(Token::Type::RETURN);
-    } else if (current == "if") {
-        return make_token(Token::Type::IF);
-    } else if (current == "is") {
-        return make_token(Token::Type::IS);
-    } else if (current == "in") {
-        return make_token(Token::Type::IN);
-    } else if (current == "break") {
-        return make_token(Token::Type::BREAK);
-    } else if (current == "continue") {
-        return make_token(Token::Type::CONTINUE);
-    } else if (current == "match") {
-        return make_token(Token::Type::MATCH);
-    } else if (current == "true") {
-        return make_token(Token::Type::TRUE);
-    } else if (current == "false") {
-        return make_token(Token::Type::FALSE);
-    } else if (current == "else") {
-        return make_token(Token::Type::ELSE);
-    } else if (current == "this") {
-        return make_token(Token::Type::THIS);
-    } else if (current == "loop") {
-        return make_token(Token::Type::LOOP);
-    } else if (current == "super") {
-        return make_token(Token::Type::SUPER);
-    } else if (current == "nil") {
-        return make_token(Token::Type::NIL);
-    } else if (current == "let") {
-        return make_token(Token::Type::LET);
-    } else if (current == "while") {
-        return make_token(Token::Type::WHILE);
-    } else if (current == "native") {
-        return make_token(Token::Type::NATIVE);
-    } else if (current == "for") {
-        return make_token(Token::Type::FOR);
-    } else if (current == "private") {
-        return make_token(Token::Type::PRIVATE);
-    } else if (current == "abstract") {
-        return make_token(Token::Type::ABSTRACT);
-    } else if (current == "override") {
-        return make_token(Token::Type::OVERRDIE);
-    } else if (current == "get") {
-        return make_token(Token::Type::GET);
-    } else if (current == "set") {
-        return make_token(Token::Type::SET);
-    } else if (current == "object") {
-        return make_token(Token::Type::OBJECT);
-    } else if (current == "trait") {
-        return make_token(Token::Type::TRAIT);
-    } else if (current == "using") {
-        return make_token(Token::Type::USING);
-    } else if (current == "as") {
-        return make_token(Token::Type::AS);
-    } else if (current == "exclude") {
-        return make_token(Token::Type::EXCLUDE);
+    if (std::optional<Token::Type> type = identifiers[current]) {
+        return make_token(*type);
     }
     return make_token(Token::Type::IDENTIFIER);
 }
