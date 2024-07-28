@@ -1,3 +1,5 @@
+native print;
+
 trait A {
     get a;
     set a(value);

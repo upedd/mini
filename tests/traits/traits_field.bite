@@ -1,3 +1,5 @@
+native print;
+
 trait A {
     a;
 

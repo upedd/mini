@@ -3,7 +3,7 @@ native print;
 trait A {
     get_text();
     display() {
-        print(bar());
+        print(get_text());
     }
 }
 
@@ -19,7 +19,7 @@ class C {
     using A, B;
 
     get_foo() {
-        return "B";
+        return "C";
     }
 }
 
