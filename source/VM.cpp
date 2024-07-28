@@ -852,20 +852,29 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                     } else {
                         trait->methods[name] = ClassValue {.value = peek(), .attributes = attributes, .is_computed = false};
                     }
+                    pop();
                 }
                 break;
             }
             case OpCode::GET_TRAIT: {
                 int constant_idx = fetch();
+                bitflags<ClassAttributes> attributes(fetch()); // hacky!
                 auto name = get_constant(constant_idx).get<std::string>();
                 Trait* trait = dynamic_cast<Trait*>(pop().get<Object*>());
                 // TODO: performance
-                // for (auto& closure : trait->methods) {
-                //     if (closure->get_function()->get_name() == name) {
-                //         push(closure);
-                //         break;
-                //     }
-                // }
+                if (trait->methods.contains(name)) {
+                    push(trait->methods[name].value);
+                }
+
+                if (trait->fields.contains(name)) {
+                    if (attributes[ClassAttributes::GETTER]) {
+                        auto* computed_property = dynamic_cast<ComputedProperty *>(trait->fields[name].value.get<Object*>());
+                        push(computed_property->get.value.value);
+                    } else {
+                        auto* computed_property = dynamic_cast<ComputedProperty *>(trait->fields[name].value.get<Object*>());
+                        push(computed_property->set.value.value);
+                    }
+                }
                 break;
             }
         }

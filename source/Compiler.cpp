@@ -672,12 +672,37 @@ void Compiler::class_core(int class_slot, std::optional<Token> super_class, cons
                 member_declarations[aliased_name] = info;
                 int field_name_constant = current_function()->add_constant(field_name);
                 // TODO: performance
-                emit(OpCode::GET,
-             std::get<Context::LocalResolution>(current_context().resolve_variable(item_name)).slot);
-                emit(OpCode::GET_TRAIT, field_name_constant);
-                int aliased_name_constant = current_function()->add_constant(aliased_name);
-                emit(OpCode::METHOD, aliased_name_constant);
-                emit(info.attributes.to_ullong());
+                   if (info.attributes[ClassAttributes::GETTER]) {
+                       emit(OpCode::GET,
+                std::get<Context::LocalResolution>(current_context().resolve_variable(item_name)).slot);
+                       emit(OpCode::GET_TRAIT, field_name_constant);
+                       bitflags<ClassAttributes> hack;
+                       hack += ClassAttributes::GETTER;
+                       emit(hack.to_ullong());
+                       int aliased_name_constant = current_function()->add_constant(aliased_name);
+                       emit(OpCode::METHOD, aliased_name_constant);
+                       emit(hack.to_ullong());
+                   }
+                   if (info.attributes[ClassAttributes::SETTER]) {
+                       emit(OpCode::GET,
+                std::get<Context::LocalResolution>(current_context().resolve_variable(item_name)).slot);
+                       emit(OpCode::GET_TRAIT, field_name_constant);
+                       bitflags<ClassAttributes> hack;
+                       hack += ClassAttributes::SETTER;
+                       emit(hack.to_ullong());
+                       int aliased_name_constant = current_function()->add_constant(aliased_name);
+                       emit(OpCode::METHOD, aliased_name_constant);
+                       emit(hack.to_ullong());
+                   }
+                if (!info.attributes[ClassAttributes::GETTER] && !info.attributes[ClassAttributes::SETTER]) {
+                    emit(OpCode::GET,
+                    std::get<Context::LocalResolution>(current_context().resolve_variable(item_name)).slot);
+                    emit(OpCode::GET_TRAIT, field_name_constant);
+                    emit(0);
+                    int aliased_name_constant = current_function()->add_constant(aliased_name);
+                    emit(OpCode::METHOD, aliased_name_constant);
+                    emit(info.attributes.to_ullong());
+                }
             }
         }
     }
@@ -929,13 +954,15 @@ void Compiler::trait_statement(const TraitStmt &stmt) {
                 }
                 current_scope().add_field(aliased_name, info);
                 int field_name_constant = current_function()->add_constant(field_name);
+                       emit(OpCode::GET,
+                std::get<Context::LocalResolution>(current_context().resolve_variable(item_name)).slot);
+                       emit(OpCode::GET_TRAIT, field_name_constant);
+                emit(0); // TODO HACK
+                       int aliased_name_constant = current_function()->add_constant(aliased_name);
+                       emit(OpCode::TRAIT_METHOD, aliased_name_constant);
+                       emit(info.attributes.to_ullong());
                 // TODO: performance
-                emit(OpCode::GET,
-             std::get<Context::LocalResolution>(current_context().resolve_variable(item_name)).slot);
-                emit(OpCode::GET_TRAIT, field_name_constant);
-                int aliased_name_constant = current_function()->add_constant(aliased_name);
-                emit(OpCode::TRAIT_METHOD, aliased_name_constant);
-                emit(info.attributes.to_ullong());
+
             }
         }
     }
@@ -953,14 +980,14 @@ void Compiler::trait_statement(const TraitStmt &stmt) {
     for (auto& method : stmt.methods) {
         std::string method_name = method->function->name.get_lexeme(source);
         bool partially_defined = false;
+        // TODO this allowes clashes with real methods???
         if (current_scope().has_field(method_name)) {
-            if ((current_scope().get_fields()[name].attributes[ClassAttributes::GETTER] && method->attributes[ClassAttributes::SETTER]) ||
-              (current_scope().get_fields()[name].attributes[ClassAttributes::SETTER] && method->attributes[ClassAttributes::GETTER])) {
+            if ((!current_scope().get_fields()[method_name].attributes[ClassAttributes::SETTER] && method->attributes[ClassAttributes::SETTER]) ||
+              (!current_scope().get_fields()[method_name].attributes[ClassAttributes::GETTER] && method->attributes[ClassAttributes::GETTER])) {
                 partially_defined = true;
               } else {
                   assert(false && "member redeclaration is disallowed.");
               }
-
         }
         if (partially_defined) {
             // this does not allowed visibility fields
