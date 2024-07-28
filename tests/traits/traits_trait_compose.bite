@@ -1,0 +1,29 @@
+native print;
+
+trait A {
+    get_text();
+    display() {
+        print(bar());
+    }
+}
+
+trait B {
+    using A;
+
+    get_foo();
+
+    get_text() {
+        return get_foo();
+    }
+}
+
+class C {
+    using B;
+
+    get_foo() {
+        return "C";
+    }
+}
+
+let instance = C();
+instance.display();
