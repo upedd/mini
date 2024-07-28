@@ -1,0 +1,63 @@
+trait A {
+    get a;
+    set a(value);
+
+    change() {
+        a = "foo";
+    }
+
+    display() {
+       print(a);
+    }
+}
+
+trait B {
+    using A;
+
+    get a {
+        print("B.a");
+        return "B";
+    }
+
+    set a(value) {
+        print("=B.a");
+    }
+}
+
+class C {
+    using A;
+    a = "C";
+}
+
+class D {
+    using A;
+    _a = "D";
+    get a {
+        print("D.a");
+        return _a;
+    }
+
+    set a(value) {
+        print("=D.a");
+        _a = value;
+    }
+}
+
+class E {
+    using B;
+}
+
+let c = C();
+c.display();
+c.change();
+c.display();
+
+let d = D();
+d.display();
+d.change();
+d.display();
+
+let e = E();
+e.display();
+e.change();
+e.display();

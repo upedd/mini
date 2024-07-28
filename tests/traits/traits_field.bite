@@ -1,0 +1,41 @@
+trait A {
+    a;
+
+    display() {
+        print(a);
+    }
+}
+
+trait B {
+    using A;
+
+    get a {
+        print("B.a");
+        return "B";
+    }
+}
+
+class C {
+    using A;
+
+    get a {
+        print("C.a");
+        return "C";
+    }
+}
+
+class D {
+    using A;
+    a = "D";
+}
+
+class E {
+    using B;
+}
+
+let c = C();
+c.display();
+let d = D();
+d.display();
+let e = E();
+e.display();
