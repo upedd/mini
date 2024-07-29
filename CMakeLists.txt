@@ -32,5 +32,7 @@ add_executable(bite source/main.cpp
         source/GarbageCollector.h
         source/parser/perfect_map.h
         source/shared/StringTable.h
-        source/shared/Context.h
+        source/shared/SharedContext.h
+        source/base/unordered_dense.h
+        source/base/common.h
 )
