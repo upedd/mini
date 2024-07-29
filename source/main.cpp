@@ -5,6 +5,8 @@
 
 #include "Compiler.h"
 #include "VM.h"
+#include "parser/ErrorPrettyPrinter.h"
+#include "shared/SharedContext.h"
 
 int main(int argc, char** argv) {
     // TODO error handling
@@ -16,6 +18,14 @@ int main(int argc, char** argv) {
     Compiler compiler(FileInputStream(argv[1]), &context);
     compiler.compile();
     auto& func = compiler.get_main();
+    std::vector<Lexer::Error> errors = context.get_errors();
+    if (!errors.empty()) {
+        ErrorPrettyPrinter printer(argv[1], std::list(errors.begin(), errors.end()));
+        printer.prepare_messages();
+        printer.print_messages();
+        int a;
+        std::cin >> a;
+    }
     // Disassembler disassembler(func);
     // disassembler.disassemble("main");
     auto& functions = compiler.get_functions();

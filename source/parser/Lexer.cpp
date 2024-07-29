@@ -4,6 +4,7 @@
 
 #include "../common.h"
 #include "../base/perfect_map.h"
+#include "../shared/SharedContext.h"
 
 std::expected<Token, Lexer::Error> Lexer::next_token() {
     skip_whitespace();
@@ -107,7 +108,8 @@ Token Lexer::make_token(const Token::Type type) {
     return { .type = type, .source_offset = start_pos, .string = string };
 }
 
-std::unexpected<Lexer::Error> Lexer::make_error(const std::string& message) const {
+std::unexpected<Lexer::Error> Lexer::make_error(const std::string& message) {
+    context->add_error(start_pos, stream.position() - start_pos, message);
     return std::unexpected<Error>({ start_pos, message });
 }
 

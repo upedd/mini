@@ -5,7 +5,8 @@
 
 #include "../Token.h"
 #include "InputStream.h"
-#include "../shared/SharedContext.h"
+
+class SharedContext;
 
 /**
  * Given input stream with code produces tokens.
@@ -27,7 +28,7 @@ private:
     void consume_identifier();
 
     [[nodiscard]] Token make_token(Token::Type type);
-    [[nodiscard]] std::unexpected<Error> make_error(const std::string& message) const;
+    [[nodiscard]] std::unexpected<Error> make_error(const std::string& message);
 
     Token keyword_or_identifier();
     std::expected<Token, Error> string();
