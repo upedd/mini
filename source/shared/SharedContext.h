@@ -10,6 +10,7 @@ public:
     StringTable::Handle intern(const std::string& string) {
         return string_table.intern(string);
     }
+
 private:
     StringTable string_table;
 };

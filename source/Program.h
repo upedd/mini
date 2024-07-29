@@ -22,5 +22,4 @@ private:
 };
 
 
-
 #endif //PROGRAM_H

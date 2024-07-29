@@ -5,17 +5,20 @@
 
 #include "conversions.h"
 
-void Parser::error(const Token &token, std::string_view message) {
-    if (panic_mode) return;
+void Parser::error(const Token& token, std::string_view message) {
+    if (panic_mode)
+        return;
     panic_mode = true;
     errors.emplace_back(token, message);
 }
 
 void Parser::synchronize() {
-    if (!panic_mode) return;
+    if (!panic_mode)
+        return;
     panic_mode = false;
     while (!check(Token::Type::END)) {
-        if (current.type == Token::Type::SEMICOLON) return;
+        if (current.type == Token::Type::SEMICOLON)
+            return;
 
         // synchonization points (https://www.ssw.uni-linz.ac.at/Misc/CC/slides/03.Parsing.pdf)
         // should synchronize on start of statement or declaration
@@ -25,14 +28,13 @@ void Parser::synchronize() {
             case Token::Type::IF:
             case Token::Type::WHILE:
             case Token::Type::FUN:
-            case Token::Type::RETURN:
-                return;
+            case Token::Type::RETURN: return;
             default: advance();
         }
     }
 }
 
-const std::vector<Parser::Error> &Parser::get_errors() {
+const std::vector<Parser::Error>& Parser::get_errors() {
     return errors;
 }
 
@@ -135,12 +137,12 @@ Expr Parser::for_expression(std::optional<Token> label) {
         error(current, "Expected '{' before loop body.");
     }
     Expr body = block();
-    return ForExpr{
-        .name = name,
-        .iterable = make_expr_handle(std::move(iterable)),
-        .body = make_expr_handle(std::move(body)),
-        .label = label
-    };
+    return ForExpr {
+            .name = name,
+            .iterable = make_expr_handle(std::move(iterable)),
+            .body = make_expr_handle(std::move(body)),
+            .label = label
+        };
 }
 
 Expr Parser::return_expression() {
@@ -149,20 +151,22 @@ Expr Parser::return_expression() {
         expr = make_expr_handle(expression());
         consume(Token::Type::SEMICOLON, "Exepected ';' after return value.");
     }
-    return ReturnExpr{std::move(expr)};
+    return ReturnExpr { std::move(expr) };
 }
 
 Stmt Parser::object_declaration() {
     consume(Token::Type::IDENTIFIER, "Expected object name.");
     Token name = current;
-    return ObjectStmt {
-        .name = name,
-        .object = make_expr_handle(object_expression())
-    };
+    return ObjectStmt { .name = name, .object = make_expr_handle(object_expression()) };
 }
 
 std::optional<Stmt> Parser::statement() {
-    auto exit = scope_exit([this] { if (panic_mode) synchronize(); });
+    auto exit = scope_exit(
+        [this] {
+            if (panic_mode)
+                synchronize();
+        }
+    );
 
     if (match(Token::Type::LET)) {
         return var_declaration();
@@ -195,9 +199,9 @@ Stmt Parser::var_declaration() {
 }
 
 VarStmt Parser::var_declaration_after_name(const Token name) {
-    Expr expr = match(Token::Type::EQUAL) ? expression() : LiteralExpr{nil_t};
+    Expr expr = match(Token::Type::EQUAL) ? expression() : LiteralExpr { nil_t };
     consume(Token::Type::SEMICOLON, "Expected ';' after variable declaration.");
-    return VarStmt{.name = name, .value = make_expr_handle(std::move(expr))};
+    return VarStmt { .name = name, .value = make_expr_handle(std::move(expr)) };
 }
 
 FunctionStmt Parser::function_declaration() {
@@ -219,11 +223,11 @@ FunctionStmt Parser::function_declaration_after_name(const Token name, bool skip
     }
     consume(Token::Type::LEFT_BRACE, "Expected '{' before function body");
     auto body = block();
-    return FunctionStmt{
-        .name = name,
-        .params = std::move(parameters),
-        .body = std::make_unique<Expr>(std::move(body))
-    };
+    return FunctionStmt {
+            .name = name,
+            .params = std::move(parameters),
+            .body = std::make_unique<Expr>(std::move(body))
+        };
 }
 
 ConstructorStmt Parser::constructor_statement() {
@@ -255,12 +259,12 @@ ConstructorStmt Parser::constructor_statement() {
     }
 
     consume(Token::Type::LEFT_BRACE, "Expected '{' before constructor body");
-    return ConstructorStmt{
-        .parameters = parameters,
-        .has_super = has_super,
-        .super_arguments = std::move(super_arguments),
-        .body = make_expr_handle(block())
-    };
+    return ConstructorStmt {
+            .parameters = parameters,
+            .has_super = has_super,
+            .super_arguments = std::move(super_arguments),
+            .body = make_expr_handle(block())
+        };
 }
 
 FunctionStmt Parser::abstract_method(Token name, bool skip_params) {
@@ -277,17 +281,13 @@ FunctionStmt Parser::abstract_method(Token name, bool skip_params) {
         consume(Token::Type::RIGHT_PAREN, "Expected ')' after function parameters");
     }
     consume(Token::Type::SEMICOLON, "Expected ';' after abstract function declaration");
-    return FunctionStmt{
-        .name = name,
-        .params = std::move(parameters),
-        .body = nullptr
-    };
+    return FunctionStmt { .name = name, .params = std::move(parameters), .body = nullptr };
 }
 
 VarStmt Parser::abstract_field(Token name) {
-    Expr expr = match(Token::Type::EQUAL) ? expression() : LiteralExpr{nil_t};
+    Expr expr = match(Token::Type::EQUAL) ? expression() : LiteralExpr { nil_t };
     consume(Token::Type::SEMICOLON, "Expected ';' after variable declaration.");
-    return VarStmt{.name = name, .value = nullptr};
+    return VarStmt { .name = name, .value = nullptr };
 }
 
 // refactor: use across whole parser
@@ -307,14 +307,16 @@ bitflags<ClassAttributes> Parser::member_attributes(StructureType outer_type) {
         attributes += ClassAttributes::PRIVATE;
     }
     if (match(Token::Type::OVERRDIE)) {
-        if (attributes[ClassAttributes::PRIVATE]) error(current, "Overrides cannot be private");
+        if (attributes[ClassAttributes::PRIVATE])
+            error(current, "Overrides cannot be private");
         attributes += ClassAttributes::OVERRIDE;
     }
     if (match(Token::Type::ABSTRACT)) {
         if (outer_type != StructureType::ABSTRACT_CLASS) {
             error(current, "Abstract methods can be only declared in abstract classes.");
         }
-        if (attributes[ClassAttributes::PRIVATE]) error(current, "Abstract members cannot be private");
+        if (attributes[ClassAttributes::PRIVATE])
+            error(current, "Abstract members cannot be private");
         attributes += ClassAttributes::ABSTRACT;
     }
     if (match(Token::Type::GET)) {
@@ -335,11 +337,11 @@ Stmt Parser::trait_declaration() {
     consume(Token::Type::RIGHT_BRACE, "Expected '}' after class body.");
 
     return TraitStmt {
-        .name = name,
-        .methods = std::move(members.methods),
-        .fields = std::move(members.fields),
-        .using_stmts = std::move(members.using_statements)
-    };
+            .name = name,
+            .methods = std::move(members.methods),
+            .fields = std::move(members.fields),
+            .using_stmts = std::move(members.using_statements)
+        };
 }
 
 
@@ -380,7 +382,8 @@ Parser::StructureMembers Parser::structure_body(StructureType type) {
     while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
         if (check(Token::Type::OBJECT)) {
             advance();
-            if (type == StructureType::OBJECT) error(current, "Class objects cannot be defined inside of objects.");
+            if (type == StructureType::OBJECT)
+                error(current, "Class objects cannot be defined inside of objects.");
             members.class_object = make_expr_handle(object_expression());
             continue;
         }
@@ -394,29 +397,35 @@ Parser::StructureMembers Parser::structure_body(StructureType type) {
         Token name = current;
 
         if (*name.string == "init") {
-            if (type == StructureType::OBJECT) error(current, "Constructors cannot be defined inside of objects.");
-            if (type == StructureType::TRAIT) error(current, "Constructors cannot be defined inside of traits.");
+            if (type == StructureType::OBJECT)
+                error(current, "Constructors cannot be defined inside of objects.");
+            if (type == StructureType::TRAIT)
+                error(current, "Constructors cannot be defined inside of traits.");
             // constructor call
             members.constructor = std::make_unique<ConstructorStmt>(constructor_statement());
         } else if ((check(Token::Type::SEMICOLON) || check(Token::Type::EQUAL)) && !attributes[ClassAttributes::SETTER]
-                   && !attributes[ClassAttributes::GETTER]) {
+            && !attributes[ClassAttributes::GETTER]) {
             attributes += ClassAttributes::GETTER;
             attributes += ClassAttributes::SETTER;
             if (type == StructureType::TRAIT) {
                 attributes += ClassAttributes::ABSTRACT;
-                if (!check(Token::Type::SEMICOLON)) error(current, "Expected ';' after trait declared field.");
-                members.fields.push_back(std::make_unique<FieldStmt>(
-                        std::make_unique<VarStmt>(abstract_field(name)), attributes
-                    ));
+                if (!check(Token::Type::SEMICOLON))
+                    error(current, "Expected ';' after trait declared field.");
+                members.fields.push_back(
+                    std::make_unique<FieldStmt>(std::make_unique<VarStmt>(abstract_field(name)), attributes)
+                );
             } else {
                 if (attributes[ClassAttributes::ABSTRACT]) {
-                    members.fields.push_back(std::make_unique<FieldStmt>(
-                        std::make_unique<VarStmt>(abstract_field(name)), attributes
-                    ));
+                    members.fields.push_back(
+                        std::make_unique<FieldStmt>(std::make_unique<VarStmt>(abstract_field(name)), attributes)
+                    );
                 } else {
-                    members.fields.push_back(std::make_unique<FieldStmt>(
-                        std::make_unique<VarStmt>(var_declaration_after_name(name)), attributes
-                    ));
+                    members.fields.push_back(
+                        std::make_unique<FieldStmt>(
+                            std::make_unique<VarStmt>(var_declaration_after_name(name)),
+                            attributes
+                        )
+                    );
                 }
             }
         } else {
@@ -437,25 +446,38 @@ Parser::StructureMembers Parser::structure_body(StructureType type) {
                 if (check(Token::Type::SEMICOLON)) {
                     attributes += ClassAttributes::ABSTRACT;
                     advance();
-                    members.methods.push_back(std::make_unique<MethodStmt>(std::make_unique<FunctionStmt>(name, std::move(parameters), nullptr), attributes));
+                    members.methods.push_back(
+                        std::make_unique<MethodStmt>(
+                            std::make_unique<FunctionStmt>(name, std::move(parameters), nullptr),
+                            attributes
+                        )
+                    );
                 } else {
                     consume(Token::Type::LEFT_BRACE, "Expected '{' before function body");
-                    members.methods.push_back(std::make_unique<MethodStmt>(std::make_unique<FunctionStmt>(name, std::move(parameters), make_expr_handle(block())), attributes));
-
+                    members.methods.push_back(
+                        std::make_unique<MethodStmt>(
+                            std::make_unique<FunctionStmt>(name, std::move(parameters), make_expr_handle(block())),
+                            attributes
+                        )
+                    );
                 }
             } else {
                 if (attributes[ClassAttributes::ABSTRACT]) {
                     bool skip_params = attributes[ClassAttributes::GETTER];
-                    members.methods.push_back(std::make_unique<MethodStmt>(
-                        std::make_unique<FunctionStmt>(abstract_method(current, skip_params)),
-                        attributes
-                    ));
+                    members.methods.push_back(
+                        std::make_unique<MethodStmt>(
+                            std::make_unique<FunctionStmt>(abstract_method(current, skip_params)),
+                            attributes
+                        )
+                    );
                 } else {
                     bool skip_params = attributes[ClassAttributes::GETTER] && !check(Token::Type::LEFT_PAREN);
-                    members.methods.push_back(std::make_unique<MethodStmt>(
-                        std::make_unique<FunctionStmt>(function_declaration_after_name(current, skip_params)),
-                        attributes
-                    ));
+                    members.methods.push_back(
+                        std::make_unique<MethodStmt>(
+                            std::make_unique<FunctionStmt>(function_declaration_after_name(current, skip_params)),
+                            attributes
+                        )
+                    );
                 }
             }
         }
@@ -480,12 +502,12 @@ ObjectExpr Parser::object_expression() {
     StructureMembers members = structure_body(StructureType::OBJECT);
     consume(Token::Type::RIGHT_BRACE, "Expected '}' after object body.");
     return ObjectExpr {
-        .methods = std::move(members.methods),
-        .fields = std::move(members.fields),
-        .super_class = superclass,
-        .superclass_arguments = std::move(superclass_arguments),
-        .using_stmts = std::move(members.using_statements)
-    };
+            .methods = std::move(members.methods),
+            .fields = std::move(members.fields),
+            .super_class = superclass,
+            .superclass_arguments = std::move(superclass_arguments),
+            .using_stmts = std::move(members.using_statements)
+        };
 }
 
 Stmt Parser::class_declaration(bool is_abstract) {
@@ -502,19 +524,19 @@ Stmt Parser::class_declaration(bool is_abstract) {
     consume(Token::Type::RIGHT_BRACE, "Expected '}' after class body.");
 
     return ClassStmt {
-        .name = name,
-        .constructor = std::move(members.constructor),
-        .methods = std::move(members.methods),
-        .fields = std::move(members.fields),
-        .class_object = std::move(members.class_object),
-        .super_class = super_class,
-        .is_abstract = is_abstract,
-        .using_statements = std::move(members.using_statements)
-    };
+            .name = name,
+            .constructor = std::move(members.constructor),
+            .methods = std::move(members.methods),
+            .fields = std::move(members.fields),
+            .class_object = std::move(members.class_object),
+            .super_class = super_class,
+            .is_abstract = is_abstract,
+            .using_statements = std::move(members.using_statements)
+        };
 }
 
 Stmt Parser::expr_statement() {
-    Stmt stmt = ExprStmt{make_expr_handle(expression())};
+    Stmt stmt = ExprStmt { make_expr_handle(expression()) };
     consume(Token::Type::SEMICOLON, "Expected ';' after expression");
     return stmt;
 }
@@ -534,40 +556,32 @@ Expr Parser::if_expression() {
             else_stmt = make_expr_handle(block());
         }
     }
-    return IfExpr{
-        .condition = make_expr_handle(std::move(condition)),
-        .then_expr = make_expr_handle(std::move(then_stmt)),
-        .else_expr = std::move(else_stmt)
-    };
+    return IfExpr {
+            .condition = make_expr_handle(std::move(condition)),
+            .then_expr = make_expr_handle(std::move(then_stmt)),
+            .else_expr = std::move(else_stmt)
+        };
 }
 
 Parser::Precedence Parser::get_precendece(Token::Type token) {
     switch (token) {
         case Token::Type::PLUS:
-        case Token::Type::MINUS:
-            return Precedence::TERM;
+        case Token::Type::MINUS: return Precedence::TERM;
         case Token::Type::STAR:
         case Token::Type::SLASH:
         case Token::Type::SLASH_SLASH:
-        case Token::Type::PERCENT:
-            return Precedence::FACTOR;
+        case Token::Type::PERCENT: return Precedence::FACTOR;
         case Token::Type::EQUAL_EQUAL:
-        case Token::Type::BANG_EQUAL:
-            return Precedence::EQUALITY;
+        case Token::Type::BANG_EQUAL: return Precedence::EQUALITY;
         case Token::Type::LESS:
         case Token::Type::LESS_EQUAL:
         case Token::Type::GREATER:
-        case Token::Type::GREATER_EQUAL:
-            return Precedence::RELATIONAL;
+        case Token::Type::GREATER_EQUAL: return Precedence::RELATIONAL;
         case Token::Type::LESS_LESS:
-        case Token::Type::GREATER_GREATER:
-            return Precedence::BITWISE_SHIFT;
-        case Token::Type::AND:
-            return Precedence::BITWISE_AND;
-        case Token::Type::BAR:
-            return Precedence::BITWISE_OR;
-        case Token::Type::CARET:
-            return Precedence::BITWISE_XOR;
+        case Token::Type::GREATER_GREATER: return Precedence::BITWISE_SHIFT;
+        case Token::Type::AND: return Precedence::BITWISE_AND;
+        case Token::Type::BAR: return Precedence::BITWISE_OR;
+        case Token::Type::CARET: return Precedence::BITWISE_XOR;
         case Token::Type::EQUAL:
         case Token::Type::PLUS_EQUAL:
         case Token::Type::MINUS_EQUAL:
@@ -579,26 +593,19 @@ Parser::Precedence Parser::get_precendece(Token::Type token) {
         case Token::Type::GREATER_GREATER_EQUAL:
         case Token::Type::AND_EQUAL:
         case Token::Type::CARET_EQUAL:
-        case Token::Type::BAR_EQUAL:
-
-            return Precedence::ASSIGMENT;
-        case Token::Type::AND_AND:
-            return Precedence::LOGICAL_AND;
-        case Token::Type::BAR_BAR:
-            return Precedence::LOGICAL_OR;
+        case Token::Type::BAR_EQUAL: return Precedence::ASSIGMENT;
+        case Token::Type::AND_AND: return Precedence::LOGICAL_AND;
+        case Token::Type::BAR_BAR: return Precedence::LOGICAL_OR;
         case Token::Type::LEFT_PAREN:
         case Token::Type::LEFT_BRACE:
-        case Token::Type::DOT:
-            return Precedence::CALL;
+        case Token::Type::DOT: return Precedence::CALL;
         case Token::Type::IF:
         case Token::Type::LOOP:
         case Token::Type::WHILE:
         case Token::Type::FOR:
         case Token::Type::LABEL:
         case Token::Type::RETURN:
-        case Token::Type::OBJECT:
-        default:
-            return Precedence::NONE;
+        case Token::Type::OBJECT: default: return Precedence::NONE;
     }
 }
 
@@ -617,13 +624,13 @@ Expr Parser::expression(const Precedence precedence) {
 }
 
 Expr Parser::this_() {
-    return ThisExpr{};
+    return ThisExpr {};
 }
 
 Expr Parser::super_() {
     consume(Token::Type::DOT, "Expected '.' after 'super'.");
     consume(Token::Type::IDENTIFIER, "Expected superclass method name.");
-    return SuperExpr{current};
+    return SuperExpr { current };
 }
 
 bool has_prefix(Token::Type type) {
@@ -649,19 +656,14 @@ bool has_prefix(Token::Type type) {
         case Token::Type::WHILE:
         case Token::Type::FOR:
         case Token::Type::LABEL:
-        case Token::Type::RETURN:
-            return true;
+        case Token::Type::RETURN: return true;
         default: return false;
     }
 }
 
 bool starts_block_expression(Token::Type type) {
-    return type == Token::Type::LABEL
-           || type == Token::Type::LEFT_BRACE
-           || type == Token::Type::LOOP
-           || type == Token::Type::WHILE
-           || type == Token::Type::FOR
-           || type == Token::Type::IF;
+    return type == Token::Type::LABEL || type == Token::Type::LEFT_BRACE || type == Token::Type::LOOP || type ==
+        Token::Type::WHILE || type == Token::Type::FOR || type == Token::Type::IF;
 }
 
 Expr Parser::block(std::optional<Token> label) {
@@ -673,9 +675,8 @@ Expr Parser::block(std::optional<Token> label) {
         } else {
             bool is_block_expression = starts_block_expression(next.type);
             auto expr = expression();
-            if (match(Token::Type::SEMICOLON) || (
-                    is_block_expression && (!check(Token::Type::RIGHT_BRACE) || current.type ==
-                                            Token::Type::SEMICOLON))) {
+            if (match(Token::Type::SEMICOLON) || (is_block_expression && (!check(Token::Type::RIGHT_BRACE) || current.
+                type == Token::Type::SEMICOLON))) {
                 stmts.push_back(std::make_unique<Stmt>(ExprStmt(std::make_unique<Expr>(std::move(expr)))));
             } else {
                 expr_at_end = std::make_unique<Expr>(std::move(expr));
@@ -684,7 +685,7 @@ Expr Parser::block(std::optional<Token> label) {
         }
     }
     consume(Token::Type::RIGHT_BRACE, "Expected '}' after block.");
-    return BlockExpr{.stmts = std::move(stmts), .expr = std::move(expr_at_end), .label = label};
+    return BlockExpr { .stmts = std::move(stmts), .expr = std::move(expr_at_end), .label = label };
 }
 
 Expr Parser::loop_expression(std::optional<Token> label) {
@@ -698,9 +699,9 @@ Expr Parser::break_expression() {
         label = current;
     }
     if (!has_prefix(next.type)) {
-        return BreakExpr{.label = label};
+        return BreakExpr { .label = label };
     }
-    return BreakExpr{make_expr_handle(expression()), label};
+    return BreakExpr { make_expr_handle(expression()), label };
 }
 
 Expr Parser::continue_expression() {
@@ -742,48 +743,29 @@ Expr Parser::labeled_expression() {
 
 std::optional<Expr> Parser::prefix() {
     switch (current.type) {
-        case Token::Type::INTEGER:
-            return integer();
-        case Token::Type::NUMBER:
-            return number();
-        case Token::Type::STRING:
-            return string();
+        case Token::Type::INTEGER: return integer();
+        case Token::Type::NUMBER: return number();
+        case Token::Type::STRING: return string();
         case Token::Type::TRUE:
         case Token::Type::FALSE:
-        case Token::Type::NIL:
-            return keyword();
-        case Token::Type::IDENTIFIER:
-            return identifier();
-        case Token::Type::LEFT_PAREN:
-            return grouping();
-        case Token::Type::LEFT_BRACE:
-            return block();
+        case Token::Type::NIL: return keyword();
+        case Token::Type::IDENTIFIER: return identifier();
+        case Token::Type::LEFT_PAREN: return grouping();
+        case Token::Type::LEFT_BRACE: return block();
         case Token::Type::BANG:
         case Token::Type::MINUS:
-        case Token::Type::TILDE:
-            return unary(current.type);
-        case Token::Type::THIS:
-            return this_();
-        case Token::Type::SUPER:
-            return super_();
-        case Token::Type::IF:
-            return if_expression();
-        case Token::Type::LOOP:
-            return loop_expression();
-        case Token::Type::BREAK:
-            return break_expression();
-        case Token::Type::CONTINUE:
-            return continue_expression();
-        case Token::Type::WHILE:
-            return while_expression();
-        case Token::Type::FOR:
-            return for_expression();
-        case Token::Type::LABEL:
-            return labeled_expression();
-        case Token::Type::RETURN:
-            return return_expression();
-        case Token::Type::OBJECT:
-            return object_expression();
+        case Token::Type::TILDE: return unary(current.type);
+        case Token::Type::THIS: return this_();
+        case Token::Type::SUPER: return super_();
+        case Token::Type::IF: return if_expression();
+        case Token::Type::LOOP: return loop_expression();
+        case Token::Type::BREAK: return break_expression();
+        case Token::Type::CONTINUE: return continue_expression();
+        case Token::Type::WHILE: return while_expression();
+        case Token::Type::FOR: return for_expression();
+        case Token::Type::LABEL: return labeled_expression();
+        case Token::Type::RETURN: return return_expression();
+        case Token::Type::OBJECT: return object_expression();
         default: return {};
     }
 }
@@ -794,7 +776,7 @@ Expr Parser::integer() {
     if (!result) {
         error(current, result.error().what());
     }
-    return LiteralExpr{*result};
+    return LiteralExpr { *result };
 }
 
 Expr Parser::number() {
@@ -803,25 +785,22 @@ Expr Parser::number() {
     if (!result) {
         error(current, result.error().what());
     }
-    return LiteralExpr{*result};
+    return LiteralExpr { *result };
 }
 
 Expr Parser::string() const {
-    return StringLiteral{*current.string};
+    return StringLiteral { *current.string };
 }
 
 Expr Parser::identifier() {
-    return VariableExpr{current};
+    return VariableExpr { current };
 }
 
 Expr Parser::keyword() const {
     switch (current.type) {
-        case Token::Type::NIL:
-            return LiteralExpr{nil_t};
-        case Token::Type::FALSE:
-            return LiteralExpr{false};
-        case Token::Type::TRUE:
-            return LiteralExpr{true};
+        case Token::Type::NIL: return LiteralExpr { nil_t };
+        case Token::Type::FALSE: return LiteralExpr { false };
+        case Token::Type::TRUE: return LiteralExpr { true };
         default: assert(false); // unreachable!
     }
 }
@@ -833,12 +812,12 @@ Expr Parser::grouping() {
 }
 
 Expr Parser::unary(Token::Type operator_type) {
-    return UnaryExpr{.expr = make_expr_handle(expression(Precedence::UNARY)), .op = operator_type};
+    return UnaryExpr { .expr = make_expr_handle(expression(Precedence::UNARY)), .op = operator_type };
 }
 
 Expr Parser::dot(Expr left) {
     consume(Token::Type::IDENTIFIER, "Expected property name after '.'");
-    return GetPropertyExpr{.left = make_expr_handle(std::move(left)), .property = current};
+    return GetPropertyExpr { .left = make_expr_handle(std::move(left)), .property = current };
 }
 
 Expr Parser::infix(Expr left) {
@@ -861,8 +840,7 @@ Expr Parser::infix(Expr left) {
         case Token::Type::CARET:
         case Token::Type::AND_AND:
         case Token::Type::BAR_BAR:
-        case Token::Type::PERCENT:
-            return binary(std::move(left));
+        case Token::Type::PERCENT: return binary(std::move(left));
         case Token::Type::EQUAL:
         case Token::Type::PLUS_EQUAL:
         case Token::Type::MINUS_EQUAL:
@@ -874,20 +852,16 @@ Expr Parser::infix(Expr left) {
         case Token::Type::GREATER_GREATER_EQUAL:
         case Token::Type::AND_EQUAL:
         case Token::Type::CARET_EQUAL:
-        case Token::Type::BAR_EQUAL:
-            return binary(std::move(left), true);
-        case Token::Type::LEFT_PAREN:
-            return call(std::move(left));
-        case Token::Type::DOT:
-            return dot(std::move(left));
-        default:
-            return left;
+        case Token::Type::BAR_EQUAL: return binary(std::move(left), true);
+        case Token::Type::LEFT_PAREN: return call(std::move(left));
+        case Token::Type::DOT: return dot(std::move(left));
+        default: return left;
     }
 }
 
 Expr Parser::binary(Expr left, bool expect_lvalue) {
-    if (expect_lvalue && !std::holds_alternative<VariableExpr>(left) && !std::holds_alternative<
-            GetPropertyExpr>(left) && !std::holds_alternative<SuperExpr>(left)) {
+    if (expect_lvalue && !std::holds_alternative<VariableExpr>(left) && !std::holds_alternative<GetPropertyExpr>(left)
+        && !std::holds_alternative<SuperExpr>(left)) {
         error(current, "Expected lvalue as left hand side of an binary expression.");
     }
     Token::Type op = current.type;
@@ -896,10 +870,7 @@ Expr Parser::binary(Expr left, bool expect_lvalue) {
     if (precedence == Precedence::ASSIGMENT) {
         precedence = static_cast<Precedence>(static_cast<int>(precedence) - 1);
     }
-    return BinaryExpr{
-        make_expr_handle(std::move(left)),
-        make_expr_handle(expression(precedence)), op
-    };
+    return BinaryExpr { make_expr_handle(std::move(left)), make_expr_handle(expression(precedence)), op };
 }
 
 Expr Parser::call(Expr left) {
@@ -910,5 +881,5 @@ Expr Parser::call(Expr left) {
         } while (match(Token::Type::COMMA));
     }
     consume(Token::Type::RIGHT_PAREN, "Expected ')' after call arguments.");
-    return CallExpr{.callee = make_expr_handle(std::move(left)), .arguments = std::move(arguments)};
+    return CallExpr { .callee = make_expr_handle(std::move(left)), .arguments = std::move(arguments) };
 }

@@ -20,7 +20,9 @@ public:
     // We want to continue parsing in order to provide user multiple issues in their code at once.
     class Error {
     public:
-        Error(Token token, std::string_view message) : message(message), token(token) {}
+        Error(Token token, std::string_view message) : message(message),
+                                                       token(token) {}
+
         Token token;
         std::string message;
     };
@@ -30,6 +32,7 @@ public:
     explicit Parser(FileInputStream&& stream, SharedContext* context) : lexer(std::move(stream), context) {}
 
     std::vector<Stmt> parse();
+
 private:
     bool panic_mode = false;
     std::vector<Error> errors;
@@ -43,7 +46,6 @@ private:
     void consume(Token::Type type, std::string_view message);
 
 
-
     Stmt statement_or_expression();
 
     Stmt native_declaration();
@@ -53,7 +55,6 @@ private:
     Expr return_expression();
 
     Stmt object_declaration();
-
 
 
     std::optional<Stmt> statement();
@@ -73,8 +74,6 @@ private:
     VarStmt abstract_field(Token name);
 
     std::vector<ExprHandle> arguments_list();
-
-
 
 
     Stmt class_declaration(bool is_abstract = false);

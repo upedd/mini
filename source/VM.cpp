@@ -6,7 +6,7 @@
 // TODO: maybe add asserts
 
 uint8_t VM::fetch() {
-    CallFrame &frame = frames.back();
+    CallFrame& frame = frames.back();
     return frame.closure->get_function()->get_program().get_at(frame.instruction_pointer++);
 }
 
@@ -40,28 +40,28 @@ Value VM::peek(const int n) const {
     return stack[stack_index - n - 1];
 }
 
-void VM::push(const Value &value) {
+void VM::push(const Value& value) {
     stack[stack_index++] = value;
 }
 
-Value &VM::get_from_slot(int index) {
+Value& VM::get_from_slot(int index) {
     return stack[frames.back().frame_pointer + index];
 }
 
-void VM::set_in_slot(const int index, const Value &value) {
+void VM::set_in_slot(const int index, const Value& value) {
     stack[frames.back().frame_pointer + index] = value;
 }
 
 
-std::optional<VM::RuntimeError> VM::call_value(const Value &value, const int arguments_count) {
+std::optional<VM::RuntimeError> VM::call_value(const Value& value, const int arguments_count) {
     // todo: refactor!
-    std::optional<Object *> object = value.as<Object *>();
+    std::optional<Object*> object = value.as<Object*>();
 
     if (!object) {
         return RuntimeError("Expected callable value such as function or class.");
     }
 
-    if (auto *klass = dynamic_cast<Class *>(*object)) {
+    if (auto* klass = dynamic_cast<Class*>(*object)) {
         if (klass->is_abstract) {
             return RuntimeError("Cannot instantiate abstract class");
         }
@@ -71,7 +71,7 @@ std::optional<VM::RuntimeError> VM::call_value(const Value &value, const int arg
             args.push_back(pop());
         }
         pop(); // pop class
-        auto *instance = new Instance(klass);
+        auto* instance = new Instance(klass);
         push(instance);
         allocate(instance);
         auto bound = bind_method(klass->constructor, klass, instance);
@@ -94,15 +94,16 @@ std::optional<VM::RuntimeError> VM::call_value(const Value &value, const int arg
         auto res = call_value(bound, arguments_count); // success
         return res;
     }
-    if (auto *closure = dynamic_cast<Closure *>(*object)) {
+    if (auto* closure = dynamic_cast<Closure*>(*object)) {
         if (arguments_count != closure->get_function()->get_arity()) {
-            return RuntimeError(std::format("Expected {} but got {} arguments",
-                                            closure->get_function()->get_arity(), arguments_count));
+            return RuntimeError(
+                std::format("Expected {} but got {} arguments", closure->get_function()->get_arity(), arguments_count)
+            );
         }
         frames.emplace_back(closure, 0, stack_index - arguments_count - 1);
         return {}; // success
     }
-    if (auto *bound = dynamic_cast<BoundMethod *>(*object)) {
+    if (auto* bound = dynamic_cast<BoundMethod*>(*object)) {
         // reuse closure value in stack as bound method reciver ("this")
         stack[stack_index - arguments_count - 1] = bound->receiver;
         return call_value(bound->closure, arguments_count);
@@ -121,11 +122,11 @@ std::optional<VM::RuntimeError> VM::call_value(const Value &value, const int arg
     return RuntimeError("Expected callable value such as function or class.");
 }
 
-Upvalue *VM::capture_upvalue(int index) {
-    auto *value = &get_from_slot(index);
+Upvalue* VM::capture_upvalue(int index) {
+    auto* value = &get_from_slot(index);
     // try to reuse already open upvalue
-    Upvalue *upvalue = nullptr;
-    for (auto open: open_upvalues) {
+    Upvalue* upvalue = nullptr;
+    for (auto open : open_upvalues) {
         if (open->location == value) {
             upvalue = open;
             break;
@@ -139,16 +140,19 @@ Upvalue *VM::capture_upvalue(int index) {
     return upvalue;
 }
 
-void VM::close_upvalues(const Value &value) {
-    std::erase_if(open_upvalues, [&value](Upvalue *open) {
-        if (open->location >= &value) {
-            // maybe don't use memory addresses for this? seems unsafe
-            open->closed = *open->location;
-            open->location = &open->closed;
-            return true;
+void VM::close_upvalues(const Value& value) {
+    std::erase_if(
+        open_upvalues,
+        [&value](Upvalue* open) {
+            if (open->location >= &value) {
+                // maybe don't use memory addresses for this? seems unsafe
+                open->closed = *open->location;
+                open->location = &open->closed;
+                return true;
+            }
+            return false;
         }
-        return false;
-    });
+    );
 }
 
 void VM::mark_roots_for_gc() {
@@ -156,14 +160,14 @@ void VM::mark_roots_for_gc() {
         gc.mark(stack[i]);
     }
 
-    for (auto &frame: frames) {
+    for (auto& frame : frames) {
         gc.mark(frame.closure);
     }
 
-    for (auto *open_upvalue: open_upvalues) {
+    for (auto* open_upvalue : open_upvalues) {
         gc.mark(open_upvalue);
     }
-    for (auto& value: std::views::values(natives)) {
+    for (auto& value : std::views::values(natives)) {
         gc.mark(value);
     }
 }
@@ -173,8 +177,8 @@ void VM::run_gc() {
     gc.collect();
 }
 
-void VM::adopt_objects(std::vector<Object *> objects) {
-    for (auto *object: objects) {
+void VM::adopt_objects(std::vector<Object*> objects) {
+    for (auto* object : objects) {
         allocate<Object>(object);
     }
 }
@@ -218,42 +222,52 @@ std::optional<VM::RuntimeError> VM::validate_class_access(Class* accessor, const
 
 
 Value VM::bind_method(const Value& method, Class* klass, Instance* instance) {
-    auto* closure = dynamic_cast<Closure *>(method.get<Object*>());
+    auto* closure = dynamic_cast<Closure*>(method.get<Object*>());
     auto* receiver = new Receiver(klass, instance);
     auto* bound = new BoundMethod(receiver, closure);
     return bound;
 }
 
 
-std::expected<Value, VM::RuntimeError> VM::get_value_or_bound_method(Instance *instance, const ClassValue &value,
-                                                                     bool &is_computed_property) {
+std::expected<Value, VM::RuntimeError> VM::get_value_or_bound_method(
+    Instance* instance,
+    const ClassValue& value,
+    bool& is_computed_property
+) {
     if (!value.attributes[ClassAttributes::GETTER]) {
         return std::unexpected(RuntimeError("Getter not defined for property."));
     }
     if (value.is_computed) {
         // TODO validate!
         is_computed_property = true;
-        auto* property = dynamic_cast<ComputedProperty *>(value.value.get<Object*>());
+        auto* property = dynamic_cast<ComputedProperty*>(value.value.get<Object*>());
         return bind_method(property->get.value.value, property->get.owner, instance);
     }
     return value.value;
 }
 
 std::variant<std::monostate, Value, VM::RuntimeError> VM::set_value_or_get_bound_method(
-    Instance *instance, ClassValue &property, const Value &value) {
+    Instance* instance,
+    ClassValue& property,
+    const Value& value
+) {
     if (!property.attributes[ClassAttributes::GETTER]) {
         return RuntimeError("Setter not defined for property.");
     }
     if (property.is_computed) {
         // TODO validate!
-        auto* computed = dynamic_cast<ComputedProperty *>(property.value.get<Object*>());
+        auto* computed = dynamic_cast<ComputedProperty*>(property.value.get<Object*>());
         return bind_method(computed->set.value.value, computed->set.owner, instance);
     }
     property.value = value;
     return {};
 }
 
-std::expected<Value, VM::RuntimeError> VM::get_instance_property(Instance *instance, const std::string &name, bool& is_computed_property) {
+std::expected<Value, VM::RuntimeError> VM::get_instance_property(
+    Instance* instance,
+    const std::string& name,
+    bool& is_computed_property
+) {
     // private or static members get resolved first
     std::optional<Receiver*> receiver = get_current_receiver();
     if (receiver) {
@@ -286,7 +300,12 @@ std::expected<Value, VM::RuntimeError> VM::get_instance_property(Instance *insta
     return std::unexpected(RuntimeError("Property must be declared on class."));
 }
 
-std::expected<Value, VM::RuntimeError> VM::get_super_property(Instance *super_instance, Instance* accessor, const std::string &name, bool& is_computed_property) {
+std::expected<Value, VM::RuntimeError> VM::get_super_property(
+    Instance* super_instance,
+    Instance* accessor,
+    const std::string& name,
+    bool& is_computed_property
+) {
     if (auto super_property = super_instance->resolve_dynamic_property(name, ClassAttributes::GETTER)) {
         if (std::optional<RuntimeError> error = validate_instance_access(accessor, super_property.value())) {
             return std::unexpected(*error);
@@ -305,12 +324,12 @@ std::expected<Value, VM::RuntimeError> VM::get_super_property(Instance *super_in
 }
 
 std::variant<std::monostate, VM::RuntimeError, Value> VM::set_instance_property(
-    Instance *instance, const std::string &name,
-    const Value &value) {
+    Instance* instance,
+    const std::string& name,
+    const Value& value
+) {
     std::optional<Receiver*> receiver = get_current_receiver();
     if (receiver) {
-
-
         if (auto super_instnace = receiver.value()->instance->get_super_instance_by_class(receiver.value()->klass)) {
             // private property
             if (auto class_property = super_instnace.value()->resolve_private_property(name)) {
@@ -344,7 +363,11 @@ std::variant<std::monostate, VM::RuntimeError, Value> VM::set_instance_property(
 }
 
 std::variant<std::monostate, VM::RuntimeError, Value> VM::set_super_property(
-    Instance *super_instance, Instance *accessor, const std::string &name, const Value &value) {
+    Instance* super_instance,
+    Instance* accessor,
+    const std::string& name,
+    const Value& value
+) {
     if (auto super_property = super_instance->resolve_dynamic_property(name, ClassAttributes::SETTER)) {
         if (std::optional<RuntimeError> error = validate_instance_access(accessor, super_property.value())) {
             return *error;
@@ -362,7 +385,7 @@ std::variant<std::monostate, VM::RuntimeError, Value> VM::set_super_property(
 }
 
 std::expected<Value, VM::RuntimeError> VM::run() {
-#define BINARY_OPERATION(op) { \
+    #define BINARY_OPERATION(op) { \
     auto b = pop(); \
     auto a = pop(); \
     push(a.op(b)); \
@@ -470,12 +493,13 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 }
                 frames.pop_back();
                 push(result);
-                if (frames.empty()) return pop();
+                if (frames.empty())
+                    return pop();
                 break;
             }
             case OpCode::CLOSURE: {
-                Function *function = reinterpret_cast<Function *>(*get_constant(fetch()).as<Object *>());
-                auto *closure = new Closure(function);
+                Function* function = reinterpret_cast<Function*>(*get_constant(fetch()).as<Object*>());
+                auto* closure = new Closure(function);
                 push(closure);
                 for (int i = 0; i < closure->get_function()->get_upvalue_count(); ++i) {
                     int is_local = fetch();
@@ -508,7 +532,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
             case OpCode::CLASS: {
                 int constant_idx = fetch();
                 auto name = get_constant(constant_idx).get<std::string>();
-                auto *klass = new Class(name);
+                auto* klass = new Class(name);
                 if (!peek().is<Nil>()) {
                     klass->class_object = dynamic_cast<Instance*>(peek().get<Object*>());
                 }
@@ -521,7 +545,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 // overlap?
                 int constant_idx = fetch();
                 auto name = get_constant(constant_idx).get<std::string>();
-                auto *klass = new Class(name);
+                auto* klass = new Class(name);
                 if (!peek().is<Nil>()) {
                     klass->class_object = dynamic_cast<Instance*>(peek().get<Object*>());
                 }
@@ -539,16 +563,20 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                     return std::unexpected(RuntimeError("Expected class instance value."));
                 }
                 Instance* instance;
-                if (auto *klass = dynamic_cast<Class *>(*object)) {
+                if (auto* klass = dynamic_cast<Class*>(*object)) {
                     instance = klass->class_object;
                 } else {
-                    instance = dynamic_cast<Instance *>(*object);
+                    instance = dynamic_cast<Instance*>(*object);
                 }
 
                 if (instance) {
                     pop();
                     bool is_computed_property = false;
-                    std::expected<Value, RuntimeError> property = get_instance_property(instance, name, is_computed_property);
+                    std::expected<Value, RuntimeError> property = get_instance_property(
+                        instance,
+                        name,
+                        is_computed_property
+                    );
                     if (!property) {
                         return std::unexpected(property.error());
                     }
@@ -582,16 +610,16 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 }
 
                 Instance* instance;
-                if (auto *klass = dynamic_cast<Class *>(*object)) {
+                if (auto* klass = dynamic_cast<Class*>(*object)) {
                     instance = klass->class_object;
                 } else {
-                    instance = dynamic_cast<Instance *>(*object);
+                    instance = dynamic_cast<Instance*>(*object);
                 }
 
                 if (instance) {
                     Value value = peek(1);
 
-                    auto response  = set_instance_property(instance, name, value);
+                    auto response = set_instance_property(instance, name, value);
                     if (std::holds_alternative<RuntimeError>(response)) {
                         return std::unexpected(std::get<RuntimeError>(response));
                     }
@@ -629,7 +657,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 if (!attributes[ClassAttributes::ABSTRACT]) {
                     method = peek();
                 }
-                Class *klass = dynamic_cast<Class *>(peek(attributes[ClassAttributes::ABSTRACT] ? 0 : 1).get<Object *>());
+                Class* klass = dynamic_cast<Class*>(peek(attributes[ClassAttributes::ABSTRACT] ? 0 : 1).get<Object*>());
                 // TODO: refactor!
                 if (attributes[ClassAttributes::GETTER]) {
                     if (!klass->fields[name].is_computed) {
@@ -638,8 +666,11 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                         klass->fields[name].value = property;
                         allocate<ComputedProperty>(property);
                     }
-                    auto* computed_property = dynamic_cast<ComputedProperty *>(klass->fields[name].value.get<Object*>());
-                    computed_property->get = ClassMethod {.value =  {.value = method, .attributes = attributes}, .owner = klass};
+                    auto* computed_property = dynamic_cast<ComputedProperty*>(klass->fields[name].value.get<Object*>());
+                    computed_property->get = ClassMethod {
+                            .value = { .value = method, .attributes = attributes },
+                            .owner = klass
+                        };
                     klass->fields[name].attributes += ClassAttributes::GETTER;
                 } else if (attributes[ClassAttributes::SETTER]) {
                     if (!klass->fields[name].is_computed) {
@@ -649,11 +680,14 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                         allocate<ComputedProperty>(property);
                     }
                     klass->fields[name].is_computed = true;
-                    auto* computed_property = dynamic_cast<ComputedProperty *>(klass->fields[name].value.get<Object*>());
-                    computed_property->set = ClassMethod {.value =  {.value = method, .attributes = attributes}, .owner = klass};
+                    auto* computed_property = dynamic_cast<ComputedProperty*>(klass->fields[name].value.get<Object*>());
+                    computed_property->set = ClassMethod {
+                            .value = { .value = method, .attributes = attributes },
+                            .owner = klass
+                        };
                     klass->fields[name].attributes += ClassAttributes::SETTER;
                 } else {
-                    klass->methods[name] = {.value = method, .attributes = attributes};
+                    klass->methods[name] = { .value = method, .attributes = attributes };
                 }
 
                 if (!attributes[ClassAttributes::ABSTRACT]) {
@@ -662,8 +696,8 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 break;
             }
             case OpCode::INHERIT: {
-                Class *superclass = dynamic_cast<Class *>(peek(1).get<Object *>());
-                Class *subclass = dynamic_cast<Class *>(peek(0).get<Object *>());
+                Class* superclass = dynamic_cast<Class*>(peek(1).get<Object*>());
+                Class* subclass = dynamic_cast<Class*>(peek(0).get<Object*>());
                 // for (auto &value: superclass->methods) {
                 //     if (value.second.is_private ||) continue;
                 //     subclass->methods.insert(value);
@@ -681,7 +715,12 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 bool is_computed_property = false;
                 auto name = get_constant(constant_idx).get<std::string>();
                 Instance* accessor = dynamic_cast<Instance*>(peek().get<Object*>());
-                std::expected<Value, RuntimeError> property = get_super_property(accessor->get_super().value(), accessor, name, is_computed_property);
+                std::expected<Value, RuntimeError> property = get_super_property(
+                    accessor->get_super().value(),
+                    accessor,
+                    name,
+                    is_computed_property
+                );
                 if (!property) {
                     return std::unexpected(property.error());
                 }
@@ -746,8 +785,8 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 auto attributes = bitflags<ClassAttributes>(fetch());
                 auto name = get_constant(constant_idx).get<std::string>();
                 Value value;
-                Class *klass = dynamic_cast<Class *>(peek().get<Object *>());
-                klass->fields[name] = {.value = value, .attributes = attributes};
+                Class* klass = dynamic_cast<Class*>(peek().get<Object*>());
+                klass->fields[name] = { .value = value, .attributes = attributes };
                 break;
             }
             case OpCode::THIS: {
@@ -761,7 +800,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
             }
             case OpCode::CONSTRUCTOR: {
                 Value method = peek();
-                Class *klass = dynamic_cast<Class *>(peek(1).get<Object *>());
+                Class* klass = dynamic_cast<Class*>(peek(1).get<Object*>());
                 klass->constructor = method;
                 pop();
                 break;
@@ -778,7 +817,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                     args.push_back(pop());
                 }
                 //pop(); // pop class
-                auto *instance = new Instance(superclass);
+                auto* instance = new Instance(superclass);
                 push(instance);
                 allocate(instance);
 
@@ -811,7 +850,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 // TODO: trait objects?
                 int constant_idx = fetch();
                 auto name = get_constant(constant_idx).get<std::string>();
-                auto *trait = new Trait(name);
+                auto* trait = new Trait(name);
                 push(trait);
                 allocate(trait);
                 break;
@@ -836,8 +875,12 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                             trait->fields[name].value = property;
                             allocate(property);
                         }
-                        auto* computed_property = dynamic_cast<ComputedProperty *>(trait->fields[name].value.get<Object*>());
-                        computed_property->get = ClassMethod {.value = {.value = peek(), .attributes = attributes}, .owner = nullptr}; //?
+                        auto* computed_property = dynamic_cast<ComputedProperty*>(trait->fields[name].value.get<Object
+                            *>());
+                        computed_property->get = ClassMethod {
+                                .value = { .value = peek(), .attributes = attributes },
+                                .owner = nullptr
+                            }; //?
                         trait->fields[name].attributes += ClassAttributes::GETTER;
                     } else if (attributes[ClassAttributes::SETTER]) {
                         if (!trait->fields[name].is_computed) {
@@ -846,11 +889,19 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                             trait->fields[name].value = property;
                             allocate(property);
                         }
-                        auto* computed_property = dynamic_cast<ComputedProperty *>(trait->fields[name].value.get<Object*>());
-                        computed_property->set = ClassMethod {.value = {.value = peek(), .attributes = attributes}, .owner = nullptr}; //?
+                        auto* computed_property = dynamic_cast<ComputedProperty*>(trait->fields[name].value.get<Object
+                            *>());
+                        computed_property->set = ClassMethod {
+                                .value = { .value = peek(), .attributes = attributes },
+                                .owner = nullptr
+                            }; //?
                         trait->fields[name].attributes += ClassAttributes::SETTER;
                     } else {
-                        trait->methods[name] = ClassValue {.value = peek(), .attributes = attributes, .is_computed = false};
+                        trait->methods[name] = ClassValue {
+                                .value = peek(),
+                                .attributes = attributes,
+                                .is_computed = false
+                            };
                     }
                     pop();
                 }
@@ -868,10 +919,12 @@ std::expected<Value, VM::RuntimeError> VM::run() {
 
                 if (trait->fields.contains(name)) {
                     if (attributes[ClassAttributes::GETTER]) {
-                        auto* computed_property = dynamic_cast<ComputedProperty *>(trait->fields[name].value.get<Object*>());
+                        auto* computed_property = dynamic_cast<ComputedProperty*>(trait->fields[name].value.get<Object
+                            *>());
                         push(computed_property->get.value.value);
                     } else {
-                        auto* computed_property = dynamic_cast<ComputedProperty *>(trait->fields[name].value.get<Object*>());
+                        auto* computed_property = dynamic_cast<ComputedProperty*>(trait->fields[name].value.get<Object
+                            *>());
                         push(computed_property->set.value.value);
                     }
                 }
@@ -883,14 +936,14 @@ std::expected<Value, VM::RuntimeError> VM::run() {
         // }
         // std::cout << '\n';
     }
-#undef BINARY_OPERATION
+    #undef BINARY_OPERATION
 }
 
-void VM::add_native(const std::string &name, const Value &value) {
+void VM::add_native(const std::string& name, const Value& value) {
     natives[name] = value;
 }
 
-void VM::add_native_function(const std::string &name, const std::function<Value(const std::vector<Value>&)> &fn) {
+void VM::add_native_function(const std::string& name, const std::function<Value(const std::vector<Value>&)>& fn) {
     auto* ptr = new NativeFunction(fn);
     natives[name] = ptr;
     allocate(ptr);

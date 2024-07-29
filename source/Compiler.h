@@ -10,18 +10,16 @@
 
 class Compiler {
 public:
-
     class Error : public std::runtime_error {
     public:
-        explicit Error(const std::string &message) : runtime_error(message) {
-        }
+        explicit Error(const std::string& message) : runtime_error(message) {}
     };
 
     struct Upvalue {
         int index; // should be other type
         bool is_local;
 
-        bool operator==(const Upvalue & upvalue) const = default;
+        bool operator==(const Upvalue& upvalue) const = default;
     };
 
     struct Local {
@@ -49,7 +47,9 @@ public:
     // Break this scope into classes because it is too monolithic
     class Scope {
     public:
-        Scope(ScopeType type, int slot_start, std::string name = "") : type(type), slot_start(slot_start), name(std::move(name)) {}
+        Scope(ScopeType type, int slot_start, std::string name = "") : type(type),
+                                                                       slot_start(slot_start),
+                                                                       name(std::move(name)) {}
 
         void mark_temporary(int count = 1);
 
@@ -79,6 +79,7 @@ public:
         [[nodiscard]] int get_start_slot() const {
             return slot_start;
         }
+
         [[nodiscard]] const std::vector<Local>& get_locals() const {
             return locals;
         }
@@ -91,7 +92,7 @@ public:
             return fields;
         }
 
-        void add_field(const std::string & string, FieldInfo field_info) {
+        void add_field(const std::string& string, FieldInfo field_info) {
             fields[string] = field_info;
         }
 
@@ -104,6 +105,7 @@ public:
         int return_slot = -1;
 
         int constructor_argument_count = 0;
+
     private:
         ScopeType type;
         std::string name;
@@ -120,7 +122,7 @@ public:
     };
 
     struct Context {
-        Function *function = nullptr;
+        Function* function = nullptr;
         FunctionType function_type;
         std::vector<Upvalue> upvalues;
         std::vector<Scope> scopes;
@@ -129,16 +131,17 @@ public:
         Scope& current_scope() {
             return scopes.back();
         }
+
         // TODO: does this support nested classes??
-        struct FieldResolution {
-        };
+        struct FieldResolution {};
+
         struct LocalResolution {
             int slot;
         };
 
         using Resolution = std::variant<std::monostate, FieldResolution, LocalResolution>;
 
-        Resolution resolve_variable(const std::string &name);
+        Resolution resolve_variable(const std::string& name);
 
         int add_upvalue(int index, bool is_local);
 
@@ -146,7 +149,9 @@ public:
     };
 
 
-    explicit Compiler(FileInputStream&& stream, SharedContext* context) : parser(std::move(stream), context), source(source), main("", 0) {
+    explicit Compiler(FileInputStream&& stream, SharedContext* context) : parser(std::move(stream), context),
+                                                                          source(source),
+                                                                          main("", 0) {
         context_stack.emplace_back(&main, FunctionType::FUNCTION);
         current_context().scopes.emplace_back(ScopeType::BLOCK, 0); // TODO: special type?
         functions.push_back(&main);
@@ -161,83 +166,95 @@ public:
 
     void this_expr();
 
-    void object_constructor(const std::vector<std::unique_ptr<FieldStmt>> &fields, bool has_superclass, const std::vector<ExprHandle> &
-                            superclass_arguments);
+    void object_constructor(
+        const std::vector<std::unique_ptr<FieldStmt>>& fields,
+        bool has_superclass,
+        const std::vector<ExprHandle>& superclass_arguments
+    );
 
     void object_expression(const ObjectExpr& expr);
 
-    void object_statement(const ObjectStmt & stmt);
+    void object_statement(const ObjectStmt& stmt);
 
-    void trait_statement(const TraitStmt & stmt);
+    void trait_statement(const TraitStmt& stmt);
 
 private:
-    void start_context(Function *function, FunctionType type);
+    void start_context(Function* function, FunctionType type);
     void end_context();
-    Context &current_context();
+    Context& current_context();
     Scope& current_scope();
-    [[nodiscard]] Function *current_function();
-    [[nodiscard]] Program &current_program();
+    [[nodiscard]] Function* current_function();
+    [[nodiscard]] Program& current_program();
 
     void emit(bite_byte byte);
     void emit(OpCode op_code);
     void emit(OpCode op_code, bite_byte value);
     void emit_default_return();
 
-    void begin_scope(ScopeType type, const std::string &label = "");
+    void begin_scope(ScopeType type, const std::string& label = "");
     void end_scope();
     void pop_out_of_scopes(int depth);
 
-    void define_variable(const std::string &name);
-    void resolve_variable(const std::string &name);
+    void define_variable(const std::string& name);
+    void resolve_variable(const std::string& name);
 
-    Compiler::Context::Resolution resolve_upvalue(const std::string &name);
+    Compiler::Context::Resolution resolve_upvalue(const std::string& name);
 
-    void visit_stmt(const Stmt &stmt);
+    void visit_stmt(const Stmt& stmt);
 
-    void variable_declaration(const VarStmt &expr);
-    void function_declaration(const FunctionStmt &stmt);
-    void function(const FunctionStmt &stmt, FunctionType type);
+    void variable_declaration(const VarStmt& expr);
+    void function_declaration(const FunctionStmt& stmt);
+    void function(const FunctionStmt& stmt, FunctionType type);
 
-    void constructor(const ConstructorStmt &stmt, const std::vector<std::unique_ptr<FieldStmt>> &fields, bool has_superclass, int
-                     superclass_arguments_count);
+    void constructor(
+        const ConstructorStmt& stmt,
+        const std::vector<std::unique_ptr<FieldStmt>>& fields,
+        bool has_superclass,
+        int superclass_arguments_count
+    );
 
-    void default_constructor(const std::vector<std::unique_ptr<FieldStmt>> &fields, bool has_superclass);
+    void default_constructor(const std::vector<std::unique_ptr<FieldStmt>>& fields, bool has_superclass);
 
-    void using_core(const std::vector<std::unique_ptr<UsingStmt>> &using_stmts);
+    void using_core(const std::vector<std::unique_ptr<UsingStmt>>& using_stmts);
 
-    void class_core(int class_slot, std::optional<Token> super_class, const std::vector<std::unique_ptr<MethodStmt>> &methods, const std::
-                    vector<std::unique_ptr<FieldStmt>> &fields, const std::vector<std::unique_ptr<UsingStmt>> &using_stmts, bool
-                    is_abstract);
+    void class_core(
+        int class_slot,
+        std::optional<Token> super_class,
+        const std::vector<std::unique_ptr<MethodStmt>>& methods,
+        const std::vector<std::unique_ptr<FieldStmt>>& fields,
+        const std::vector<std::unique_ptr<UsingStmt>>& using_stmts,
+        bool is_abstract
+    );
 
-    void class_declaration(const ClassStmt &stmt);
-    void expr_statement(const ExprStmt &stmt);
+    void class_declaration(const ClassStmt& stmt);
+    void expr_statement(const ExprStmt& stmt);
     void native_declaration(const NativeStmt& stmt);
 
-    void if_expression(const IfExpr &stmt);
+    void if_expression(const IfExpr& stmt);
 
-    void visit_expr(const Expr &expr);
+    void visit_expr(const Expr& expr);
 
-    void block(const BlockExpr & expr);
-    void loop_expression(const LoopExpr & expr);
-    void break_expr(const BreakExpr & expr);
-    void continue_expr(const ContinueExpr &expr);
-    void while_expr(const WhileExpr & expr);
-    void for_expr(const ForExpr & expr);
-    void retrun_expression(const ReturnExpr &stmt);
+    void block(const BlockExpr& expr);
+    void loop_expression(const LoopExpr& expr);
+    void break_expr(const BreakExpr& expr);
+    void continue_expr(const ContinueExpr& expr);
+    void while_expr(const WhileExpr& expr);
+    void for_expr(const ForExpr& expr);
+    void retrun_expression(const ReturnExpr& stmt);
 
-    void literal(const LiteralExpr &expr);
-    void string_literal(const StringLiteral &expr);
-    void unary(const UnaryExpr &expr);
+    void literal(const LiteralExpr& expr);
+    void string_literal(const StringLiteral& expr);
+    void unary(const UnaryExpr& expr);
 
-    void binary(const BinaryExpr &expr);
+    void binary(const BinaryExpr& expr);
 
-    void update_lvalue(const Expr &lvalue);
+    void update_lvalue(const Expr& lvalue);
 
-    void logical(const BinaryExpr &expr);
+    void logical(const BinaryExpr& expr);
 
     void variable(const VariableExpr& expr);
-    void call(const CallExpr &expr);
-    void get_property(const GetPropertyExpr & expr);
+    void call(const CallExpr& expr);
+    void get_property(const GetPropertyExpr& expr);
     void super(const SuperExpr& expr);
 
     Parser parser;

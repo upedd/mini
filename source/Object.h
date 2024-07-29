@@ -19,8 +19,7 @@ public:
 
     virtual std::string to_string() = 0;
 
-    virtual void mark_references(GarbageCollector &gc) {
-    }
+    virtual void mark_references(GarbageCollector& gc) {}
 
     virtual ~Object() = default;
 };
@@ -28,13 +27,13 @@ public:
 class Function final : public Object {
 public:
     Function(std::string name, const int arity) : name(std::move(name)),
-                                                  arity(arity), upvalue_count(0) {
-    }
+                                                  arity(arity),
+                                                  upvalue_count(0) {}
 
-    Program &get_program() { return program; }
+    Program& get_program() { return program; }
     [[nodiscard]] int get_arity() const { return arity; }
 
-    int add_constant(const Value &value);
+    int add_constant(const Value& value);
 
     Value get_constant(int idx);
 
@@ -61,11 +60,11 @@ public:
         return jump_table[idx];
     }
 
-    std::vector<Value> &get_constants();
+    std::vector<Value>& get_constants();
 
-    void add_allocated(Object *object);
+    void add_allocated(Object* object);
 
-    const std::vector<Object *> get_allocated();
+    const std::vector<Object*> get_allocated();
 
     std::size_t get_size() override {
         return sizeof(Function);
@@ -79,8 +78,8 @@ public:
         return std::format("<Function({})>", name);
     }
 
-    void mark_references(GarbageCollector &gc) override {
-        for (auto &constant: constants) {
+    void mark_references(GarbageCollector& gc) override {
+        for (auto& constant : constants) {
             gc.mark(constant);
         }
     }
@@ -88,7 +87,7 @@ public:
 private:
     // objects that were allocated during function compilation
     // vm should adpot them
-    std::vector<Object *> allocated_objects;
+    std::vector<Object*> allocated_objects;
     std::string name;
     int arity;
     Program program; // code of function
@@ -99,8 +98,7 @@ private:
 
 class NativeFunction final : public Object {
 public:
-    explicit NativeFunction(std::function<Value(const std::vector<Value> &)> function) : function(std::move(function)) {
-    }
+    explicit NativeFunction(std::function<Value(const std::vector<Value>&)> function) : function(std::move(function)) {}
 
     std::size_t get_size() override {
         return sizeof(NativeFunction);
@@ -110,13 +108,12 @@ public:
         return "<Native>";
     }
 
-    std::function<Value(const std::vector<Value> &)> function;
+    std::function<Value(const std::vector<Value>&)> function;
 };
 
 class Upvalue : public Object {
 public:
-    explicit Upvalue(Value *location) : location(location) {
-    }
+    explicit Upvalue(Value* location) : location(location) {}
 
     std::size_t get_size() override {
         return sizeof(Upvalue);
@@ -126,20 +123,19 @@ public:
         return std::format("<Upvalue({})>", location->to_string());
     }
 
-    void mark_references(GarbageCollector &gc) override {
+    void mark_references(GarbageCollector& gc) override {
         gc.mark(closed);
     }
 
-    Value *location = nullptr;
-    Value closed = Value{nil_t};
+    Value* location = nullptr;
+    Value closed = Value { nil_t };
 };
 
 class Closure final : public Object {
 public:
-    explicit Closure(Function *function) : function(function) {
-    }
+    explicit Closure(Function* function) : function(function) {}
 
-    [[nodiscard]] Function *get_function() const { return function; }
+    [[nodiscard]] Function* get_function() const { return function; }
 
     std::size_t get_size() override {
         return sizeof(Closure);
@@ -149,17 +145,17 @@ public:
         return std::format("<Closure({})>", function->to_string());
     };
 
-    void mark_references(GarbageCollector &gc) override {
-        for (auto *upvalue: upvalues) {
+    void mark_references(GarbageCollector& gc) override {
+        for (auto* upvalue : upvalues) {
             gc.mark(upvalue);
         }
         gc.mark(function);
     }
 
-    std::vector<Upvalue *> upvalues;
+    std::vector<Upvalue*> upvalues;
 
 private:
-    Function *function;
+    Function* function;
 };
 
 struct ClassValue {
@@ -167,11 +163,12 @@ struct ClassValue {
     bitflags<ClassAttributes> attributes;
     bool is_computed = false; // if is computed don't look at this attributes?
 };
+
 class Class;
 
 struct ClassMethod {
     ClassValue value;
-    Class *owner = nullptr;
+    Class* owner = nullptr;
 };
 
 
@@ -185,7 +182,7 @@ public:
         return std::format("<ComputedPropety()>"); // TODO: implement
     }
 
-    void mark_references(GarbageCollector &gc) override {
+    void mark_references(GarbageCollector& gc) override {
         gc.mark(get.value.value);
         gc.mark(set.value.value);
     }
@@ -198,8 +195,7 @@ class Instance;
 
 class Class final : public Object {
 public:
-    explicit Class(std::string name) : name(std::move(name)) {
-    }
+    explicit Class(std::string name) : name(std::move(name)) {}
 
     std::size_t get_size() override {
         return sizeof(Class);
@@ -209,25 +205,23 @@ public:
         return std::format("<Class({})>", name);
     }
 
-    void mark_references(GarbageCollector &gc) override;
+    void mark_references(GarbageCollector& gc) override;
 
     // resolve only current class memebers
-    std::optional<ClassMethod> resolve_private_method(const std::string &name) {
+    std::optional<ClassMethod> resolve_private_method(const std::string& name) {
         if (!methods.contains(name) || !methods[name].attributes[ClassAttributes::PRIVATE]) {
             return {};
         }
-        return {{methods[name], this}};
+        return { { methods[name], this } };
     }
 
-    std::optional<ClassMethod> resolve_dynamic_method(const std::string &name) {
-        if (methods.contains(name) && !methods[name].attributes[
-                ClassAttributes::PRIVATE]) {
-            return {{methods[name], this}};
+    std::optional<ClassMethod> resolve_dynamic_method(const std::string& name) {
+        if (methods.contains(name) && !methods[name].attributes[ClassAttributes::PRIVATE]) {
+            return { { methods[name], this } };
         }
-        for (auto *superclass: std::views::reverse(superclasses)) {
-            if (superclass->methods.contains(name) &&
-                !superclass->methods[name].attributes[ClassAttributes::PRIVATE]) {
-                return {{superclass->methods[name], this}};
+        for (auto* superclass : std::views::reverse(superclasses)) {
+            if (superclass->methods.contains(name) && !superclass->methods[name].attributes[ClassAttributes::PRIVATE]) {
+                return { { superclass->methods[name], this } };
             }
         }
         return {};
@@ -250,10 +244,10 @@ public:
 
 class Instance final : public Object {
 public:
-    explicit Instance(Class *klass) : klass(klass) {
+    explicit Instance(Class* klass) : klass(klass) {
         // default intialize properties
         // should this be here or in vm?
-        for (auto &[name, value]: klass->fields) {
+        for (auto& [name, value] : klass->fields) {
             properties[name] = value;
         }
     }
@@ -266,39 +260,43 @@ public:
         return std::format("<Instance({})>", klass->to_string());
     }
 
-    void mark_references(GarbageCollector &gc) override {
+    void mark_references(GarbageCollector& gc) override {
         gc.mark(klass);
-        for (auto &value: std::views::values(properties)) {
+        for (auto& value : std::views::values(properties)) {
             gc.mark(value.value);
         }
-        for (auto *super_instance: super_instances) {
+        for (auto* super_instance : super_instances) {
             gc.mark(super_instance);
         }
     }
 
-    std::optional<std::reference_wrapper<ClassValue> > resolve_private_property(const std::string &name) {
+    std::optional<std::reference_wrapper<ClassValue>> resolve_private_property(const std::string& name) {
         if (properties.contains(name) && properties[name].attributes[ClassAttributes::PRIVATE]) {
             return properties[name];
         }
         return {};
     }
 
-    std::optional<std::reference_wrapper<ClassValue> > resolve_dynamic_property(const std::string &name, std::optional<ClassAttributes> attribute_to_match = {}) {
-        if (properties.contains(name) && !properties[name].
-            attributes[ClassAttributes::PRIVATE] && (!attribute_to_match || properties[name].attributes[*attribute_to_match])) {
+    std::optional<std::reference_wrapper<ClassValue>> resolve_dynamic_property(
+        const std::string& name,
+        std::optional<ClassAttributes> attribute_to_match = {}
+    ) {
+        if (properties.contains(name) && !properties[name].attributes[ClassAttributes::PRIVATE] && (!attribute_to_match
+            || properties[name].attributes[*attribute_to_match])) {
             return properties[name];
         }
-        for (auto *super_instance: super_instances) {
+        for (auto* super_instance : super_instances) {
             if (super_instance->properties.contains(name) && !super_instance->properties[name].attributes[
-                    ClassAttributes::PRIVATE] && (!attribute_to_match || super_instance->properties[name].attributes[*attribute_to_match])) {
+                ClassAttributes::PRIVATE] && (!attribute_to_match || super_instance->properties[name].attributes[*
+                attribute_to_match])) {
                 return super_instance->properties[name];
             }
         }
         return {};
     }
 
-    std::optional<Instance *> get_super_instance_by_class(Class *klass) {
-        for (auto *super_instance: super_instances) {
+    std::optional<Instance*> get_super_instance_by_class(Class* klass) {
+        for (auto* super_instance : super_instances) {
             if (super_instance->klass == klass) {
                 return super_instance;
             }
@@ -306,12 +304,13 @@ public:
         return {};
     }
 
-    std::optional<Instance *> get_super() {
-        if (super_instances.empty()) return {};
+    std::optional<Instance*> get_super() {
+        if (super_instances.empty())
+            return {};
         return super_instances[0];
     }
 
-    Class *klass;
+    Class* klass;
     std::vector<Instance*> super_instances;
     std::unordered_map<std::string, ClassValue> properties;
 };
@@ -322,18 +321,18 @@ public:
     explicit Trait(std::string name) : name(std::move(name)) {}
 
     std::size_t get_size() override {
-       return sizeof(Trait);
+        return sizeof(Trait);
     }
 
     std::string to_string() override {
         return std::string("<trait>"); // TODO: implement
     }
 
-    void mark_references(GarbageCollector &gc) override {
-        for (auto &method: methods | std::views::values) {
+    void mark_references(GarbageCollector& gc) override {
+        for (auto& method : methods | std::views::values) {
             gc.mark(method.value);
         }
-        for (auto &method: fields | std::views::values) {
+        for (auto& method : fields | std::views::values) {
             gc.mark(method.value);
         }
     }
@@ -349,52 +348,46 @@ public:
  */
 class Receiver final : public Object {
 public:
-    Receiver(Class *klass, Instance *instance) : klass(klass), instance(instance) {
-    }
+    Receiver(Class* klass, Instance* instance) : klass(klass),
+                                                 instance(instance) {}
 
     std::size_t get_size() override {
         return sizeof(Receiver);
     }
 
     std::string to_string() override {
-        return std::format("<Receiver({}, {})>",
-                           klass->to_string(),
-                           instance->to_string());
+        return std::format("<Receiver({}, {})>", klass->to_string(), instance->to_string());
     }
 
-    void mark_references(GarbageCollector &gc) override {
+    void mark_references(GarbageCollector& gc) override {
         gc.mark(klass);
         gc.mark(instance);
     }
 
-    Class *klass;
-    Instance *instance;
+    Class* klass;
+    Instance* instance;
 };
 
 class BoundMethod final : public Object {
 public:
-    BoundMethod(Value receiver, Closure *closure)
-        : receiver(std::move(receiver)),
-          closure(closure) {
-    }
+    BoundMethod(Value receiver, Closure* closure) : receiver(std::move(receiver)),
+                                                    closure(closure) {}
 
     std::size_t get_size() override {
         return sizeof(BoundMethod);
     }
 
     std::string to_string() override {
-        return std::format("<BoundMethod({}, {})>",
-                           receiver.to_string(),
-                           closure->to_string());
+        return std::format("<BoundMethod({}, {})>", receiver.to_string(), closure->to_string());
     }
 
-    void mark_references(GarbageCollector &gc) override {
+    void mark_references(GarbageCollector& gc) override {
         gc.mark(receiver);
         gc.mark(closure);
     }
 
     Value receiver;
-    Closure *closure;
+    Closure* closure;
 };
 
 #endif //FUNCTION_H

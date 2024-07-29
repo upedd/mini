@@ -24,10 +24,13 @@ int main(int argc, char** argv) {
         gc.add_object(function);
     }
     VM vm(std::move(gc), &func);
-    vm.add_native_function("print", [](const std::vector<Value>& args) {
-        std::cout << args[1].to_string() << '\n';
-        return nil_t;
-    });
+    vm.add_native_function(
+        "print",
+        [](const std::vector<Value>& args) {
+            std::cout << args[1].to_string() << '\n';
+            return nil_t;
+        }
+    );
     auto result = vm.run();
     if (!result) {
         std::cerr << result.error().what() << '\n';

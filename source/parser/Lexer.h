@@ -17,15 +17,17 @@ public:
         std::string message;
     };
 
-    explicit Lexer(FileInputStream&& stream, SharedContext* context) : context(context), stream(std::move(stream)) {};
+    explicit Lexer(FileInputStream&& stream, SharedContext* context) : context(context),
+                                                                       stream(std::move(stream)) {};
 
     std::expected<Token, Error> next_token();
+
 private:
     void skip_whitespace();
     void consume_identifier();
 
     [[nodiscard]] Token make_token(Token::Type type);
-    [[nodiscard]] std::unexpected<Error> make_error(const std::string &message) const;
+    [[nodiscard]] std::unexpected<Error> make_error(const std::string& message) const;
 
     Token keyword_or_identifier();
     std::expected<Token, Error> string();
@@ -37,7 +39,6 @@ private:
     SharedContext* context;
     FileInputStream stream;
 };
-
 
 
 #endif //LEXER_H

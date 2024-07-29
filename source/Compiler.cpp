@@ -13,13 +13,13 @@ void Compiler::Scope::pop_temporary(int count) {
     temporaries -= count;
 }
 
-int Compiler::Scope::define(const std::string &name) {
+int Compiler::Scope::define(const std::string& name) {
     locals.emplace_back(name);
     //++items_on_stack;
     return slot_start + temporaries;
 }
 
-std::optional<int> Compiler::Scope::get(const std::string &name) {
+std::optional<int> Compiler::Scope::get(const std::string& name) {
     // assumes locals are not mixed with temporaries in scope is that true?
     for (int i = 0; i < locals.size(); ++i) {
         if (locals[i].name == name) {
@@ -38,8 +38,8 @@ int Compiler::Scope::next_slot() {
     return slot_start + locals.size() + temporaries;
 }
 
-Compiler::Context::Resolution Compiler::Context::resolve_variable(const std::string &name) {
-    for (auto &scope: std::views::reverse(scopes)) {
+Compiler::Context::Resolution Compiler::Context::resolve_variable(const std::string& name) {
+    for (auto& scope : std::views::reverse(scopes)) {
         if (scope.get_type() == ScopeType::CLASS && scope.has_field(name)) {
             return FieldResolution();
         }
@@ -52,7 +52,7 @@ Compiler::Context::Resolution Compiler::Context::resolve_variable(const std::str
 }
 
 int Compiler::Context::add_upvalue(int index, bool is_local) {
-    Upvalue upvalue{.index = index, .is_local = is_local};
+    Upvalue upvalue { .index = index, .is_local = is_local };
     // try to reuse existing upvalue (possible optimization replace linear search)
     auto found = std::ranges::find(upvalues, upvalue);
     if (found != upvalues.end()) {
@@ -63,7 +63,7 @@ int Compiler::Context::add_upvalue(int index, bool is_local) {
 }
 
 void Compiler::Context::close_upvalue(int index) {
-    for (auto &scope: std::views::reverse(scopes)) {
+    for (auto& scope : std::views::reverse(scopes)) {
         if (scope.get_start_slot() <= index) {
             scope.close(index - scope.get_start_slot());
             break;
@@ -72,8 +72,8 @@ void Compiler::Context::close_upvalue(int index) {
 }
 
 void Compiler::compile() {
-    for (auto &stmt: parser.parse()) {
-        for (auto &err: parser.get_errors()) {
+    for (auto& stmt : parser.parse()) {
+        for (auto& err : parser.get_errors()) {
             std::cerr << err.message << '\n';
         }
         //std::cout << stmt_to_string(stmt, source) << '\n';
@@ -83,15 +83,15 @@ void Compiler::compile() {
     emit_default_return();
 }
 
-Function &Compiler::get_main() {
+Function& Compiler::get_main() {
     return main;
 }
 
-const std::vector<Function *> &Compiler::get_functions() {
+const std::vector<Function*>& Compiler::get_functions() {
     return functions;
 }
 
-const std::vector<std::string> &Compiler::get_natives() {
+const std::vector<std::string>& Compiler::get_natives() {
     return natives;
 }
 
@@ -100,7 +100,7 @@ void Compiler::this_expr() {
     emit(OpCode::THIS);
 }
 
-void Compiler::start_context(Function *function, FunctionType type) {
+void Compiler::start_context(Function* function, FunctionType type) {
     context_stack.emplace_back(function, type);
     current_context().scopes.emplace_back(ScopeType::BLOCK, 0); // TODO: should be function?
 }
@@ -108,28 +108,28 @@ void Compiler::start_context(Function *function, FunctionType type) {
 //#define COMPILER_PRINT_BYTECODE
 
 void Compiler::end_context() {
-#ifdef COMPILER_PRINT_BYTECODE
+    #ifdef COMPILER_PRINT_BYTECODE
     Disassembler disassembler(*current_function());
     disassembler.disassemble(current_function()->to_string());
-#endif
+    #endif
 
     context_stack.pop_back();
 }
 
-Compiler::Context &Compiler::current_context() {
+Compiler::Context& Compiler::current_context() {
     return context_stack.back();
 }
 
-Compiler::Scope &Compiler::current_scope() {
+Compiler::Scope& Compiler::current_scope() {
     return current_context().current_scope();
 }
 
 
-Function *Compiler::current_function() {
+Function* Compiler::current_function() {
     return current_context().function;
 }
 
-Program &Compiler::current_program() {
+Program& Compiler::current_program() {
     return current_function()->get_program();
 }
 
@@ -155,13 +155,13 @@ void Compiler::emit_default_return() {
     emit(OpCode::RETURN);
 }
 
-void Compiler::begin_scope(ScopeType type, const std::string &label) {
+void Compiler::begin_scope(ScopeType type, const std::string& label) {
     current_context().scopes.emplace_back(type, current_scope().next_slot(), label);
 }
 
 void Compiler::pop_out_of_scopes(int depth) {
     for (int i = 0; i < depth; ++i) {
-        Scope &scope = current_context().scopes[current_context().scopes.size() - i - 1];
+        Scope& scope = current_context().scopes[current_context().scopes.size() - i - 1];
         // every scope in bite is an expression which should produce a value
         // so we actually leave last value on the stack
         // every time we begin scope we have to remeber that (TODO: maybe this system could be rewritten more clearly)
@@ -169,7 +169,7 @@ void Compiler::pop_out_of_scopes(int depth) {
             emit(OpCode::POP);
         }
         bool leave_last = i == depth - 1;
-        auto &locals = scope.get_locals();
+        auto& locals = scope.get_locals();
         for (int j = locals.size() - 1; j >= leave_last; --j) {
             if (locals[j].is_closed) {
                 emit(OpCode::CLOSE_UPVALUE);
@@ -183,14 +183,16 @@ void Compiler::pop_out_of_scopes(int depth) {
 void Compiler::end_scope() {
     if (current_scope().get_type() == ScopeType::CLASS) {
         current_context().resolved_classes[current_scope().get_name()] = ResolvedClass(
-            current_scope().get_fields(), current_scope().constructor_argument_count);
+            current_scope().get_fields(),
+            current_scope().constructor_argument_count
+        );
     }
     pop_out_of_scopes(1);
     current_context().scopes.pop_back();
     current_scope().mark_temporary();
 }
 
-void Compiler::define_variable(const std::string &name) {
+void Compiler::define_variable(const std::string& name) {
     if (current_scope().get(name)) {
         throw Error("Variable redefinition in same scope is disallowed.");
     }
@@ -198,7 +200,7 @@ void Compiler::define_variable(const std::string &name) {
 }
 
 // TODO: total mess!!!!
-void Compiler::resolve_variable(const std::string &name) {
+void Compiler::resolve_variable(const std::string& name) {
     auto resolution = current_context().resolve_variable(name);
     if (std::holds_alternative<Context::LocalResolution>(resolution)) {
         emit(OpCode::GET, std::get<Context::LocalResolution>(resolution).slot); // todo: handle overflow
@@ -221,12 +223,12 @@ void Compiler::resolve_variable(const std::string &name) {
     current_scope().mark_temporary();
 }
 
-Compiler::Context::Resolution Compiler::resolve_upvalue(const std::string &name) {
+Compiler::Context::Resolution Compiler::resolve_upvalue(const std::string& name) {
     std::optional<int> resolved;
     // find first context that contains given name as a local variable
     // while tracking all contexts that we needed to go through while getting to that local
-    std::vector<std::reference_wrapper<Context> > resolve_up;
-    for (Context &context: context_stack | std::views::reverse) {
+    std::vector<std::reference_wrapper<Context>> resolve_up;
+    for (Context& context : context_stack | std::views::reverse) {
         auto resolution = context.resolve_variable(name);
         if (std::holds_alternative<Context::LocalResolution>(resolution)) {
             resolved = std::get<Context::LocalResolution>(resolution).slot;
@@ -240,47 +242,52 @@ Compiler::Context::Resolution Compiler::resolve_upvalue(const std::string &name)
         resolve_up.emplace_back(context);
     }
     // if we didn't find any local variable with given name return -1;
-    if (!resolved) return std::monostate();
+    if (!resolved)
+        return std::monostate();
     // tracks whetever upvalue points to local value or another upvalue
     bool is_local = true;
     // go from context that contains local variable to context that we are resolving from
-    for (std::reference_wrapper<Context> context: resolve_up | std::views::reverse) {
+    for (std::reference_wrapper<Context> context : resolve_up | std::views::reverse) {
         resolved = context.get().add_upvalue(*resolved, is_local);
-        if (is_local) is_local = false; // only top level context points to local variable
+        if (is_local)
+            is_local = false; // only top level context points to local variable
     }
 
     return Context::LocalResolution(*resolved);
 }
 
-void Compiler::visit_stmt(const Stmt &statement) {
-    std::visit(overloaded{
-                   [this](const VarStmt &stmt) { variable_declaration(stmt); },
-                   [this](const FunctionStmt &stmt) { function_declaration(stmt); },
-                   [this](const ExprStmt &stmt) { expr_statement(stmt); },
-                   [this](const ClassStmt &stmt) { class_declaration(stmt); },
-                   [this](const NativeStmt &stmt) { native_declaration(stmt); },
-                   [this](const ObjectStmt& stmt) {object_statement(stmt);},
-                   [this](const TraitStmt& stmt) {trait_statement(stmt);},
-                   [this](const MethodStmt &) { assert("unreachable"); },
-                   [this](const FieldStmt &) { assert("unreachable"); },
-                   [this](const ConstructorStmt &) { assert("unreachable"); },
-                   [this](const UsingStmt&) {}
-               }, statement);
+void Compiler::visit_stmt(const Stmt& statement) {
+    std::visit(
+        overloaded {
+            [this](const VarStmt& stmt) { variable_declaration(stmt); },
+            [this](const FunctionStmt& stmt) { function_declaration(stmt); },
+            [this](const ExprStmt& stmt) { expr_statement(stmt); },
+            [this](const ClassStmt& stmt) { class_declaration(stmt); },
+            [this](const NativeStmt& stmt) { native_declaration(stmt); },
+            [this](const ObjectStmt& stmt) { object_statement(stmt); },
+            [this](const TraitStmt& stmt) { trait_statement(stmt); },
+            [this](const MethodStmt&) { assert("unreachable"); },
+            [this](const FieldStmt&) { assert("unreachable"); },
+            [this](const ConstructorStmt&) { assert("unreachable"); },
+            [this](const UsingStmt&) {}
+        },
+        statement
+    );
 }
 
-void Compiler::variable_declaration(const VarStmt &expr) {
+void Compiler::variable_declaration(const VarStmt& expr) {
     std::string name = *expr.name.string;
     visit_expr(*expr.value);
     current_scope().pop_temporary();
     define_variable(name);
 }
 
-void Compiler::function_declaration(const FunctionStmt &stmt) {
+void Compiler::function_declaration(const FunctionStmt& stmt) {
     define_variable(*stmt.name.string);
     function(stmt, FunctionType::FUNCTION);
 }
 
-void Compiler::native_declaration(const NativeStmt &stmt) {
+void Compiler::native_declaration(const NativeStmt& stmt) {
     std::string name = *stmt.name.string;
     natives.push_back(name);
     int idx = current_function()->add_constant(name);
@@ -288,14 +295,14 @@ void Compiler::native_declaration(const NativeStmt &stmt) {
     define_variable(name);
 }
 
-void Compiler::block(const BlockExpr &expr) {
+void Compiler::block(const BlockExpr& expr) {
     int break_idx = current_function()->add_empty_jump_destination();
     begin_scope(ScopeType::BLOCK, expr.label ? *expr.label->string : "");
     current_scope().break_idx = break_idx;
     emit(OpCode::NIL);
     define_variable("$scope_return");
     current_scope().return_slot = *current_scope().get("$scope_return");
-    for (auto &stmt: expr.stmts) {
+    for (auto& stmt : expr.stmts) {
         visit_stmt(*stmt);
     }
     if (expr.expr) {
@@ -308,14 +315,15 @@ void Compiler::block(const BlockExpr &expr) {
     current_function()->patch_jump_destination(break_idx, current_program().size());
 }
 
-void Compiler::loop_expression(const LoopExpr &expr) {
+void Compiler::loop_expression(const LoopExpr& expr) {
     std::string label = expr.label ? *expr.label->string : "";
     begin_scope(ScopeType::LOOP, label);
     // to support breaking with values before loop body we create special invisible variable used for returing
     emit(OpCode::NIL);
     define_variable("$scope_return");
     current_scope().return_slot = std::get<Context::LocalResolution>(
-        current_context().resolve_variable("$scope_return")).slot;
+        current_context().resolve_variable("$scope_return")
+    ).slot;
     int continue_idx = current_function()->add_jump_destination(current_program().size());
     int break_idx = current_function()->add_empty_jump_destination();
     current_scope().continue_idx = continue_idx;
@@ -330,14 +338,15 @@ void Compiler::loop_expression(const LoopExpr &expr) {
     current_function()->patch_jump_destination(break_idx, current_program().size());
 }
 
-void Compiler::while_expr(const WhileExpr &expr) {
+void Compiler::while_expr(const WhileExpr& expr) {
     // Tons of overlap with normal loop maybe abstract this away?
     std::string label = expr.label ? *expr.label->string : "";
     begin_scope(ScopeType::LOOP, label);
     emit(OpCode::NIL);
     define_variable("$scope_return");
     current_scope().return_slot = std::get<Context::LocalResolution>(
-        current_context().resolve_variable("$scope_return")).slot;
+        current_context().resolve_variable("$scope_return")
+    ).slot;
 
     int continue_idx = current_function()->add_jump_destination(current_program().size());
     int break_idx = current_function()->add_empty_jump_destination();
@@ -360,7 +369,7 @@ void Compiler::while_expr(const WhileExpr &expr) {
     current_function()->patch_jump_destination(break_idx, current_program().size());
 }
 
-void Compiler::for_expr(const ForExpr &expr) {
+void Compiler::for_expr(const ForExpr& expr) {
     // Tons of overlap with while loop maybe abstract this away?
     // ideally some sort of desugaring step
     begin_scope(ScopeType::BLOCK);
@@ -379,7 +388,8 @@ void Compiler::for_expr(const ForExpr &expr) {
     emit(OpCode::NIL);
     define_variable("$scope_return");
     current_scope().return_slot = std::get<Context::LocalResolution>(
-        current_context().resolve_variable("$scope_return")).slot;
+        current_context().resolve_variable("$scope_return")
+    ).slot;
     int continue_idx = current_function()->add_jump_destination(current_program().size());
     int break_idx = current_function()->add_empty_jump_destination();
     int end_idx = current_function()->add_empty_jump_destination();
@@ -423,11 +433,11 @@ void Compiler::for_expr(const ForExpr &expr) {
 }
 
 
-void Compiler::break_expr(const BreakExpr &expr) {
+void Compiler::break_expr(const BreakExpr& expr) {
     // TODO: parser should check if break expressions actually in loop
     // TODO: better way to write this
     int scope_depth = 0;
-    for (auto &scope: std::views::reverse(current_context().scopes)) {
+    for (auto& scope : std::views::reverse(current_context().scopes)) {
         if (expr.label) {
             if (scope.get_name() == *expr.label->string) {
                 break;
@@ -438,7 +448,7 @@ void Compiler::break_expr(const BreakExpr &expr) {
         }
         ++scope_depth;
     }
-    Scope &scope = current_context().scopes[current_context().scopes.size() - scope_depth - 1];
+    Scope& scope = current_context().scopes[current_context().scopes.size() - scope_depth - 1];
     if (expr.expr) {
         visit_expr(*expr.expr);
         emit(OpCode::SET, scope.return_slot);
@@ -449,35 +459,36 @@ void Compiler::break_expr(const BreakExpr &expr) {
     emit(OpCode::JUMP, scope.break_idx);
 }
 
-void Compiler::continue_expr(const ContinueExpr &expr) {
+void Compiler::continue_expr(const ContinueExpr& expr) {
     // safety: assert that contains label?
     int scope_depth = 0;
-    for (auto &scope: std::views::reverse(current_context().scopes)) {
+    for (auto& scope : std::views::reverse(current_context().scopes)) {
         if (scope.get_type() == ScopeType::LOOP) {
             // can only continue from loops
             if (expr.label) {
                 if (*expr.label->string == scope.get_name()) {
                     break;
                 }
-            } else break;
+            } else
+                break;
         }
         ++scope_depth;
     }
-    Scope &scope = current_context().scopes[current_context().scopes.size() - scope_depth - 1];
+    Scope& scope = current_context().scopes[current_context().scopes.size() - scope_depth - 1];
     pop_out_of_scopes(scope_depth + 1);
     emit(OpCode::JUMP, scope.continue_idx);
 }
 
 
-void Compiler::function(const FunctionStmt &stmt, FunctionType type) {
+void Compiler::function(const FunctionStmt& stmt, FunctionType type) {
     auto function_name = *stmt.name.string;
-    auto *function = new Function(function_name, stmt.params.size());
+    auto* function = new Function(function_name, stmt.params.size());
     functions.push_back(function);
 
     start_context(function, type);
     begin_scope(ScopeType::BLOCK);
     current_scope().define(""); // reserve slot for receiver
-    for (const Token &param: stmt.params) {
+    for (const Token& param : stmt.params) {
         define_variable(*param.string);
     }
 
@@ -493,24 +504,28 @@ void Compiler::function(const FunctionStmt &stmt, FunctionType type) {
     int constant = current_function()->add_constant(function);
     emit(OpCode::CLOSURE, constant);
 
-    for (const Upvalue &upvalue: function_upvalues) {
+    for (const Upvalue& upvalue : function_upvalues) {
         emit(upvalue.is_local);
         emit(upvalue.index);
     }
 }
 
-void Compiler::constructor(const ConstructorStmt &stmt, const std::vector<std::unique_ptr<FieldStmt> > &fields,
-                           bool has_superclass, int superclass_arguments_count) {
+void Compiler::constructor(
+    const ConstructorStmt& stmt,
+    const std::vector<std::unique_ptr<FieldStmt>>& fields,
+    bool has_superclass,
+    int superclass_arguments_count
+) {
     // refactor: tons of overlap with function generator
 
     // TODO: check name
-    auto *function = new Function("constructor", stmt.parameters.size());
+    auto* function = new Function("constructor", stmt.parameters.size());
     functions.push_back(function);
     start_context(function, FunctionType::CONSTRUCTOR);
     begin_scope(ScopeType::BLOCK); // doesn't context already start a new scope therefor it is reduntant
     current_scope().define(""); // reserve slot for receiver
 
-    for (const Token &param: stmt.parameters) {
+    for (const Token& param : stmt.parameters) {
         define_variable(*param.string);
     }
 
@@ -518,7 +533,7 @@ void Compiler::constructor(const ConstructorStmt &stmt, const std::vector<std::u
         if (!has_superclass) {
             assert(false && "No superclass to be constructed");
         }
-        for (const ExprHandle &expr: stmt.super_arguments) {
+        for (const ExprHandle& expr : stmt.super_arguments) {
             visit_expr(*expr);
         }
         // maybe better way to do this instead of this superinstruction?
@@ -536,9 +551,10 @@ void Compiler::constructor(const ConstructorStmt &stmt, const std::vector<std::u
 
 
     // default initialize fields
-    for (auto &field: fields) {
+    for (auto& field : fields) {
         // ast builder
-        if (field->attributes[ClassAttributes::ABSTRACT]) continue;
+        if (field->attributes[ClassAttributes::ABSTRACT])
+            continue;
         visit_expr(*field->variable->value);
         emit(OpCode::THIS);
         int property_name = current_function()->add_constant(*field->variable->name.string);
@@ -558,15 +574,15 @@ void Compiler::constructor(const ConstructorStmt &stmt, const std::vector<std::u
     int constant = current_function()->add_constant(function);
     emit(OpCode::CLOSURE, constant);
 
-    for (const Upvalue &upvalue: function_upvalues) {
+    for (const Upvalue& upvalue : function_upvalues) {
         emit(upvalue.is_local);
         emit(upvalue.index);
     }
 }
 
-void Compiler::default_constructor(const std::vector<std::unique_ptr<FieldStmt> > &fields, bool has_superclass) {
+void Compiler::default_constructor(const std::vector<std::unique_ptr<FieldStmt>>& fields, bool has_superclass) {
     // TODO: ideally in future default constructor has just default parameters!
-    auto *function = new Function("constructor", 0);
+    auto* function = new Function("constructor", 0);
     functions.push_back(function);
     start_context(function, FunctionType::CONSTRUCTOR);
     begin_scope(ScopeType::BLOCK); // doesn't context already start a new scope therefor it is reduntant
@@ -579,9 +595,10 @@ void Compiler::default_constructor(const std::vector<std::unique_ptr<FieldStmt> 
     }
 
     // default initialize fields
-    for (auto &field: fields) {
+    for (auto& field : fields) {
         // ast builder
-        if ( field->attributes[ClassAttributes::ABSTRACT]) continue;
+        if (field->attributes[ClassAttributes::ABSTRACT])
+            continue;
         visit_expr(*field->variable->value);
         emit(OpCode::THIS);
         int property_name = current_function()->add_constant(*field->variable->name.string);
@@ -600,7 +617,7 @@ void Compiler::default_constructor(const std::vector<std::unique_ptr<FieldStmt> 
     int constant = current_function()->add_constant(function);
     emit(OpCode::CLOSURE, constant);
 
-    for (const Upvalue &upvalue: function_upvalues) {
+    for (const Upvalue& upvalue : function_upvalues) {
         emit(upvalue.is_local);
         emit(upvalue.index);
     }
@@ -609,18 +626,28 @@ void Compiler::default_constructor(const std::vector<std::unique_ptr<FieldStmt> 
 // TODO: refactor!!! this whole class parsing part is a total mess!
 
 // refactor: maybe could use Parser::StructrueMembers and type?
-void Compiler::class_core(int class_slot, std::optional<Token> super_class, const std::vector<std::unique_ptr<MethodStmt>>& methods, const std::vector<std::unique_ptr<FieldStmt>>& fields, const std::vector<std::unique_ptr<UsingStmt>>& using_stmts, bool is_abstract) {
+void Compiler::class_core(
+    int class_slot,
+    std::optional<Token> super_class,
+    const std::vector<std::unique_ptr<MethodStmt>>& methods,
+    const std::vector<std::unique_ptr<FieldStmt>>& fields,
+    const std::vector<std::unique_ptr<UsingStmt>>& using_stmts,
+    bool is_abstract
+) {
     if (super_class) {
         std::string super_class_name = *super_class->string;
-        emit(OpCode::GET,
-             std::get<Context::LocalResolution>(current_context().resolve_variable(super_class_name)).slot);
+        emit(
+            OpCode::GET,
+            std::get<Context::LocalResolution>(current_context().resolve_variable(super_class_name)).slot
+        );
         emit(OpCode::GET, class_slot);
         emit(OpCode::INHERIT);
         emit(OpCode::POP);
         assert(current_context().resolved_classes.contains(super_class_name));
         auto super_fields = current_context().resolved_classes[super_class_name].fields;
-        for (auto &field: super_fields) {
-            if (field.second.attributes[ClassAttributes::PRIVATE]) continue;
+        for (auto& field : super_fields) {
+            if (field.second.attributes[ClassAttributes::PRIVATE])
+                continue;
             current_scope().add_field(field.first, field.second);
         }
     }
@@ -672,31 +699,37 @@ void Compiler::class_core(int class_slot, std::optional<Token> super_class, cons
                 member_declarations[aliased_name] = info;
                 int field_name_constant = current_function()->add_constant(field_name);
                 // TODO: performance
-                   if (info.attributes[ClassAttributes::GETTER]) {
-                       emit(OpCode::GET,
-                std::get<Context::LocalResolution>(current_context().resolve_variable(item_name)).slot);
-                       emit(OpCode::GET_TRAIT, field_name_constant);
-                       bitflags<ClassAttributes> hack;
-                       hack += ClassAttributes::GETTER;
-                       emit(hack.to_ullong());
-                       int aliased_name_constant = current_function()->add_constant(aliased_name);
-                       emit(OpCode::METHOD, aliased_name_constant);
-                       emit(hack.to_ullong());
-                   }
-                   if (info.attributes[ClassAttributes::SETTER]) {
-                       emit(OpCode::GET,
-                std::get<Context::LocalResolution>(current_context().resolve_variable(item_name)).slot);
-                       emit(OpCode::GET_TRAIT, field_name_constant);
-                       bitflags<ClassAttributes> hack;
-                       hack += ClassAttributes::SETTER;
-                       emit(hack.to_ullong());
-                       int aliased_name_constant = current_function()->add_constant(aliased_name);
-                       emit(OpCode::METHOD, aliased_name_constant);
-                       emit(hack.to_ullong());
-                   }
+                if (info.attributes[ClassAttributes::GETTER]) {
+                    emit(
+                        OpCode::GET,
+                        std::get<Context::LocalResolution>(current_context().resolve_variable(item_name)).slot
+                    );
+                    emit(OpCode::GET_TRAIT, field_name_constant);
+                    bitflags<ClassAttributes> hack;
+                    hack += ClassAttributes::GETTER;
+                    emit(hack.to_ullong());
+                    int aliased_name_constant = current_function()->add_constant(aliased_name);
+                    emit(OpCode::METHOD, aliased_name_constant);
+                    emit(hack.to_ullong());
+                }
+                if (info.attributes[ClassAttributes::SETTER]) {
+                    emit(
+                        OpCode::GET,
+                        std::get<Context::LocalResolution>(current_context().resolve_variable(item_name)).slot
+                    );
+                    emit(OpCode::GET_TRAIT, field_name_constant);
+                    bitflags<ClassAttributes> hack;
+                    hack += ClassAttributes::SETTER;
+                    emit(hack.to_ullong());
+                    int aliased_name_constant = current_function()->add_constant(aliased_name);
+                    emit(OpCode::METHOD, aliased_name_constant);
+                    emit(hack.to_ullong());
+                }
                 if (!info.attributes[ClassAttributes::GETTER] && !info.attributes[ClassAttributes::SETTER]) {
-                    emit(OpCode::GET,
-                    std::get<Context::LocalResolution>(current_context().resolve_variable(item_name)).slot);
+                    emit(
+                        OpCode::GET,
+                        std::get<Context::LocalResolution>(current_context().resolve_variable(item_name)).slot
+                    );
                     emit(OpCode::GET_TRAIT, field_name_constant);
                     emit(0);
                     int aliased_name_constant = current_function()->add_constant(aliased_name);
@@ -711,7 +744,7 @@ void Compiler::class_core(int class_slot, std::optional<Token> super_class, cons
     // TODO: better error handling
     // TODO: should all be moved to some sort of resolving step
     // TODO: should check for invalid attributes combinations
-    for (auto &field: fields) {
+    for (auto& field : fields) {
         std::string field_name = *field->variable->name.string;
         int idx = current_function()->add_constant(field_name);
         emit(OpCode::FIELD, idx);
@@ -734,17 +767,17 @@ void Compiler::class_core(int class_slot, std::optional<Token> super_class, cons
     }
 
     // hoist methods
-    for (auto &method: methods) {
+    for (auto& method : methods) {
         // TODO: much overlap with above loop
         std::string method_name = *method->function->name.string;
         bool already_partially_declared = false;
         if (member_declarations.contains(method_name)) {
             // special case for getters and setters methods
             if (member_declarations[method_name].attributes[ClassAttributes::SETTER] && method->attributes[
-                    ClassAttributes::GETTER]) {
+                ClassAttributes::GETTER]) {
                 already_partially_declared = true;
             } else if (member_declarations[method_name].attributes[ClassAttributes::GETTER] && method->attributes[
-                           ClassAttributes::SETTER]) {
+                ClassAttributes::SETTER]) {
                 already_partially_declared = true;
             } else {
                 assert(false && "Member redeclaration is disallowed.");
@@ -757,9 +790,9 @@ void Compiler::class_core(int class_slot, std::optional<Token> super_class, cons
 
             // special case for getters and setters methods
             // TODO: mess
-            if ((!field_info.attributes[ClassAttributes::GETTER] && method->attributes[ClassAttributes::GETTER])
-                || (!field_info.attributes[ClassAttributes::SETTER] && method->attributes[ClassAttributes::SETTER])) {
-            } else {
+            if ((!field_info.attributes[ClassAttributes::GETTER] && method->attributes[ClassAttributes::GETTER]) || (!
+                field_info.attributes[ClassAttributes::SETTER] && method->attributes[
+                    ClassAttributes::SETTER])) {} else {
                 should_override = true;
             }
         }
@@ -781,17 +814,17 @@ void Compiler::class_core(int class_slot, std::optional<Token> super_class, cons
 
     // check if all abstract classes are overriden
     if (!is_abstract && super_class) {
-        for (auto &[name, info]: current_scope().get_fields()) {
+        for (auto& [name, info] : current_scope().get_fields()) {
             if (info.attributes[ClassAttributes::ABSTRACT]) {
                 if (!member_declarations.contains(name)) {
                     assert(false && "Expected abstract override");
                 }
                 if (info.attributes[ClassAttributes::GETTER] && !member_declarations[name].attributes[
-                        ClassAttributes::GETTER]) {
+                    ClassAttributes::GETTER]) {
                     assert(false && "Expected abstract override for getter");
                 }
                 if (info.attributes[ClassAttributes::SETTER] && !member_declarations[name].attributes[
-                        ClassAttributes::SETTER]) {
+                    ClassAttributes::SETTER]) {
                     assert(false && "Expected abstract override for setter");
                 }
             }
@@ -809,7 +842,7 @@ void Compiler::class_core(int class_slot, std::optional<Token> super_class, cons
         }
     }
 
-    for (auto &method: methods) {
+    for (auto& method : methods) {
         std::string method_name = *method->function->name.string;
         if (!method->attributes[ClassAttributes::ABSTRACT]) {
             function(*method->function, FunctionType::METHOD);
@@ -822,16 +855,19 @@ void Compiler::class_core(int class_slot, std::optional<Token> super_class, cons
 }
 
 // overlaps
-void Compiler::object_constructor(const std::vector<std::unique_ptr<FieldStmt>> &fields, bool has_superclass, const std::vector<ExprHandle> &
-                                  superclass_arguments) {
-    auto *function = new Function("constructor", 0);
+void Compiler::object_constructor(
+    const std::vector<std::unique_ptr<FieldStmt>>& fields,
+    bool has_superclass,
+    const std::vector<ExprHandle>& superclass_arguments
+) {
+    auto* function = new Function("constructor", 0);
     functions.push_back(function);
     start_context(function, FunctionType::CONSTRUCTOR);
     begin_scope(ScopeType::BLOCK); // doesn't context already start a new scope therefor it is reduntant
     current_scope().define(""); // reserve slot for receiver
 
     if (has_superclass) {
-        for (const ExprHandle &expr: superclass_arguments) {
+        for (const ExprHandle& expr : superclass_arguments) {
             visit_expr(*expr);
         }
         // maybe better way to do this instead of this superinstruction?
@@ -840,9 +876,10 @@ void Compiler::object_constructor(const std::vector<std::unique_ptr<FieldStmt>> 
     }
 
     // default initialize fields
-    for (auto &field: fields) {
+    for (auto& field : fields) {
         // ast builder
-        if (field->attributes[ClassAttributes::ABSTRACT]) continue;
+        if (field->attributes[ClassAttributes::ABSTRACT])
+            continue;
         visit_expr(*field->variable->value);
         emit(OpCode::THIS);
         int property_name = current_function()->add_constant(*field->variable->name.string);
@@ -860,13 +897,13 @@ void Compiler::object_constructor(const std::vector<std::unique_ptr<FieldStmt>> 
     int constant = current_function()->add_constant(function);
     emit(OpCode::CLOSURE, constant);
 
-    for (const Upvalue &upvalue: function_upvalues) {
+    for (const Upvalue& upvalue : function_upvalues) {
         emit(upvalue.is_local);
         emit(upvalue.index);
     }
 }
 
-void Compiler::object_expression(const ObjectExpr &expr) {
+void Compiler::object_expression(const ObjectExpr& expr) {
     // TODO: refactor!
     begin_scope(ScopeType::BLOCK);
     emit(OpCode::NIL);
@@ -883,7 +920,14 @@ void Compiler::object_expression(const ObjectExpr &expr) {
     define_variable("$scope_return");
 
     // TODO: traits in objects.
-    class_core(std::get<Context::LocalResolution>(current_context().resolve_variable(name)).slot, expr.super_class, expr.methods, expr.fields, expr.using_stmts, false);
+    class_core(
+        std::get<Context::LocalResolution>(current_context().resolve_variable(name)).slot,
+        expr.super_class,
+        expr.methods,
+        expr.fields,
+        expr.using_stmts,
+        false
+    );
 
     object_constructor(expr.fields, expr.super_class.has_value(), expr.superclass_arguments);
     emit(OpCode::CONSTRUCTOR);
@@ -900,13 +944,13 @@ void Compiler::object_expression(const ObjectExpr &expr) {
     end_scope();
 }
 
-void Compiler::object_statement(const ObjectStmt &stmt) {
+void Compiler::object_statement(const ObjectStmt& stmt) {
     visit_expr(*stmt.object);
     current_scope().pop_temporary();
     define_variable(*stmt.name.string);
 }
 
-void Compiler::trait_statement(const TraitStmt &stmt) {
+void Compiler::trait_statement(const TraitStmt& stmt) {
     std::string name = *stmt.name.string;
     uint8_t name_constanst = current_function()->add_constant(name);
 
@@ -954,15 +998,16 @@ void Compiler::trait_statement(const TraitStmt &stmt) {
                 }
                 current_scope().add_field(aliased_name, info);
                 int field_name_constant = current_function()->add_constant(field_name);
-                       emit(OpCode::GET,
-                std::get<Context::LocalResolution>(current_context().resolve_variable(item_name)).slot);
-                       emit(OpCode::GET_TRAIT, field_name_constant);
+                emit(
+                    OpCode::GET,
+                    std::get<Context::LocalResolution>(current_context().resolve_variable(item_name)).slot
+                );
+                emit(OpCode::GET_TRAIT, field_name_constant);
                 emit(0); // TODO HACK
-                       int aliased_name_constant = current_function()->add_constant(aliased_name);
-                       emit(OpCode::TRAIT_METHOD, aliased_name_constant);
-                       emit(info.attributes.to_ullong());
+                int aliased_name_constant = current_function()->add_constant(aliased_name);
+                emit(OpCode::TRAIT_METHOD, aliased_name_constant);
+                emit(info.attributes.to_ullong());
                 // TODO: performance
-
             }
         }
     }
@@ -982,16 +1027,20 @@ void Compiler::trait_statement(const TraitStmt &stmt) {
         bool partially_defined = false;
         // TODO this allowes clashes with real methods???
         if (current_scope().has_field(method_name)) {
-            if ((!current_scope().get_fields()[method_name].attributes[ClassAttributes::SETTER] && method->attributes[ClassAttributes::SETTER]) ||
-              (!current_scope().get_fields()[method_name].attributes[ClassAttributes::GETTER] && method->attributes[ClassAttributes::GETTER])) {
+            if ((!current_scope().get_fields()[method_name].attributes[ClassAttributes::SETTER] && method->attributes[
+                ClassAttributes::SETTER]) || (!current_scope().get_fields()[method_name].attributes[
+                ClassAttributes::GETTER] && method->attributes[ClassAttributes::GETTER])) {
                 partially_defined = true;
-              } else {
-                  assert(false && "member redeclaration is disallowed.");
-              }
+            } else {
+                assert(false && "member redeclaration is disallowed.");
+            }
         }
         if (partially_defined) {
             // this does not allowed visibility fields
-            current_scope().get_fields()[method_name].attributes += current_scope().get_fields()[method_name].attributes[ClassAttributes::GETTER] ? ClassAttributes::SETTER : ClassAttributes::GETTER;
+            current_scope().get_fields()[method_name].attributes +=
+                current_scope().get_fields()[method_name].attributes[ClassAttributes::GETTER]
+                    ? ClassAttributes::SETTER
+                    : ClassAttributes::GETTER;
         } else {
             current_scope().add_field(method_name, FieldInfo(method->attributes));
         }
@@ -1025,7 +1074,7 @@ void Compiler::trait_statement(const TraitStmt &stmt) {
     current_scope().pop_temporary();
 }
 
-void Compiler::class_declaration(const ClassStmt &stmt) {
+void Compiler::class_declaration(const ClassStmt& stmt) {
     // TODO: refactor!
     std::string name = *stmt.name.string;
     uint8_t name_constant = current_function()->add_constant(name);
@@ -1050,17 +1099,29 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
     emit(OpCode::NIL);
     define_variable("$scope_return");
 
-    class_core(std::get<Context::LocalResolution>(current_context().resolve_variable(name)).slot, stmt.super_class, stmt.methods, stmt.fields, stmt.using_statements, stmt.is_abstract);
+    class_core(
+        std::get<Context::LocalResolution>(current_context().resolve_variable(name)).slot,
+        stmt.super_class,
+        stmt.methods,
+        stmt.fields,
+        stmt.using_statements,
+        stmt.is_abstract
+    );
 
     if (stmt.constructor) {
         current_scope().constructor_argument_count = stmt.constructor->parameters.size();
         bool has_super_class = static_cast<bool>(stmt.super_class);
-        constructor(*stmt.constructor, stmt.fields, has_super_class,
-                    has_super_class ? current_context().resolved_classes[*stmt.super_class->string].
-                    constructor_argument_count : 0);
+        constructor(
+            *stmt.constructor,
+            stmt.fields,
+            has_super_class,
+            has_super_class
+                ? current_context().resolved_classes[*stmt.super_class->string].constructor_argument_count
+                : 0
+        );
     } else {
-        if (stmt.super_class && current_context().resolved_classes[*stmt.super_class->string].
-            constructor_argument_count != 0) {
+        if (stmt.super_class && current_context().resolved_classes[*stmt.super_class->string].constructor_argument_count
+            != 0) {
             assert(false && "Class must implement constructor because it needs to call superclass constructor");
         }
         default_constructor(stmt.fields, static_cast<bool>(stmt.super_class));
@@ -1075,14 +1136,14 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
     current_scope().pop_temporary();
 }
 
-void Compiler::expr_statement(const ExprStmt &stmt) {
+void Compiler::expr_statement(const ExprStmt& stmt) {
     visit_expr(*stmt.expr);
 
     emit(OpCode::POP);
     current_scope().pop_temporary();
 }
 
-void Compiler::retrun_expression(const ReturnExpr &stmt) {
+void Compiler::retrun_expression(const ReturnExpr& stmt) {
     if (stmt.value != nullptr) {
         visit_expr(*stmt.value);
     } else {
@@ -1094,7 +1155,7 @@ void Compiler::retrun_expression(const ReturnExpr &stmt) {
     current_scope().mark_temporary();
 }
 
-void Compiler::if_expression(const IfExpr &stmt) {
+void Compiler::if_expression(const IfExpr& stmt) {
     visit_expr(*stmt.condition);
     int jump_to_else = current_function()->add_empty_jump_destination();
     emit(OpCode::JUMP_IF_FALSE, jump_to_else);
@@ -1114,44 +1175,47 @@ void Compiler::if_expression(const IfExpr &stmt) {
     current_function()->patch_jump_destination(jump_to_end, current_program().size());
 }
 
-void Compiler::visit_expr(const Expr &expression) {
-    std::visit(overloaded{
-                   [this](const LiteralExpr &expr) { literal(expr); },
-                   [this](const UnaryExpr &expr) { unary(expr); },
-                   [this](const BinaryExpr &expr) { binary(expr); },
-                   [this](const StringLiteral &expr) { string_literal(expr); },
-                   [this](const VariableExpr &expr) { variable(expr); },
-                   [this](const CallExpr &expr) { call(expr); },
-                   [this](const GetPropertyExpr &expr) { get_property(expr); },
-                   [this](const SuperExpr &expr) { super(expr); },
-                   [this](const BlockExpr &expr) { block(expr); },
-                   [this](const IfExpr &expr) { if_expression(expr); },
-                   [this](const LoopExpr &expr) { loop_expression(expr); },
-                   [this](const BreakExpr &expr) { break_expr(expr); },
-                   [this](const ContinueExpr &expr) { continue_expr(expr); },
-                   [this](const WhileExpr &expr) { while_expr(expr); },
-                   [this](const ForExpr &expr) { for_expr(expr); },
-                   [this](const ReturnExpr &expr) { retrun_expression(expr); },
-                   [this](const ThisExpr &expr) { this_expr(); },
-                   [this](const ObjectExpr &expr) { object_expression(expr); }
-               }, expression);
+void Compiler::visit_expr(const Expr& expression) {
+    std::visit(
+        overloaded {
+            [this](const LiteralExpr& expr) { literal(expr); },
+            [this](const UnaryExpr& expr) { unary(expr); },
+            [this](const BinaryExpr& expr) { binary(expr); },
+            [this](const StringLiteral& expr) { string_literal(expr); },
+            [this](const VariableExpr& expr) { variable(expr); },
+            [this](const CallExpr& expr) { call(expr); },
+            [this](const GetPropertyExpr& expr) { get_property(expr); },
+            [this](const SuperExpr& expr) { super(expr); },
+            [this](const BlockExpr& expr) { block(expr); },
+            [this](const IfExpr& expr) { if_expression(expr); },
+            [this](const LoopExpr& expr) { loop_expression(expr); },
+            [this](const BreakExpr& expr) { break_expr(expr); },
+            [this](const ContinueExpr& expr) { continue_expr(expr); },
+            [this](const WhileExpr& expr) { while_expr(expr); },
+            [this](const ForExpr& expr) { for_expr(expr); },
+            [this](const ReturnExpr& expr) { retrun_expression(expr); },
+            [this](const ThisExpr& expr) { this_expr(); },
+            [this](const ObjectExpr& expr) { object_expression(expr); }
+        },
+        expression
+    );
 }
 
-void Compiler::literal(const LiteralExpr &expr) {
+void Compiler::literal(const LiteralExpr& expr) {
     current_scope().mark_temporary();
     int index = current_function()->add_constant(expr.literal);
     emit(OpCode::CONSTANT);
     emit(index); // handle overflow!!!
 }
 
-void Compiler::string_literal(const StringLiteral &expr) {
+void Compiler::string_literal(const StringLiteral& expr) {
     current_scope().mark_temporary();
     std::string s = expr.string;
     int index = current_function()->add_constant(s); // memory!
     emit(OpCode::CONSTANT, index); // handle overflow!!!
 }
 
-void Compiler::unary(const UnaryExpr &expr) {
+void Compiler::unary(const UnaryExpr& expr) {
     visit_expr(*expr.expr);
     switch (expr.op) {
         case Token::Type::MINUS: emit(OpCode::NEGATE);
@@ -1164,7 +1228,7 @@ void Compiler::unary(const UnaryExpr &expr) {
     }
 }
 
-void Compiler::binary(const BinaryExpr &expr) {
+void Compiler::binary(const BinaryExpr& expr) {
     // we don't need to actually visit lhs for plain assigment
     if (expr.op == Token::Type::EQUAL) {
         visit_expr(*expr.right);
@@ -1217,48 +1281,37 @@ void Compiler::binary(const BinaryExpr &expr) {
             break;
         case Token::Type::SLASH_SLASH: emit(OpCode::FLOOR_DIVISON);
             break;
-        case Token::Type::PLUS_EQUAL:
-            emit(OpCode::ADD);
+        case Token::Type::PLUS_EQUAL: emit(OpCode::ADD);
             update_lvalue(*expr.left);
             break;
-        case Token::Type::MINUS_EQUAL:
-            emit(OpCode::SUBTRACT);
+        case Token::Type::MINUS_EQUAL: emit(OpCode::SUBTRACT);
             update_lvalue(*expr.left);
             break;
-        case Token::Type::STAR_EQUAL:
-            emit(OpCode::MULTIPLY);
+        case Token::Type::STAR_EQUAL: emit(OpCode::MULTIPLY);
             update_lvalue(*expr.left);
             break;
-        case Token::Type::SLASH_EQUAL:
-            emit(OpCode::DIVIDE);
+        case Token::Type::SLASH_EQUAL: emit(OpCode::DIVIDE);
             update_lvalue(*expr.left);
             break;
-        case Token::Type::SLASH_SLASH_EQUAL:
-            emit(OpCode::FLOOR_DIVISON);
+        case Token::Type::SLASH_SLASH_EQUAL: emit(OpCode::FLOOR_DIVISON);
             update_lvalue(*expr.left);
             break;
-        case Token::Type::PERCENT_EQUAL:
-            emit(OpCode::MODULO);
+        case Token::Type::PERCENT_EQUAL: emit(OpCode::MODULO);
             update_lvalue(*expr.left);
             break;
-        case Token::Type::LESS_LESS_EQUAL:
-            emit(OpCode::LEFT_SHIFT);
+        case Token::Type::LESS_LESS_EQUAL: emit(OpCode::LEFT_SHIFT);
             update_lvalue(*expr.left);
             break;
-        case Token::Type::GREATER_GREATER_EQUAL:
-            emit(OpCode::RIGHT_SHIFT);
+        case Token::Type::GREATER_GREATER_EQUAL: emit(OpCode::RIGHT_SHIFT);
             update_lvalue(*expr.left);
             break;
-        case Token::Type::AND_EQUAL:
-            emit(OpCode::BITWISE_AND);
+        case Token::Type::AND_EQUAL: emit(OpCode::BITWISE_AND);
             update_lvalue(*expr.left);
             break;
-        case Token::Type::CARET_EQUAL:
-            emit(OpCode::BITWISE_XOR);
+        case Token::Type::CARET_EQUAL: emit(OpCode::BITWISE_XOR);
             update_lvalue(*expr.left);
             break;
-        case Token::Type::BAR_EQUAL:
-            emit(OpCode::BITWISE_OR);
+        case Token::Type::BAR_EQUAL: emit(OpCode::BITWISE_OR);
             update_lvalue(*expr.left);
             break;
         default: assert("unreachable");
@@ -1267,7 +1320,7 @@ void Compiler::binary(const BinaryExpr &expr) {
 }
 
 // TODO: total mess and loads of overlap with Compiler::resolve_variable
-void Compiler::update_lvalue(const Expr &lvalue) {
+void Compiler::update_lvalue(const Expr& lvalue) {
     if (std::holds_alternative<VariableExpr>(lvalue)) {
         std::string name = *std::get<VariableExpr>(lvalue).identifier.string;
         auto resolution = current_context().resolve_variable(name);
@@ -1289,13 +1342,13 @@ void Compiler::update_lvalue(const Expr &lvalue) {
             }
         }
     } else if (std::holds_alternative<GetPropertyExpr>(lvalue)) {
-        const auto &property_expr = std::get<GetPropertyExpr>(lvalue);
+        const auto& property_expr = std::get<GetPropertyExpr>(lvalue);
         std::string name = *property_expr.property.string;
         int constant = current_function()->add_constant(name);
         visit_expr(*property_expr.left);
         emit(OpCode::SET_PROPERTY, constant);
     } else if (std::holds_alternative<SuperExpr>(lvalue)) {
-        const auto &super_expr = std::get<SuperExpr>(lvalue);
+        const auto& super_expr = std::get<SuperExpr>(lvalue);
         int constant = current_function()->add_constant(*super_expr.method.string);
         emit(OpCode::THIS);
         emit(OpCode::SET_SUPER, constant);
@@ -1304,12 +1357,12 @@ void Compiler::update_lvalue(const Expr &lvalue) {
     }
 }
 
-void Compiler::variable(const VariableExpr &expr) {
+void Compiler::variable(const VariableExpr& expr) {
     std::string name = *expr.identifier.string;
     resolve_variable(name);
 }
 
-void Compiler::logical(const BinaryExpr &expr) {
+void Compiler::logical(const BinaryExpr& expr) {
     int jump = current_function()->add_empty_jump_destination();
     emit(expr.op == Token::Type::AND_AND ? OpCode::JUMP_IF_FALSE : OpCode::JUMP_IF_TRUE, jump);
     emit(OpCode::POP);
@@ -1317,23 +1370,23 @@ void Compiler::logical(const BinaryExpr &expr) {
     current_function()->patch_jump_destination(jump, current_program().size());
 }
 
-void Compiler::call(const CallExpr &expr) {
+void Compiler::call(const CallExpr& expr) {
     visit_expr(*expr.callee);
-    for (const ExprHandle &argument: expr.arguments) {
+    for (const ExprHandle& argument : expr.arguments) {
         visit_expr(*argument);
     }
     current_scope().pop_temporary(expr.arguments.size());
     emit(OpCode::CALL, expr.arguments.size()); // TODO: check
 }
 
-void Compiler::get_property(const GetPropertyExpr &expr) {
+void Compiler::get_property(const GetPropertyExpr& expr) {
     visit_expr(*expr.left);
     std::string name = *expr.property.string;
     int constant = current_function()->add_constant(name);
     emit(OpCode::GET_PROPERTY, constant);
 }
 
-void Compiler::super(const SuperExpr &expr) {
+void Compiler::super(const SuperExpr& expr) {
     int constant = current_function()->add_constant(*expr.method.string);
     // or just resolve this in vm?
     emit(OpCode::THIS);

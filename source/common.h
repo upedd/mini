@@ -4,8 +4,6 @@
 #include <cassert>
 #include <expected>
 
-#include "types.h"
-
 inline bool is_space(const char c) {
     return c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\v' || c == '\f';
 }
@@ -64,20 +62,23 @@ inline int hex_digit_to_int(const char c) {
 
 // helper for std::visit
 // source: https://en.cppreference.com/w/cpp/utility/variant/visit
-template<class... Ts>
-struct overloaded : Ts... { using Ts::operator()...; };
+template <class... Ts>
+struct overloaded : Ts... {
+    using Ts::operator()...;
+};
 
 // https://en.cppreference.com/w/cpp/experimental/scope_exit/scope_exit
-template<class Fn>
+template <class Fn>
 class scope_exit {
 public:
     explicit scope_exit(Fn&& fn) : fn(fn) {}
     ~scope_exit() { fn(); }
+
 private:
     Fn fn;
 };
 
-template<typename T>
+template <typename T>
 class bitflags {
 public:
     // Inspiration: https://m-peko.github.io/craft-cpp/posts/different-ways-to-define-binary-flags/
@@ -107,6 +108,7 @@ public:
     [[nodiscard]] constexpr unsigned long long to_ullong() const {
         return storage.to_ullong();
     }
+
 private:
     std::bitset<static_cast<std::size_t>(T::size)> storage;
 };

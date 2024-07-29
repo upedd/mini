@@ -17,7 +17,7 @@
  * @tparam V value type
  * @tparam size Number of key-value pairs
  */
-template<typename V, std::size_t size>
+template <typename V, std::size_t size>
 class perfect_map {
 public:
     // heavily inspired from http://stevehanov.ca/blog/index.php?id=119
@@ -30,23 +30,27 @@ public:
 
     constexpr explicit perfect_map(dict_t dictionary) {
         std::array<std::vector<std::string_view>, size> buckets;
-        std::array<bool, size> has_value{};
+        std::array<bool, size> has_value {};
 
         // Split keys into buckets
-        for (auto &key: dictionary | std::views::keys) {
+        for (auto& key : dictionary | std::views::keys) {
             buckets[fnv1(key) % size].push_back(key);
         }
 
         // Sort buckets in largest bucket first order
-        std::ranges::sort(buckets, [](auto &a, auto &b) {
-            return a.size() > b.size();
-        });
+        std::ranges::sort(
+            buckets,
+            [](auto& a, auto& b) {
+                return a.size() > b.size();
+            }
+        );
 
         std::size_t bucket_idx = 0;
         for (; bucket_idx < buckets.size(); ++bucket_idx) {
-            auto &bucket = buckets[bucket_idx];
+            auto& bucket = buckets[bucket_idx];
 
-            if (bucket.size() <= 1) break;
+            if (bucket.size() <= 1)
+                break;
 
             // try different offsets values until we find one that places all items into empty slots
             // optim: maybe random should try random offsets?
@@ -66,12 +70,12 @@ public:
                 }
             }
             // store found offset indexed by first bucket element
-            offsets[fnv1(bucket[0]) % size] = {.value = offset, .is_pos = false};
+            offsets[fnv1(bucket[0]) % size] = { .value = offset, .is_pos = false };
             // remap values
             for (std::size_t i = 0; i < bucket.size(); ++i) {
                 // note this operation is linear but performance is not as critical as it will be ran at compile time
                 kv_pair kv = *std::ranges::find(dictionary, bucket[i], &kv_pair::first);
-                values[slots[i]] = {.value = kv.second, .hash = fnv1(kv.first)};
+                values[slots[i]] = { .value = kv.second, .hash = fnv1(kv.first) };
                 has_value[slots[i]] = true;
             }
         }
@@ -86,13 +90,14 @@ public:
         }
 
         for (; bucket_idx < buckets.size(); ++bucket_idx) {
-            auto &bucket = buckets[bucket_idx];
-            if (bucket.empty()) break;
+            auto& bucket = buckets[bucket_idx];
+            if (bucket.empty())
+                break;
             std::size_t slot = empty_positions.back();
             empty_positions.pop_back();
-            offsets[fnv1(bucket[0]) % size] = {.value = slot, .is_pos = true};
+            offsets[fnv1(bucket[0]) % size] = { .value = slot, .is_pos = true };
             kv_pair kv = *std::ranges::find(dictionary, bucket[0], &kv_pair::first);
-            values[slot] = {.value = kv.second, .hash = fnv1(kv.first)};
+            values[slot] = { .value = kv.second, .hash = fnv1(kv.first) };
         }
     }
 
@@ -122,10 +127,12 @@ private:
     constexpr static std::uint64_t FNV_prime = 0x100000001b3;
 
     // FNV-1 hash https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function
-    [[nodiscard]] constexpr static std::uint64_t
-    fnv1(std::string_view string, std::uint64_t offset = FNV_offset_basis) {
+    [[nodiscard]] constexpr static std::uint64_t fnv1(
+        std::string_view string,
+        std::uint64_t offset = FNV_offset_basis
+    ) {
         std::uint64_t hash = offset;
-        for (char c: string) {
+        for (char c : string) {
             hash = hash * FNV_prime ^ static_cast<std::uint64_t>(c);
         }
         return hash;
@@ -144,7 +151,7 @@ private:
         std::uint64_t hash;
     };
 
-    std::array<Offset, size> offsets{};
-    std::array<ValueHashPair, size> values{};
+    std::array<Offset, size> offsets {};
+    std::array<ValueHashPair, size> values {};
 };
 #endif //PERFECT_HASHMAP_H

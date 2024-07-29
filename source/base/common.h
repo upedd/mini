@@ -15,4 +15,3 @@
 #else
 #    define BITE_NOINLINE [[gnu::noinline]]
 #endif
-

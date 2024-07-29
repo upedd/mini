@@ -56,77 +56,76 @@ namespace bite::unordered_dense {
             uint32_t m_value_idx; // index into the m_values vector.
         };
 
-        BITE_DENSE_PACK(struct big {
-            static constexpr uint32_t dist_inc = 1U << 8U; // skip 1 byte fingerprint
+        BITE_DENSE_PACK(
+            struct big { static constexpr uint32_t dist_inc = 1U << 8U; // skip 1 byte fingerprint
             static constexpr uint32_t fingerprint_mask = dist_inc - 1; // mask for 1 byte of fingerprint
 
             uint32_t m_dist_and_fingerprint;
             // upper 3 byte: distance to original bucket. lower byte: fingerprint from hash
             size_t m_value_idx; // index into the m_values vector.
-            });
+            }
+        );
     } // namespace bucket_type
 
     namespace detail {
-        struct nonesuch {
-        };
+        struct nonesuch {};
 
-        template<class Default, class AlwaysVoid, template <class...> class Op, class... Args>
+        template <class Default, class AlwaysVoid, template <class...> class Op, class... Args>
         struct detector {
             using value_t = std::false_type;
             using type = Default;
         };
 
-        template<class Default, template <class...> class Op, class... Args>
-        struct detector<Default, std::void_t<Op<Args...> >, Op, Args...> {
+        template <class Default, template <class...> class Op, class... Args>
+        struct detector<Default, std::void_t<Op<Args...>>, Op, Args...> {
             using value_t = std::true_type;
             using type = Op<Args...>;
         };
 
-        template<template <class...> class Op, class... Args>
+        template <template <class...> class Op, class... Args>
         using is_detected = typename detector<nonesuch, void, Op, Args...>::value_t;
 
-        template<template <class...> class Op, class... Args>
+        template <template <class...> class Op, class... Args>
         constexpr bool is_detected_v = is_detected<Op, Args...>::value;
 
-        template<typename T>
+        template <typename T>
         using detect_avalanching = typename T::is_avalanching;
 
-        template<typename T>
+        template <typename T>
         using detect_is_transparent = typename T::is_transparent;
 
-        template<typename T>
+        template <typename T>
         using detect_iterator = typename T::iterator;
 
-        template<typename T>
-        using detect_reserve = decltype(std::declval<T &>().reserve(size_t{}));
+        template <typename T>
+        using detect_reserve = decltype(std::declval<T&>().reserve(size_t {}));
 
         // enable_if helpers
 
-        template<typename Mapped>
+        template <typename Mapped>
         constexpr bool is_map_v = !std::is_void_v<Mapped>;
 
         // clang-format off
-        template<typename Hash, typename KeyEqual>
+        template <typename Hash, typename KeyEqual>
         constexpr bool is_transparent_v = is_detected_v<detect_is_transparent, Hash> && is_detected_v<
-                                              detect_is_transparent, KeyEqual>;
+            detect_is_transparent, KeyEqual>;
         // clang-format on
 
-        template<typename From, typename To1, typename To2>
-        constexpr bool is_neither_convertible_v =
-                !std::is_convertible_v<From, To1> && !std::is_convertible_v<From, To2>;
+        template <typename From, typename To1, typename To2>
+        constexpr bool is_neither_convertible_v = !std::is_convertible_v<From, To1> && !std::is_convertible_v<
+            From, To2>;
 
-        template<typename T>
+        template <typename T>
         constexpr bool has_reserve = is_detected_v<detect_reserve, T>;
 
         // base type for map has mapped_type
-        template<class T>
+        template <class T>
         struct base_table_type_map {
             using mapped_type = T;
         };
 
         // base type for set doesn't have mapped_type
-        struct base_table_type_set {
-        };
+        struct base_table_type_set {};
     } // namespace detail
 
     // Very much like std::deque, but faster for indexing (in most cases). As of now this doesn't implement the full std::vector
@@ -134,9 +133,9 @@ namespace bite::unordered_dense {
     // It allocates blocks of equal size and puts them into the m_blocks vector. That means it can grow simply by adding a new
     // block to the back of m_blocks, and doesn't double its size like an std::vector. The disadvantage is that memory is not
     // linear and thus there is one more indirection necessary for indexing.
-    template<typename T, typename Allocator = std::allocator<T>, size_t MaxSegmentSizeBytes = 4096>
+    template <typename T, typename Allocator = std::allocator<T>, size_t MaxSegmentSizeBytes = 4096>
     class segmented_vector {
-        template<bool IsConst>
+        template <bool IsConst>
         class iter_t;
 
     public:
@@ -146,19 +145,19 @@ namespace bite::unordered_dense {
         using difference_type = typename std::allocator_traits<allocator_type>::difference_type;
         using value_type = T;
         using size_type = std::size_t;
-        using reference = T &;
-        using const_reference = T const &;
+        using reference = T&;
+        using const_reference = T const&;
         using iterator = iter_t<false>;
         using const_iterator = iter_t<true>;
 
     private:
         using vec_alloc = typename std::allocator_traits<Allocator>::template rebind_alloc<pointer>;
-        std::vector<pointer, vec_alloc> m_blocks{};
-        size_t m_size{};
+        std::vector<pointer, vec_alloc> m_blocks {};
+        size_t m_size {};
 
         // Calculates the maximum number for x in  (s << x) <= max_val
         static constexpr auto num_bits_closest(size_t max_val, size_t s) -> size_t {
-            auto f = size_t{0};
+            auto f = size_t { 0 };
             while (s << (f + 1) <= max_val) {
                 ++f;
             }
@@ -173,54 +172,50 @@ namespace bite::unordered_dense {
         /**
          * Iterator class doubles as const_iterator and iterator
          */
-        template<bool IsConst>
+        template <bool IsConst>
         class iter_t {
-            using ptr_t = std::conditional_t<IsConst, const_pointer const *, pointer *>;
-            ptr_t m_data{};
-            size_t m_idx{};
+            using ptr_t = std::conditional_t<IsConst, const_pointer const*, pointer*>;
+            ptr_t m_data {};
+            size_t m_idx {};
 
-            template<bool B>
+            template <bool B>
             friend class iter_t;
 
         public:
             using difference_type = difference_type;
             using value_type = T;
-            using reference = std::conditional_t<IsConst, value_type const &, value_type &>;
+            using reference = std::conditional_t<IsConst, value_type const&, value_type&>;
             using pointer = std::conditional_t<IsConst, const_pointer, pointer>;
             using iterator_category = std::forward_iterator_tag;
 
             iter_t() noexcept = default;
 
-            template<bool OtherIsConst, typename = std::enable_if_t<IsConst && !OtherIsConst> >
+            template <bool OtherIsConst, typename = std::enable_if_t<IsConst && !OtherIsConst>>
             // NOLINTNEXTLINE(google-explicit-constructor,hicpp-explicit-conversions)
-            constexpr iter_t(iter_t<OtherIsConst> const &other) noexcept
-                : m_data(other.m_data)
-                  , m_idx(other.m_idx) {
-            }
+            constexpr iter_t(iter_t<OtherIsConst> const& other) noexcept : m_data(other.m_data),
+                                                                           m_idx(other.m_idx) {}
 
-            constexpr iter_t(ptr_t data, size_t idx) noexcept
-                : m_data(data)
-                  , m_idx(idx) {
-            }
+            constexpr iter_t(ptr_t data, size_t idx) noexcept : m_data(data),
+                                                                m_idx(idx) {}
 
-            template<bool OtherIsConst, typename = std::enable_if_t<IsConst && !OtherIsConst> >
-            constexpr auto operator=(iter_t<OtherIsConst> const &other) noexcept -> iter_t & {
+            template <bool OtherIsConst, typename = std::enable_if_t<IsConst && !OtherIsConst>>
+            constexpr auto operator =(iter_t<OtherIsConst> const& other) noexcept -> iter_t& {
                 m_data = other.m_data;
                 m_idx = other.m_idx;
                 return *this;
             }
 
-            constexpr auto operator++() noexcept -> iter_t & {
+            constexpr auto operator++() noexcept -> iter_t& {
                 ++m_idx;
                 return *this;
             }
 
             constexpr auto operator+(difference_type diff) noexcept -> iter_t {
-                return {m_data, static_cast<size_t>(static_cast<difference_type>(m_idx) + diff)};
+                return { m_data, static_cast<size_t>(static_cast<difference_type>(m_idx) + diff) };
             }
 
-            template<bool OtherIsConst>
-            constexpr auto operator-(iter_t<OtherIsConst> const &other) noexcept -> difference_type {
+            template <bool OtherIsConst>
+            constexpr auto operator-(iter_t<OtherIsConst> const& other) noexcept -> difference_type {
                 return static_cast<difference_type>(m_idx) - static_cast<difference_type>(other.m_idx);
             }
 
@@ -232,13 +227,13 @@ namespace bite::unordered_dense {
                 return &m_data[m_idx >> num_bits][m_idx & mask];
             }
 
-            template<bool O>
-            constexpr auto operator==(iter_t<O> const &o) const noexcept -> bool {
+            template <bool O>
+            constexpr auto operator==(iter_t<O> const& o) const noexcept -> bool {
                 return m_idx == o.m_idx;
             }
 
-            template<bool O>
-            constexpr auto operator!=(iter_t<O> const &o) const noexcept -> bool {
+            template <bool O>
+            constexpr auto operator!=(iter_t<O> const& o) const noexcept -> bool {
                 return !(*this == o);
             }
         };
@@ -251,24 +246,24 @@ namespace bite::unordered_dense {
         }
 
         // Moves everything from other
-        void append_everything_from(segmented_vector &&other) {
+        void append_everything_from(segmented_vector&& other) {
             reserve(size() + other.size());
-            for (auto &&o: other) {
+            for (auto&& o : other) {
                 emplace_back(std::move(o));
             }
         }
 
         // Copies everything from other
-        void append_everything_from(segmented_vector const &other) {
+        void append_everything_from(segmented_vector const& other) {
             reserve(size() + other.size());
-            for (auto const &o: other) {
+            for (auto const& o : other) {
                 emplace_back(o);
             }
         }
 
         void dealloc() {
             auto ba = Allocator(m_blocks.get_allocator());
-            for (auto ptr: m_blocks) {
+            for (auto ptr : m_blocks) {
                 std::allocator_traits<Allocator>::deallocate(ba, ptr, num_elements_in_block);
             }
         }
@@ -281,29 +276,23 @@ namespace bite::unordered_dense {
         segmented_vector() = default;
 
         // NOLINTNEXTLINE(google-explicit-constructor,hicpp-explicit-conversions)
-        segmented_vector(Allocator alloc)
-            : m_blocks(vec_alloc(alloc)) {
-        }
+        segmented_vector(Allocator alloc) : m_blocks(vec_alloc(alloc)) {}
 
-        segmented_vector(segmented_vector &&other, Allocator alloc)
-            : segmented_vector(alloc) {
+        segmented_vector(segmented_vector&& other, Allocator alloc) : segmented_vector(alloc) {
             *this = std::move(other);
         }
 
-        segmented_vector(segmented_vector const &other, Allocator alloc)
-            : m_blocks(vec_alloc(alloc)) {
+        segmented_vector(segmented_vector const& other, Allocator alloc) : m_blocks(vec_alloc(alloc)) {
             append_everything_from(other);
         }
 
-        segmented_vector(segmented_vector &&other) noexcept
-            : segmented_vector(std::move(other), get_allocator()) {
-        }
+        segmented_vector(segmented_vector&& other) noexcept : segmented_vector(std::move(other), get_allocator()) {}
 
-        segmented_vector(segmented_vector const &other) {
+        segmented_vector(segmented_vector const& other) {
             append_everything_from(other);
         }
 
-        auto operator=(segmented_vector const &other) -> segmented_vector & {
+        auto operator=(segmented_vector const& other) -> segmented_vector& {
             if (this == &other) {
                 return *this;
             }
@@ -312,7 +301,7 @@ namespace bite::unordered_dense {
             return *this;
         }
 
-        auto operator=(segmented_vector &&other) noexcept -> segmented_vector & {
+        auto operator=(segmented_vector&& other) noexcept -> segmented_vector& {
             clear();
             dealloc();
             if (other.get_allocator() == get_allocator()) {
@@ -340,36 +329,36 @@ namespace bite::unordered_dense {
         }
 
         // Indexing is highly performance critical
-        [[nodiscard]] constexpr auto operator[](size_t i) const noexcept -> T const & {
+        [[nodiscard]] constexpr auto operator[](size_t i) const noexcept -> T const& {
             return m_blocks[i >> num_bits][i & mask];
         }
 
-        [[nodiscard]] constexpr auto operator[](size_t i) noexcept -> T & {
+        [[nodiscard]] constexpr auto operator[](size_t i) noexcept -> T& {
             return m_blocks[i >> num_bits][i & mask];
         }
 
         [[nodiscard]] constexpr auto begin() -> iterator {
-            return {m_blocks.data(), 0U};
+            return { m_blocks.data(), 0U };
         }
 
         [[nodiscard]] constexpr auto begin() const -> const_iterator {
-            return {m_blocks.data(), 0U};
+            return { m_blocks.data(), 0U };
         }
 
         [[nodiscard]] constexpr auto cbegin() const -> const_iterator {
-            return {m_blocks.data(), 0U};
+            return { m_blocks.data(), 0U };
         }
 
         [[nodiscard]] constexpr auto end() -> iterator {
-            return {m_blocks.data(), m_size};
+            return { m_blocks.data(), m_size };
         }
 
         [[nodiscard]] constexpr auto end() const -> const_iterator {
-            return {m_blocks.data(), m_size};
+            return { m_blocks.data(), m_size };
         }
 
         [[nodiscard]] constexpr auto cend() const -> const_iterator {
-            return {m_blocks.data(), m_size};
+            return { m_blocks.data(), m_size };
         }
 
         [[nodiscard]] constexpr auto back() -> reference {
@@ -397,16 +386,16 @@ namespace bite::unordered_dense {
         }
 
         [[nodiscard]] auto get_allocator() const -> allocator_type {
-            return allocator_type{m_blocks.get_allocator()};
+            return allocator_type { m_blocks.get_allocator() };
         }
 
-        template<class... Args>
-        auto emplace_back(Args &&... args) -> reference {
+        template <class... Args>
+        auto emplace_back(Args&&... args) -> reference {
             if (m_size == capacity()) {
                 increase_capacity();
             }
-            auto *ptr = static_cast<void *>(&operator[](m_size));
-            auto &ref = *new(ptr) T(std::forward<Args>(args)...);
+            auto* ptr = static_cast<void*>(&operator[](m_size));
+            auto& ref = *new(ptr) T(std::forward<Args>(args)...);
             ++m_size;
             return ref;
         }
@@ -433,27 +422,23 @@ namespace bite::unordered_dense {
 
     namespace detail {
         // This is it, the table. Doubles as map and set, and uses `void` for T when its used as a set.
-        template<class Key,
-            class T, // when void, treat it as a set.
-            class Hash,
-            class KeyEqual,
-            class AllocatorOrContainer,
-            class Bucket,
-            bool IsSegmented>
+        template <class Key, class T, // when void, treat it as a set.
+                  class Hash, class KeyEqual, class AllocatorOrContainer, class Bucket, bool IsSegmented>
         class table : public std::conditional_t<is_map_v<T>, base_table_type_map<T>, base_table_type_set> {
             using underlying_value_type = std::conditional_t<is_map_v<T>, std::pair<Key, T>, Key>;
             using underlying_container_type = std::conditional_t<IsSegmented,
-                segmented_vector<underlying_value_type, AllocatorOrContainer>,
-                std::vector<underlying_value_type, AllocatorOrContainer> >;
+                                                                 segmented_vector<
+                                                                     underlying_value_type, AllocatorOrContainer>,
+                                                                 std::vector<
+                                                                     underlying_value_type, AllocatorOrContainer>>;
 
         public:
             using value_container_type = std::conditional_t<is_detected_v<detect_iterator, AllocatorOrContainer>,
-                AllocatorOrContainer, underlying_container_type>;
+                                                            AllocatorOrContainer, underlying_container_type>;
 
         private:
-            using bucket_alloc =
-            typename std::allocator_traits<typename value_container_type::allocator_type>::template rebind_alloc<Bucket>
-            ;
+            using bucket_alloc = typename std::allocator_traits<typename value_container_type::allocator_type>::template
+            rebind_alloc<Bucket>;
             using bucket_alloc_traits = std::allocator_traits<bucket_alloc>;
 
             static constexpr uint8_t initial_shifts = 64 - 2; // 2^(64-m_shift) number of buckets
@@ -479,32 +464,32 @@ namespace bite::unordered_dense {
             using value_idx_type = decltype(Bucket::m_value_idx);
             using dist_and_fingerprint_type = decltype(Bucket::m_dist_and_fingerprint);
 
-            static_assert(std::is_trivially_destructible_v<Bucket>,
-                          "assert there's no need to call destructor / std::destroy");
+            static_assert(
+                std::is_trivially_destructible_v<Bucket>,
+                "assert there's no need to call destructor / std::destroy"
+            );
             static_assert(std::is_trivially_copyable_v<Bucket>, "assert we can just memset / memcpy");
 
-            value_container_type m_values{};
+            value_container_type m_values {};
             // Contains all the key-value pairs in one densely stored container. No holes.
             using bucket_pointer = typename std::allocator_traits<bucket_alloc>::pointer;
-            bucket_pointer m_buckets{};
+            bucket_pointer m_buckets {};
             size_t m_num_buckets = 0;
             size_t m_max_bucket_capacity = 0;
             float m_max_load_factor = default_max_load_factor;
-            Hash m_hash{};
-            KeyEqual m_equal{};
+            Hash m_hash {};
+            KeyEqual m_equal {};
             uint8_t m_shifts = initial_shifts;
 
             [[nodiscard]] auto next(value_idx_type bucket_idx) const -> value_idx_type {
                 // add unlikely
-                return (bucket_idx + 1U == m_num_buckets)
-                           ? 0
-                           : static_cast<value_idx_type>(bucket_idx + 1U);
+                return (bucket_idx + 1U == m_num_buckets) ? 0 : static_cast<value_idx_type>(bucket_idx + 1U);
             }
 
             // Helper to access bucket through pointer types
-            [[nodiscard]] static constexpr auto at(bucket_pointer bucket_ptr, size_t offset) -> Bucket & {
+            [[nodiscard]] static constexpr auto at(bucket_pointer bucket_ptr, size_t offset) -> Bucket& {
                 return *(bucket_ptr + static_cast<typename std::allocator_traits<bucket_alloc>::difference_type>(
-                             offset));
+                    offset));
             }
 
             // use the dist_inc and dist_dec functions so that uint16_t types work without warning
@@ -517,8 +502,8 @@ namespace bite::unordered_dense {
             }
 
             // The goal of mixed_hash is to always produce a high quality 64bit hash.
-            template<typename K>
-            [[nodiscard]] constexpr auto mixed_hash(K const &key) const -> uint64_t {
+            template <typename K>
+            [[nodiscard]] constexpr auto mixed_hash(K const& key) const -> uint64_t {
                 if constexpr (is_detected_v<detect_avalanching, Hash>) {
                     // we know that the hash is good because is_avalanching.
                     if constexpr (sizeof(decltype(m_hash(key))) < sizeof(uint64_t)) {
@@ -535,7 +520,8 @@ namespace bite::unordered_dense {
             }
 
             [[nodiscard]] constexpr auto dist_and_fingerprint_from_hash(
-                uint64_t hash) const -> dist_and_fingerprint_type {
+                uint64_t hash
+            ) const -> dist_and_fingerprint_type {
                 return Bucket::dist_inc | (static_cast<dist_and_fingerprint_type>(hash) & Bucket::fingerprint_mask);
             }
 
@@ -543,7 +529,7 @@ namespace bite::unordered_dense {
                 return static_cast<value_idx_type>(hash >> m_shifts);
             }
 
-            [[nodiscard]] static constexpr auto get_key(value_type const &vt) -> key_type const & {
+            [[nodiscard]] static constexpr auto get_key(value_type const& vt) -> key_type const& {
                 if constexpr (is_map_v<T>) {
                     return vt.first;
                 } else {
@@ -551,8 +537,8 @@ namespace bite::unordered_dense {
                 }
             }
 
-            template<typename K>
-            [[nodiscard]] auto next_while_less(K const &key) const -> Bucket {
+            template <typename K>
+            [[nodiscard]] auto next_while_less(K const& key) const -> Bucket {
                 auto hash = mixed_hash(key);
                 auto dist_and_fingerprint = dist_and_fingerprint_from_hash(hash);
                 auto bucket_idx = bucket_idx_from_hash(hash);
@@ -561,7 +547,7 @@ namespace bite::unordered_dense {
                     dist_and_fingerprint = dist_inc(dist_and_fingerprint);
                     bucket_idx = next(bucket_idx);
                 }
-                return {dist_and_fingerprint, bucket_idx};
+                return { dist_and_fingerprint, bucket_idx };
             }
 
             void place_and_shift_up(Bucket bucket, value_idx_type place) {
@@ -574,20 +560,20 @@ namespace bite::unordered_dense {
             }
 
             [[nodiscard]] static constexpr auto calc_num_buckets(uint8_t shifts) -> size_t {
-                return (std::min)(max_bucket_count(), size_t{1} << (64U - shifts));
+                return (std::min)(max_bucket_count(), size_t { 1 } << (64U - shifts));
             }
 
             [[nodiscard]] constexpr auto calc_shifts_for_size(size_t s) const -> uint8_t {
                 auto shifts = initial_shifts;
-                while (shifts > 0 && static_cast<size_t>(
-                           static_cast<float>(calc_num_buckets(shifts)) * max_load_factor()) < s) {
+                while (shifts > 0 && static_cast<size_t>(static_cast<float>(calc_num_buckets(shifts)) *
+                    max_load_factor()) < s) {
                     --shifts;
                 }
                 return shifts;
             }
 
             // assumes m_values has data, m_buckets=m_buckets_end=nullptr, m_shifts is INITIAL_SHIFTS
-            void copy_buckets(table const &other) {
+            void copy_buckets(table const& other) {
                 // assumes m_values has already the correct data copied over.
                 if (empty()) {
                     // when empty, at least allocate an initial buckets and clear them.
@@ -625,8 +611,8 @@ namespace bite::unordered_dense {
                     // reached the maximum, make sure we can use each bucket
                     m_max_bucket_capacity = max_bucket_count();
                 } else {
-                    m_max_bucket_capacity = static_cast<value_idx_type>(
-                        static_cast<float>(m_num_buckets) * max_load_factor());
+                    m_max_bucket_capacity = static_cast<value_idx_type>(static_cast<float>(m_num_buckets) *
+                        max_load_factor());
                 }
             }
 
@@ -638,14 +624,13 @@ namespace bite::unordered_dense {
 
             void clear_and_fill_buckets_from_values() {
                 clear_buckets();
-                for (value_idx_type value_idx = 0, end_idx = static_cast<value_idx_type>(m_values.size());
-                     value_idx < end_idx;
-                     ++value_idx) {
-                    auto const &key = get_key(m_values[value_idx]);
+                for (value_idx_type value_idx = 0, end_idx = static_cast<value_idx_type>(m_values.size()); value_idx <
+                     end_idx; ++value_idx) {
+                    auto const& key = get_key(m_values[value_idx]);
                     auto [dist_and_fingerprint, bucket] = next_while_less(key);
 
                     // we know for certain that key has not yet been inserted, so no need to check it.
-                    place_and_shift_up({dist_and_fingerprint, value_idx}, bucket);
+                    place_and_shift_up({ dist_and_fingerprint, value_idx }, bucket);
                 }
             }
 
@@ -661,7 +646,7 @@ namespace bite::unordered_dense {
                 clear_and_fill_buckets_from_values();
             }
 
-            template<typename Op>
+            template <typename Op>
             void do_erase(value_idx_type bucket_idx, Op handle_erased_value) {
                 auto const value_idx_to_remove = at(m_buckets, bucket_idx).m_value_idx;
 
@@ -669,9 +654,9 @@ namespace bite::unordered_dense {
                 auto next_bucket_idx = next(bucket_idx);
                 while (at(m_buckets, next_bucket_idx).m_dist_and_fingerprint >= Bucket::dist_inc * 2) {
                     at(m_buckets, bucket_idx) = {
-                        dist_dec(at(m_buckets, next_bucket_idx).m_dist_and_fingerprint),
-                        at(m_buckets, next_bucket_idx).m_value_idx
-                    };
+                            dist_dec(at(m_buckets, next_bucket_idx).m_dist_and_fingerprint),
+                            at(m_buckets, next_bucket_idx).m_value_idx
+                        };
                     bucket_idx = std::exchange(next_bucket_idx, next(next_bucket_idx));
                 }
                 at(m_buckets, bucket_idx) = {};
@@ -680,7 +665,7 @@ namespace bite::unordered_dense {
                 // update m_values
                 if (value_idx_to_remove != m_values.size() - 1) {
                     // no luck, we'll have to replace the value with the last one and update the index accordingly
-                    auto &val = m_values[value_idx_to_remove];
+                    auto& val = m_values[value_idx_to_remove];
                     val = std::move(m_values.back());
 
                     // update the values_idx of the moved entry. No need to play the info game, just look until we find the values_idx
@@ -696,16 +681,18 @@ namespace bite::unordered_dense {
                 m_values.pop_back();
             }
 
-            template<typename K, typename Op>
-            auto do_erase_key(K &&key, Op handle_erased_value) -> size_t {
+            template <typename K, typename Op>
+            auto do_erase_key(K&& key, Op handle_erased_value) -> size_t {
                 if (empty()) {
                     return 0;
                 }
 
                 auto [dist_and_fingerprint, bucket_idx] = next_while_less(key);
 
-                while (dist_and_fingerprint == at(m_buckets, bucket_idx).m_dist_and_fingerprint &&
-                       !m_equal(key, get_key(m_values[at(m_buckets, bucket_idx).m_value_idx]))) {
+                while (dist_and_fingerprint == at(m_buckets, bucket_idx).m_dist_and_fingerprint && !m_equal(
+                    key,
+                    get_key(m_values[at(m_buckets, bucket_idx).m_value_idx])
+                )) {
                     dist_and_fingerprint = dist_inc(dist_and_fingerprint);
                     bucket_idx = next(bucket_idx);
                 }
@@ -717,8 +704,8 @@ namespace bite::unordered_dense {
                 return 1;
             }
 
-            template<class K, class M>
-            auto do_insert_or_assign(K &&key, M &&mapped) -> std::pair<iterator, bool> {
+            template <class K, class M>
+            auto do_insert_or_assign(K&& key, M&& mapped) -> std::pair<iterator, bool> {
                 auto it_isinserted = try_emplace(std::forward<K>(key), std::forward<M>(mapped));
                 if (!it_isinserted.second) {
                     it_isinserted.first->second = std::forward<M>(mapped);
@@ -726,10 +713,12 @@ namespace bite::unordered_dense {
                 return it_isinserted;
             }
 
-            template<typename... Args>
-            auto do_place_element(dist_and_fingerprint_type dist_and_fingerprint, value_idx_type bucket_idx,
-                                  Args &&... args)
-                -> std::pair<iterator, bool> {
+            template <typename... Args>
+            auto do_place_element(
+                dist_and_fingerprint_type dist_and_fingerprint,
+                value_idx_type bucket_idx,
+                Args&&... args
+            ) -> std::pair<iterator, bool> {
                 // emplace the new value. If that throws an exception, no harm done; index is still in a valid state
                 m_values.emplace_back(std::forward<Args>(args)...);
 
@@ -737,39 +726,41 @@ namespace bite::unordered_dense {
                 if (is_full()) [[unlikely]] {
                     increase_size();
                 } else {
-                    place_and_shift_up({dist_and_fingerprint, value_idx}, bucket_idx);
+                    place_and_shift_up({ dist_and_fingerprint, value_idx }, bucket_idx);
                 }
 
                 // place element and shift up until we find an empty spot
-                return {begin() + static_cast<difference_type>(value_idx), true};
+                return { begin() + static_cast<difference_type>(value_idx), true };
             }
 
-            template<typename K, typename... Args>
-            auto do_try_emplace(K &&key, Args &&... args) -> std::pair<iterator, bool> {
+            template <typename K, typename... Args>
+            auto do_try_emplace(K&& key, Args&&... args) -> std::pair<iterator, bool> {
                 auto hash = mixed_hash(key);
                 auto dist_and_fingerprint = dist_and_fingerprint_from_hash(hash);
                 auto bucket_idx = bucket_idx_from_hash(hash);
 
                 while (true) {
-                    auto *bucket = &at(m_buckets, bucket_idx);
+                    auto* bucket = &at(m_buckets, bucket_idx);
                     if (dist_and_fingerprint == bucket->m_dist_and_fingerprint) {
                         if (m_equal(key, get_key(m_values[bucket->m_value_idx]))) {
-                            return {begin() + static_cast<difference_type>(bucket->m_value_idx), false};
+                            return { begin() + static_cast<difference_type>(bucket->m_value_idx), false };
                         }
                     } else if (dist_and_fingerprint > bucket->m_dist_and_fingerprint) {
-                        return do_place_element(dist_and_fingerprint,
-                                                bucket_idx,
-                                                std::piecewise_construct,
-                                                std::forward_as_tuple(std::forward<K>(key)),
-                                                std::forward_as_tuple(std::forward<Args>(args)...));
+                        return do_place_element(
+                            dist_and_fingerprint,
+                            bucket_idx,
+                            std::piecewise_construct,
+                            std::forward_as_tuple(std::forward<K>(key)),
+                            std::forward_as_tuple(std::forward<Args>(args)...)
+                        );
                     }
                     dist_and_fingerprint = dist_inc(dist_and_fingerprint);
                     bucket_idx = next(bucket_idx);
                 }
             }
 
-            template<typename K>
-            auto do_find(K const &key) -> iterator {
+            template <typename K>
+            auto do_find(K const& key) -> iterator {
                 if (empty()) [[unlikely]] {
                     return end();
                 }
@@ -777,11 +768,13 @@ namespace bite::unordered_dense {
                 auto mh = mixed_hash(key);
                 auto dist_and_fingerprint = dist_and_fingerprint_from_hash(mh);
                 auto bucket_idx = bucket_idx_from_hash(mh);
-                auto *bucket = &at(m_buckets, bucket_idx);
+                auto* bucket = &at(m_buckets, bucket_idx);
 
                 // unrolled loop. *Always* check a few directly, then enter the loop. This is faster.
                 if (dist_and_fingerprint == bucket->m_dist_and_fingerprint && m_equal(
-                        key, get_key(m_values[bucket->m_value_idx]))) {
+                    key,
+                    get_key(m_values[bucket->m_value_idx])
+                )) {
                     return begin() + static_cast<difference_type>(bucket->m_value_idx);
                 }
                 dist_and_fingerprint = dist_inc(dist_and_fingerprint);
@@ -789,7 +782,9 @@ namespace bite::unordered_dense {
                 bucket = &at(m_buckets, bucket_idx);
 
                 if (dist_and_fingerprint == bucket->m_dist_and_fingerprint && m_equal(
-                        key, get_key(m_values[bucket->m_value_idx]))) {
+                    key,
+                    get_key(m_values[bucket->m_value_idx])
+                )) {
                     return begin() + static_cast<difference_type>(bucket->m_value_idx);
                 }
                 dist_and_fingerprint = dist_inc(dist_and_fingerprint);
@@ -810,32 +805,33 @@ namespace bite::unordered_dense {
                 }
             }
 
-            template<typename K>
-            auto do_find(K const &key) const -> const_iterator {
-                return const_cast<table *>(this)->do_find(key); // NOLINT(cppcoreguidelines-pro-type-const-cast)
+            template <typename K>
+            auto do_find(K const& key) const -> const_iterator {
+                return const_cast<table*>(this)->do_find(key); // NOLINT(cppcoreguidelines-pro-type-const-cast)
             }
 
-            template<typename K, typename Q = T, std::enable_if_t<is_map_v<Q>, bool>  = true>
-            auto do_at(K const &key) -> Q & {
+            template <typename K, typename Q = T, std::enable_if_t<is_map_v<Q>, bool>  = true>
+            auto do_at(K const& key) -> Q& {
                 if (auto it = find(key); end() != it) [[likely]] {
                     return it->second;
                 }
                 on_error_key_not_found();
             }
 
-            template<typename K, typename Q = T, std::enable_if_t<is_map_v<Q>, bool>  = true>
-            auto do_at(K const &key) const -> Q const & {
-                return const_cast<table *>(this)->at(key); // NOLINT(cppcoreguidelines-pro-type-const-cast)
+            template <typename K, typename Q = T, std::enable_if_t<is_map_v<Q>, bool>  = true>
+            auto do_at(K const& key) const -> Q const& {
+                return const_cast<table*>(this)->at(key); // NOLINT(cppcoreguidelines-pro-type-const-cast)
             }
 
         public:
-            explicit table(size_t bucket_count,
-                           Hash const &hash = Hash(),
-                           KeyEqual const &equal = KeyEqual(),
-                           allocator_type const &alloc_or_container = allocator_type())
-                : m_values(alloc_or_container)
-                  , m_hash(hash)
-                  , m_equal(equal) {
+            explicit table(
+                size_t bucket_count,
+                Hash const& hash = Hash(),
+                KeyEqual const& equal = KeyEqual(),
+                allocator_type const& alloc_or_container = allocator_type()
+            ) : m_values(alloc_or_container),
+                m_hash(hash),
+                m_equal(equal) {
                 if (0 != bucket_count) {
                     reserve(bucket_count);
                 } else {
@@ -844,81 +840,89 @@ namespace bite::unordered_dense {
                 }
             }
 
-            table()
-                : table(0) {
-            }
+            table() : table(0) {}
 
-            table(size_t bucket_count, allocator_type const &alloc)
-                : table(bucket_count, Hash(), KeyEqual(), alloc) {
-            }
+            table(size_t bucket_count, allocator_type const& alloc) : table(bucket_count, Hash(), KeyEqual(), alloc) {}
 
-            table(size_t bucket_count, Hash const &hash, allocator_type const &alloc)
-                : table(bucket_count, hash, KeyEqual(), alloc) {
-            }
+            table(size_t bucket_count, Hash const& hash, allocator_type const& alloc) : table(
+                bucket_count,
+                hash,
+                KeyEqual(),
+                alloc
+            ) {}
 
-            explicit table(allocator_type const &alloc)
-                : table(0, Hash(), KeyEqual(), alloc) {
-            }
+            explicit table(allocator_type const& alloc) : table(0, Hash(), KeyEqual(), alloc) {}
 
-            template<class InputIt>
-            table(InputIt first,
-                  InputIt last,
-                  size_type bucket_count = 0,
-                  Hash const &hash = Hash(),
-                  KeyEqual const &equal = KeyEqual(),
-                  allocator_type const &alloc = allocator_type())
-                : table(bucket_count, hash, equal, alloc) {
+            template <class InputIt>
+            table(
+                InputIt first,
+                InputIt last,
+                size_type bucket_count = 0,
+                Hash const& hash = Hash(),
+                KeyEqual const& equal = KeyEqual(),
+                allocator_type const& alloc = allocator_type()
+            ) : table(bucket_count, hash, equal, alloc) {
                 insert(first, last);
             }
 
-            template<class InputIt>
-            table(InputIt first, InputIt last, size_type bucket_count, allocator_type const &alloc)
-                : table(first, last, bucket_count, Hash(), KeyEqual(), alloc) {
-            }
+            template <class InputIt>
+            table(InputIt first, InputIt last, size_type bucket_count, allocator_type const& alloc) : table(
+                first,
+                last,
+                bucket_count,
+                Hash(),
+                KeyEqual(),
+                alloc
+            ) {}
 
-            template<class InputIt>
-            table(InputIt first, InputIt last, size_type bucket_count, Hash const &hash, allocator_type const &alloc)
-                : table(first, last, bucket_count, hash, KeyEqual(), alloc) {
-            }
+            template <class InputIt>
+            table(
+                InputIt first,
+                InputIt last,
+                size_type bucket_count,
+                Hash const& hash,
+                allocator_type const& alloc
+            ) : table(first, last, bucket_count, hash, KeyEqual(), alloc) {}
 
-            table(table const &other)
-                : table(other, other.m_values.get_allocator()) {
-            }
+            table(table const& other) : table(other, other.m_values.get_allocator()) {}
 
-            table(table const &other, allocator_type const &alloc)
-                : m_values(other.m_values, alloc)
-                  , m_max_load_factor(other.m_max_load_factor)
-                  , m_hash(other.m_hash)
-                  , m_equal(other.m_equal) {
+            table(table const& other, allocator_type const& alloc) : m_values(other.m_values, alloc),
+                                                                     m_max_load_factor(other.m_max_load_factor),
+                                                                     m_hash(other.m_hash),
+                                                                     m_equal(other.m_equal) {
                 copy_buckets(other);
             }
 
-            table(table &&other) noexcept
-                : table(std::move(other), other.m_values.get_allocator()) {
-            }
+            table(table&& other) noexcept : table(std::move(other), other.m_values.get_allocator()) {}
 
-            table(table &&other, allocator_type const &alloc) noexcept
-                : m_values(alloc) {
+            table(table&& other, allocator_type const& alloc) noexcept : m_values(alloc) {
                 *this = std::move(other);
             }
 
-            table(std::initializer_list<value_type> ilist,
-                  size_t bucket_count = 0,
-                  Hash const &hash = Hash(),
-                  KeyEqual const &equal = KeyEqual(),
-                  allocator_type const &alloc = allocator_type())
-                : table(bucket_count, hash, equal, alloc) {
+            table(
+                std::initializer_list<value_type> ilist,
+                size_t bucket_count = 0,
+                Hash const& hash = Hash(),
+                KeyEqual const& equal = KeyEqual(),
+                allocator_type const& alloc = allocator_type()
+            ) : table(bucket_count, hash, equal, alloc) {
                 insert(ilist);
             }
 
-            table(std::initializer_list<value_type> ilist, size_type bucket_count, allocator_type const &alloc)
-                : table(ilist, bucket_count, Hash(), KeyEqual(), alloc) {
-            }
+            table(std::initializer_list<value_type> ilist, size_type bucket_count, allocator_type const& alloc) : table(
+                ilist,
+                bucket_count,
+                Hash(),
+                KeyEqual(),
+                alloc
+            ) {}
 
-            table(std::initializer_list<value_type> init, size_type bucket_count, Hash const &hash,
-                  allocator_type const &alloc)
-                : table(init, bucket_count, hash, KeyEqual(), alloc) {
-            }
+            table(
+                std::initializer_list<value_type> init,
+                size_type bucket_count,
+                Hash const& hash,
+                allocator_type const& alloc
+            ) : table(init, bucket_count, hash, KeyEqual(), alloc) {}
 
             ~table() {
                 if (nullptr != m_buckets) {
@@ -927,7 +931,7 @@ namespace bite::unordered_dense {
                 }
             }
 
-            auto operator=(table const &other) -> table & {
+            auto operator=(table const& other) -> table& {
                 if (&other != this) {
                     deallocate_buckets(); // deallocate before m_values is set (might have another allocator)
                     m_values = other.m_values;
@@ -940,9 +944,10 @@ namespace bite::unordered_dense {
                 return *this;
             }
 
-            auto operator=(table &&other) noexcept(noexcept(std::is_nothrow_move_assignable_v<value_container_type> &&
-                                                            std::is_nothrow_move_assignable_v<Hash> &&
-                                                            std::is_nothrow_move_assignable_v<KeyEqual>)) -> table & {
+            auto operator=(
+                table&& other
+            ) noexcept(noexcept(std::is_nothrow_move_assignable_v<value_container_type> &&
+                std::is_nothrow_move_assignable_v<Hash> && std::is_nothrow_move_assignable_v<KeyEqual>)) -> table& {
                 if (&other != this) {
                     deallocate_buckets(); // deallocate before m_values is set (might have another allocator)
                     m_values = std::move(other.m_values);
@@ -976,7 +981,7 @@ namespace bite::unordered_dense {
                 return *this;
             }
 
-            auto operator=(std::initializer_list<value_type> ilist) -> table & {
+            auto operator=(std::initializer_list<value_type> ilist) -> table& {
                 clear();
                 insert(ilist);
                 return *this;
@@ -1024,9 +1029,9 @@ namespace bite::unordered_dense {
 
             [[nodiscard]] static constexpr auto max_size() noexcept -> size_t {
                 if constexpr ((std::numeric_limits<value_idx_type>::max)() == (std::numeric_limits<size_t>::max)()) {
-                    return size_t{1} << (sizeof(value_idx_type) * 8 - 1);
+                    return size_t { 1 } << (sizeof(value_idx_type) * 8 - 1);
                 } else {
-                    return size_t{1} << (sizeof(value_idx_type) * 8);
+                    return size_t { 1 } << (sizeof(value_idx_type) * 8);
                 }
             }
 
@@ -1037,33 +1042,33 @@ namespace bite::unordered_dense {
                 clear_buckets();
             }
 
-            auto insert(value_type const &value) -> std::pair<iterator, bool> {
+            auto insert(value_type const& value) -> std::pair<iterator, bool> {
                 return emplace(value);
             }
 
-            auto insert(value_type &&value) -> std::pair<iterator, bool> {
+            auto insert(value_type&& value) -> std::pair<iterator, bool> {
                 return emplace(std::move(value));
             }
 
-            template<class P, std::enable_if_t<std::is_constructible_v<value_type, P &&>, bool>  = true>
-            auto insert(P &&value) -> std::pair<iterator, bool> {
+            template <class P, std::enable_if_t<std::is_constructible_v<value_type, P&&>, bool>  = true>
+            auto insert(P&& value) -> std::pair<iterator, bool> {
                 return emplace(std::forward<P>(value));
             }
 
-            auto insert(const_iterator /*hint*/, value_type const &value) -> iterator {
+            auto insert(const_iterator /*hint*/, value_type const& value) -> iterator {
                 return insert(value).first;
             }
 
-            auto insert(const_iterator /*hint*/, value_type &&value) -> iterator {
+            auto insert(const_iterator /*hint*/, value_type&& value) -> iterator {
                 return insert(std::move(value)).first;
             }
 
-            template<class P, std::enable_if_t<std::is_constructible_v<value_type, P &&>, bool>  = true>
-            auto insert(const_iterator /*hint*/, P &&value) -> iterator {
+            template <class P, std::enable_if_t<std::is_constructible_v<value_type, P&&>, bool>  = true>
+            auto insert(const_iterator /*hint*/, P&& value) -> iterator {
                 return insert(std::forward<P>(value)).first;
             }
 
-            template<class InputIt>
+            template <class InputIt>
             void insert(InputIt first, InputIt last) {
                 while (first != last) {
                     insert(*first);
@@ -1083,7 +1088,7 @@ namespace bite::unordered_dense {
 
             // nonstandard API:
             // Discards the internally held container and replaces it with the one passed. Erases non-unique elements.
-            auto replace(value_container_type &&container) {
+            auto replace(value_container_type&& container) {
                 if (container.size() > max_size()) [[unlikely]] {
                     on_error_too_many_elements();
                 }
@@ -1098,11 +1103,11 @@ namespace bite::unordered_dense {
                 m_values = std::move(container);
 
                 // can't use clear_and_fill_buckets_from_values() because container elements might not be unique
-                auto value_idx = value_idx_type{};
+                auto value_idx = value_idx_type {};
 
                 // loop until we reach the end of the container. duplicated entries will be replaced with back().
                 while (value_idx != static_cast<value_idx_type>(m_values.size())) {
-                    auto const &key = get_key(m_values[value_idx]);
+                    auto const& key = get_key(m_values[value_idx]);
 
                     auto hash = mixed_hash(key);
                     auto dist_and_fingerprint = dist_and_fingerprint_from_hash(hash);
@@ -1110,12 +1115,14 @@ namespace bite::unordered_dense {
 
                     bool key_found = false;
                     while (true) {
-                        auto const &bucket = at(m_buckets, bucket_idx);
+                        auto const& bucket = at(m_buckets, bucket_idx);
                         if (dist_and_fingerprint > bucket.m_dist_and_fingerprint) {
                             break;
                         }
-                        if (dist_and_fingerprint == bucket.m_dist_and_fingerprint &&
-                            m_equal(key, get_key(m_values[bucket.m_value_idx]))) {
+                        if (dist_and_fingerprint == bucket.m_dist_and_fingerprint && m_equal(
+                            key,
+                            get_key(m_values[bucket.m_value_idx])
+                        )) {
                             key_found = true;
                             break;
                         }
@@ -1129,68 +1136,59 @@ namespace bite::unordered_dense {
                         }
                         m_values.pop_back();
                     } else {
-                        place_and_shift_up({dist_and_fingerprint, value_idx}, bucket_idx);
+                        place_and_shift_up({ dist_and_fingerprint, value_idx }, bucket_idx);
                         ++value_idx;
                     }
                 }
             }
 
-            template<class M, typename Q = T, std::enable_if_t<is_map_v<Q>, bool>  = true>
-            auto insert_or_assign(Key const &key, M &&mapped) -> std::pair<iterator, bool> {
+            template <class M, typename Q = T, std::enable_if_t<is_map_v<Q>, bool>  = true>
+            auto insert_or_assign(Key const& key, M&& mapped) -> std::pair<iterator, bool> {
                 return do_insert_or_assign(key, std::forward<M>(mapped));
             }
 
-            template<class M, typename Q = T, std::enable_if_t<is_map_v<Q>, bool>  = true>
-            auto insert_or_assign(Key &&key, M &&mapped) -> std::pair<iterator, bool> {
+            template <class M, typename Q = T, std::enable_if_t<is_map_v<Q>, bool>  = true>
+            auto insert_or_assign(Key&& key, M&& mapped) -> std::pair<iterator, bool> {
                 return do_insert_or_assign(std::move(key), std::forward<M>(mapped));
             }
 
-            template<typename K,
-                typename M,
-                typename Q = T,
-                typename H = Hash,
-                typename KE = KeyEqual,
-                std::enable_if_t<is_map_v<Q> && is_transparent_v<H, KE>, bool>  = true>
-            auto insert_or_assign(K &&key, M &&mapped) -> std::pair<iterator, bool> {
+            template <typename K, typename M, typename Q = T, typename H = Hash, typename KE = KeyEqual,
+                      std::enable_if_t<is_map_v<Q> && is_transparent_v<H, KE>, bool>  = true>
+            auto insert_or_assign(K&& key, M&& mapped) -> std::pair<iterator, bool> {
                 return do_insert_or_assign(std::forward<K>(key), std::forward<M>(mapped));
             }
 
-            template<class M, typename Q = T, std::enable_if_t<is_map_v<Q>, bool>  = true>
-            auto insert_or_assign(const_iterator /*hint*/, Key const &key, M &&mapped) -> iterator {
+            template <class M, typename Q = T, std::enable_if_t<is_map_v<Q>, bool>  = true>
+            auto insert_or_assign(const_iterator /*hint*/, Key const& key, M&& mapped) -> iterator {
                 return do_insert_or_assign(key, std::forward<M>(mapped)).first;
             }
 
-            template<class M, typename Q = T, std::enable_if_t<is_map_v<Q>, bool>  = true>
-            auto insert_or_assign(const_iterator /*hint*/, Key &&key, M &&mapped) -> iterator {
+            template <class M, typename Q = T, std::enable_if_t<is_map_v<Q>, bool>  = true>
+            auto insert_or_assign(const_iterator /*hint*/, Key&& key, M&& mapped) -> iterator {
                 return do_insert_or_assign(std::move(key), std::forward<M>(mapped)).first;
             }
 
-            template<typename K,
-                typename M,
-                typename Q = T,
-                typename H = Hash,
-                typename KE = KeyEqual,
-                std::enable_if_t<is_map_v<Q> && is_transparent_v<H, KE>, bool>  = true>
-            auto insert_or_assign(const_iterator /*hint*/, K &&key, M &&mapped) -> iterator {
+            template <typename K, typename M, typename Q = T, typename H = Hash, typename KE = KeyEqual,
+                      std::enable_if_t<is_map_v<Q> && is_transparent_v<H, KE>, bool>  = true>
+            auto insert_or_assign(const_iterator /*hint*/, K&& key, M&& mapped) -> iterator {
                 return do_insert_or_assign(std::forward<K>(key), std::forward<M>(mapped)).first;
             }
 
             // Single arguments for unordered_set can be used without having to construct the value_type
-            template<class K,
-                typename Q = T,
-                typename H = Hash,
-                typename KE = KeyEqual,
-                std::enable_if_t<!is_map_v<Q> && is_transparent_v<H, KE>, bool>  = true>
-            auto emplace(K &&key) -> std::pair<iterator, bool> {
+            template <class K, typename Q = T, typename H = Hash, typename KE = KeyEqual, std::enable_if_t<
+                          !is_map_v<Q> && is_transparent_v<H, KE>, bool>  = true>
+            auto emplace(K&& key) -> std::pair<iterator, bool> {
                 auto hash = mixed_hash(key);
                 auto dist_and_fingerprint = dist_and_fingerprint_from_hash(hash);
                 auto bucket_idx = bucket_idx_from_hash(hash);
 
                 while (dist_and_fingerprint <= at(m_buckets, bucket_idx).m_dist_and_fingerprint) {
-                    if (dist_and_fingerprint == at(m_buckets, bucket_idx).m_dist_and_fingerprint &&
-                        m_equal(key, m_values[at(m_buckets, bucket_idx).m_value_idx])) {
+                    if (dist_and_fingerprint == at(m_buckets, bucket_idx).m_dist_and_fingerprint && m_equal(
+                        key,
+                        m_values[at(m_buckets, bucket_idx).m_value_idx]
+                    )) {
                         // found it, return without ever actually creating anything
-                        return {begin() + static_cast<difference_type>(at(m_buckets, bucket_idx).m_value_idx), false};
+                        return { begin() + static_cast<difference_type>(at(m_buckets, bucket_idx).m_value_idx), false };
                     }
                     dist_and_fingerprint = dist_inc(dist_and_fingerprint);
                     bucket_idx = next(bucket_idx);
@@ -1200,20 +1198,22 @@ namespace bite::unordered_dense {
                 return do_place_element(dist_and_fingerprint, bucket_idx, std::forward<K>(key));
             }
 
-            template<class... Args>
-            auto emplace(Args &&... args) -> std::pair<iterator, bool> {
+            template <class... Args>
+            auto emplace(Args&&... args) -> std::pair<iterator, bool> {
                 // we have to instantiate the value_type to be able to access the key.
                 // 1. emplace_back the object so it is constructed. 2. If the key is already there, pop it later in the loop.
-                auto &key = get_key(m_values.emplace_back(std::forward<Args>(args)...));
+                auto& key = get_key(m_values.emplace_back(std::forward<Args>(args)...));
                 auto hash = mixed_hash(key);
                 auto dist_and_fingerprint = dist_and_fingerprint_from_hash(hash);
                 auto bucket_idx = bucket_idx_from_hash(hash);
 
                 while (dist_and_fingerprint <= at(m_buckets, bucket_idx).m_dist_and_fingerprint) {
-                    if (dist_and_fingerprint == at(m_buckets, bucket_idx).m_dist_and_fingerprint &&
-                        m_equal(key, get_key(m_values[at(m_buckets, bucket_idx).m_value_idx]))) {
+                    if (dist_and_fingerprint == at(m_buckets, bucket_idx).m_dist_and_fingerprint && m_equal(
+                        key,
+                        get_key(m_values[at(m_buckets, bucket_idx).m_value_idx])
+                    )) {
                         m_values.pop_back(); // value was already there, so get rid of it
-                        return {begin() + static_cast<difference_type>(at(m_buckets, bucket_idx).m_value_idx), false};
+                        return { begin() + static_cast<difference_type>(at(m_buckets, bucket_idx).m_value_idx), false };
                     }
                     dist_and_fingerprint = dist_inc(dist_and_fingerprint);
                     bucket_idx = next(bucket_idx);
@@ -1226,59 +1226,47 @@ namespace bite::unordered_dense {
                     increase_size();
                 } else {
                     // place element and shift up until we find an empty spot
-                    place_and_shift_up({dist_and_fingerprint, value_idx}, bucket_idx);
+                    place_and_shift_up({ dist_and_fingerprint, value_idx }, bucket_idx);
                 }
-                return {begin() + static_cast<difference_type>(value_idx), true};
+                return { begin() + static_cast<difference_type>(value_idx), true };
             }
 
-            template<class... Args>
-            auto emplace_hint(const_iterator /*hint*/, Args &&... args) -> iterator {
+            template <class... Args>
+            auto emplace_hint(const_iterator /*hint*/, Args&&... args) -> iterator {
                 return emplace(std::forward<Args>(args)...).first;
             }
 
-            template<class... Args, typename Q = T, std::enable_if_t<is_map_v<Q>, bool>  = true>
-            auto try_emplace(Key const &key, Args &&... args) -> std::pair<iterator, bool> {
+            template <class... Args, typename Q = T, std::enable_if_t<is_map_v<Q>, bool>  = true>
+            auto try_emplace(Key const& key, Args&&... args) -> std::pair<iterator, bool> {
                 return do_try_emplace(key, std::forward<Args>(args)...);
             }
 
-            template<class... Args, typename Q = T, std::enable_if_t<is_map_v<Q>, bool>  = true>
-            auto try_emplace(Key &&key, Args &&... args) -> std::pair<iterator, bool> {
+            template <class... Args, typename Q = T, std::enable_if_t<is_map_v<Q>, bool>  = true>
+            auto try_emplace(Key&& key, Args&&... args) -> std::pair<iterator, bool> {
                 return do_try_emplace(std::move(key), std::forward<Args>(args)...);
             }
 
-            template<class... Args, typename Q = T, std::enable_if_t<is_map_v<Q>, bool>  = true>
-            auto try_emplace(const_iterator /*hint*/, Key const &key, Args &&... args) -> iterator {
+            template <class... Args, typename Q = T, std::enable_if_t<is_map_v<Q>, bool>  = true>
+            auto try_emplace(const_iterator /*hint*/, Key const& key, Args&&... args) -> iterator {
                 return do_try_emplace(key, std::forward<Args>(args)...).first;
             }
 
-            template<class... Args, typename Q = T, std::enable_if_t<is_map_v<Q>, bool>  = true>
-            auto try_emplace(const_iterator /*hint*/, Key &&key, Args &&... args) -> iterator {
+            template <class... Args, typename Q = T, std::enable_if_t<is_map_v<Q>, bool>  = true>
+            auto try_emplace(const_iterator /*hint*/, Key&& key, Args&&... args) -> iterator {
                 return do_try_emplace(std::move(key), std::forward<Args>(args)...).first;
             }
 
-            template<
-                typename K,
-                typename... Args,
-                typename Q = T,
-                typename H = Hash,
-                typename KE = KeyEqual,
-                std::enable_if_t<is_map_v<Q> && is_transparent_v<H, KE> && is_neither_convertible_v<K &&, iterator,
-                                     const_iterator>,
-                    bool>  = true>
-            auto try_emplace(K &&key, Args &&... args) -> std::pair<iterator, bool> {
+            template <typename K, typename... Args, typename Q = T, typename H = Hash, typename KE = KeyEqual,
+                      std::enable_if_t<is_map_v<Q> && is_transparent_v<H, KE> && is_neither_convertible_v<
+                                           K&&, iterator, const_iterator>, bool>  = true>
+            auto try_emplace(K&& key, Args&&... args) -> std::pair<iterator, bool> {
                 return do_try_emplace(std::forward<K>(key), std::forward<Args>(args)...);
             }
 
-            template<
-                typename K,
-                typename... Args,
-                typename Q = T,
-                typename H = Hash,
-                typename KE = KeyEqual,
-                std::enable_if_t<is_map_v<Q> && is_transparent_v<H, KE> && is_neither_convertible_v<K &&, iterator,
-                                     const_iterator>,
-                    bool>  = true>
-            auto try_emplace(const_iterator /*hint*/, K &&key, Args &&... args) -> iterator {
+            template <typename K, typename... Args, typename Q = T, typename H = Hash, typename KE = KeyEqual,
+                      std::enable_if_t<is_map_v<Q> && is_transparent_v<H, KE> && is_neither_convertible_v<
+                                           K&&, iterator, const_iterator>, bool>  = true>
+            auto try_emplace(const_iterator /*hint*/, K&& key, Args&&... args) -> iterator {
                 return do_try_emplace(std::forward<K>(key), std::forward<Args>(args)...).first;
             }
 
@@ -1291,8 +1279,7 @@ namespace bite::unordered_dense {
                     bucket_idx = next(bucket_idx);
                 }
 
-                do_erase(bucket_idx, [](value_type && /*unused*/) {
-                });
+                do_erase(bucket_idx, [](value_type&& /*unused*/) {});
                 return begin() + static_cast<difference_type>(value_idx_to_remove);
             }
 
@@ -1305,19 +1292,22 @@ namespace bite::unordered_dense {
                     bucket_idx = next(bucket_idx);
                 }
 
-                auto tmp = std::optional<value_type>{};
-                do_erase(bucket_idx, [&tmp](value_type &&val) {
-                    tmp = std::move(val);
-                });
+                auto tmp = std::optional<value_type> {};
+                do_erase(
+                    bucket_idx,
+                    [&tmp](value_type&& val) {
+                        tmp = std::move(val);
+                    }
+                );
                 return std::move(tmp).value();
             }
 
-            template<typename Q = T, std::enable_if_t<is_map_v<Q>, bool>  = true>
+            template <typename Q = T, std::enable_if_t<is_map_v<Q>, bool>  = true>
             auto erase(const_iterator it) -> iterator {
                 return erase(begin() + (it - cbegin()));
             }
 
-            template<typename Q = T, std::enable_if_t<is_map_v<Q>, bool>  = true>
+            template <typename Q = T, std::enable_if_t<is_map_v<Q>, bool>  = true>
             auto extract(const_iterator it) -> value_type {
                 return extract(begin() + (it - cbegin()));
             }
@@ -1346,154 +1336,150 @@ namespace bite::unordered_dense {
                 return begin() + idx_first;
             }
 
-            auto erase(Key const &key) -> size_t {
-                return do_erase_key(key, [](value_type && /*unused*/) {
-                });
+            auto erase(Key const& key) -> size_t {
+                return do_erase_key(key, [](value_type&& /*unused*/) {});
             }
 
-            auto extract(Key const &key) -> std::optional<value_type> {
-                auto tmp = std::optional<value_type>{};
-                do_erase_key(key, [&tmp](value_type &&val) {
-                    tmp = std::move(val);
-                });
+            auto extract(Key const& key) -> std::optional<value_type> {
+                auto tmp = std::optional<value_type> {};
+                do_erase_key(
+                    key,
+                    [&tmp](value_type&& val) {
+                        tmp = std::move(val);
+                    }
+                );
                 return tmp;
             }
 
-            template<class K, class H = Hash, class KE = KeyEqual, std::enable_if_t<is_transparent_v<H, KE>, bool>  =
-                    true>
-            auto erase(K &&key) -> size_t {
-                return do_erase_key(std::forward<K>(key), [](value_type && /*unused*/) {
-                });
+            template <class K, class H = Hash, class KE = KeyEqual, std::enable_if_t<is_transparent_v<H, KE>, bool>  =
+                          true>
+            auto erase(K&& key) -> size_t {
+                return do_erase_key(std::forward<K>(key), [](value_type&& /*unused*/) {});
             }
 
-            template<class K, class H = Hash, class KE = KeyEqual, std::enable_if_t<is_transparent_v<H, KE>, bool>  =
-                    true>
-            auto extract(K &&key) -> std::optional<value_type> {
-                auto tmp = std::optional<value_type>{};
-                do_erase_key(std::forward<K>(key), [&tmp](value_type &&val) {
-                    tmp = std::move(val);
-                });
+            template <class K, class H = Hash, class KE = KeyEqual, std::enable_if_t<is_transparent_v<H, KE>, bool>  =
+                          true>
+            auto extract(K&& key) -> std::optional<value_type> {
+                auto tmp = std::optional<value_type> {};
+                do_erase_key(
+                    std::forward<K>(key),
+                    [&tmp](value_type&& val) {
+                        tmp = std::move(val);
+                    }
+                );
                 return tmp;
             }
 
-            void swap(table &other) noexcept(noexcept(std::is_nothrow_swappable_v<value_container_type> &&
-                                                      std::is_nothrow_swappable_v<Hash> && std::is_nothrow_swappable_v<
-                                                          KeyEqual>)) {
+            void swap(
+                table& other
+            ) noexcept(noexcept(std::is_nothrow_swappable_v<value_container_type> && std::is_nothrow_swappable_v<Hash>
+                && std::is_nothrow_swappable_v<KeyEqual>)) {
                 using std::swap;
                 swap(other, *this);
             }
 
             // lookup /////////////////////////////////////////////////////////////////
 
-            template<typename Q = T, std::enable_if_t<is_map_v<Q>, bool>  = true>
-            auto at(key_type const &key) -> Q & {
+            template <typename Q = T, std::enable_if_t<is_map_v<Q>, bool>  = true>
+            auto at(key_type const& key) -> Q& {
                 return do_at(key);
             }
 
-            template<typename K,
-                typename Q = T,
-                typename H = Hash,
-                typename KE = KeyEqual,
-                std::enable_if_t<is_map_v<Q> && is_transparent_v<H, KE>, bool>  = true>
-            auto at(K const &key) -> Q & {
+            template <typename K, typename Q = T, typename H = Hash, typename KE = KeyEqual, std::enable_if_t<
+                          is_map_v<Q> && is_transparent_v<H, KE>, bool>  = true>
+            auto at(K const& key) -> Q& {
                 return do_at(key);
             }
 
-            template<typename Q = T, std::enable_if_t<is_map_v<Q>, bool>  = true>
-            auto at(key_type const &key) const -> Q const & {
+            template <typename Q = T, std::enable_if_t<is_map_v<Q>, bool>  = true>
+            auto at(key_type const& key) const -> Q const& {
                 return do_at(key);
             }
 
-            template<typename K,
-                typename Q = T,
-                typename H = Hash,
-                typename KE = KeyEqual,
-                std::enable_if_t<is_map_v<Q> && is_transparent_v<H, KE>, bool>  = true>
-            auto at(K const &key) const -> Q const & {
+            template <typename K, typename Q = T, typename H = Hash, typename KE = KeyEqual, std::enable_if_t<
+                          is_map_v<Q> && is_transparent_v<H, KE>, bool>  = true>
+            auto at(K const& key) const -> Q const& {
                 return do_at(key);
             }
 
-            template<typename Q = T, std::enable_if_t<is_map_v<Q>, bool>  = true>
-            auto operator[](Key const &key) -> Q & {
+            template <typename Q = T, std::enable_if_t<is_map_v<Q>, bool>  = true>
+            auto operator[ ](Key const& key) -> Q& {
                 return try_emplace(key).first->second;
             }
 
-            template<typename Q = T, std::enable_if_t<is_map_v<Q>, bool>  = true>
-            auto operator[](Key &&key) -> Q & {
+            template <typename Q = T, std::enable_if_t<is_map_v<Q>, bool>  = true>
+            auto operator[](Key&& key) -> Q& {
                 return try_emplace(std::move(key)).first->second;
             }
 
-            template<typename K,
-                typename Q = T,
-                typename H = Hash,
-                typename KE = KeyEqual,
-                std::enable_if_t<is_map_v<Q> && is_transparent_v<H, KE>, bool>  = true>
-            auto operator[](K &&key) -> Q & {
+            template <typename K, typename Q = T, typename H = Hash, typename KE = KeyEqual, std::enable_if_t<
+                          is_map_v<Q> && is_transparent_v<H, KE>, bool>  = true>
+            auto operator[](K&& key) -> Q& {
                 return try_emplace(std::forward<K>(key)).first->second;
             }
 
-            auto count(Key const &key) const -> size_t {
+            auto count(Key const& key) const -> size_t {
                 return find(key) == end() ? 0 : 1;
             }
 
-            template<class K, class H = Hash, class KE = KeyEqual, std::enable_if_t<is_transparent_v<H, KE>, bool>  =
-                    true>
-            auto count(K const &key) const -> size_t {
+            template <class K, class H = Hash, class KE = KeyEqual, std::enable_if_t<is_transparent_v<H, KE>, bool>  =
+                          true>
+            auto count(K const& key) const -> size_t {
                 return find(key) == end() ? 0 : 1;
             }
 
-            auto find(Key const &key) -> iterator {
+            auto find(Key const& key) -> iterator {
                 return do_find(key);
             }
 
-            auto find(Key const &key) const -> const_iterator {
+            auto find(Key const& key) const -> const_iterator {
                 return do_find(key);
             }
 
-            template<class K, class H = Hash, class KE = KeyEqual, std::enable_if_t<is_transparent_v<H, KE>, bool>  =
-                    true>
-            auto find(K const &key) -> iterator {
+            template <class K, class H = Hash, class KE = KeyEqual, std::enable_if_t<is_transparent_v<H, KE>, bool>  =
+                          true>
+            auto find(K const& key) -> iterator {
                 return do_find(key);
             }
 
-            template<class K, class H = Hash, class KE = KeyEqual, std::enable_if_t<is_transparent_v<H, KE>, bool>  =
-                    true>
-            auto find(K const &key) const -> const_iterator {
+            template <class K, class H = Hash, class KE = KeyEqual, std::enable_if_t<is_transparent_v<H, KE>, bool>  =
+                          true>
+            auto find(K const& key) const -> const_iterator {
                 return do_find(key);
             }
 
-            auto contains(Key const &key) const -> bool {
+            auto contains(Key const& key) const -> bool {
                 return find(key) != end();
             }
 
-            template<class K, class H = Hash, class KE = KeyEqual, std::enable_if_t<is_transparent_v<H, KE>, bool>  =
-                    true>
-            auto contains(K const &key) const -> bool {
+            template <class K, class H = Hash, class KE = KeyEqual, std::enable_if_t<is_transparent_v<H, KE>, bool>  =
+                          true>
+            auto contains(K const& key) const -> bool {
                 return find(key) != end();
             }
 
-            auto equal_range(Key const &key) -> std::pair<iterator, iterator> {
+            auto equal_range(Key const& key) -> std::pair<iterator, iterator> {
                 auto it = do_find(key);
-                return {it, it == end() ? end() : it + 1};
+                return { it, it == end() ? end() : it + 1 };
             }
 
-            auto equal_range(const Key &key) const -> std::pair<const_iterator, const_iterator> {
+            auto equal_range(const Key& key) const -> std::pair<const_iterator, const_iterator> {
                 auto it = do_find(key);
-                return {it, it == end() ? end() : it + 1};
+                return { it, it == end() ? end() : it + 1 };
             }
 
-            template<class K, class H = Hash, class KE = KeyEqual, std::enable_if_t<is_transparent_v<H, KE>, bool>  =
-                    true>
-            auto equal_range(K const &key) -> std::pair<iterator, iterator> {
+            template <class K, class H = Hash, class KE = KeyEqual, std::enable_if_t<is_transparent_v<H, KE>, bool>  =
+                          true>
+            auto equal_range(K const& key) -> std::pair<iterator, iterator> {
                 auto it = do_find(key);
-                return {it, it == end() ? end() : it + 1};
+                return { it, it == end() ? end() : it + 1 };
             }
 
-            template<class K, class H = Hash, class KE = KeyEqual, std::enable_if_t<is_transparent_v<H, KE>, bool>  =
-                    true>
-            auto equal_range(K const &key) const -> std::pair<const_iterator, const_iterator> {
+            template <class K, class H = Hash, class KE = KeyEqual, std::enable_if_t<is_transparent_v<H, KE>, bool>  =
+                          true>
+            auto equal_range(K const& key) const -> std::pair<const_iterator, const_iterator> {
                 auto it = do_find(key);
-                return {it, it == end() ? end() : it + 1};
+                return { it, it == end() ? end() : it + 1 };
             }
 
             // bucket interface ///////////////////////////////////////////////////////
@@ -1521,8 +1507,8 @@ namespace bite::unordered_dense {
             void max_load_factor(float ml) {
                 m_max_load_factor = ml;
                 if (m_num_buckets != max_bucket_count()) {
-                    m_max_bucket_capacity = static_cast<value_idx_type>(
-                        static_cast<float>(bucket_count()) * max_load_factor());
+                    m_max_bucket_capacity = static_cast<value_idx_type>(static_cast<float>(bucket_count()) *
+                        max_load_factor());
                 }
             }
 
@@ -1564,20 +1550,20 @@ namespace bite::unordered_dense {
             }
 
             // nonstandard API: expose the underlying values container
-            [[nodiscard]] auto values() const noexcept -> value_container_type const & {
+            [[nodiscard]] auto values() const noexcept -> value_container_type const& {
                 return m_values;
             }
 
             // non-member functions ///////////////////////////////////////////////////
 
-            friend auto operator==(table const &a, table const &b) -> bool {
+            friend auto operator==(table const& a, table const& b) -> bool {
                 if (&a == &b) {
                     return true;
                 }
                 if (a.size() != b.size()) {
                     return false;
                 }
-                for (auto const &b_entry: b) {
+                for (auto const& b_entry : b) {
                     auto it = a.find(get_key(b_entry));
                     if constexpr (is_map_v<T>) {
                         // map: check that key is here, then also check that value is the same
@@ -1594,68 +1580,44 @@ namespace bite::unordered_dense {
                 return true;
             }
 
-            friend auto operator!=(table const &a, table const &b) -> bool {
+            friend auto operator!=(table const& a, table const& b) -> bool {
                 return !(a == b);
             }
         };
     } // namespace detail
 
-    template<class Key,
-        class T,
-        class Hash = hash<Key>,
-        class KeyEqual = std::equal_to<Key>,
-        class AllocatorOrContainer = std::allocator<std::pair<Key, T> >,
-        class Bucket = bucket_type::standard>
+    template <class Key, class T, class Hash = hash<Key>, class KeyEqual = std::equal_to<Key>, class
+              AllocatorOrContainer = std::allocator<std::pair<Key, T>>, class Bucket = bucket_type::standard>
     using map = detail::table<Key, T, Hash, KeyEqual, AllocatorOrContainer, Bucket, false>;
-    template<class Key,
-        class T,
-        class Hash = hash<Key>,
-        class KeyEqual = std::equal_to<Key>,
-        class AllocatorOrContainer = std::allocator<std::pair<Key, T> >,
-        class Bucket = bucket_type::standard>
+    template <class Key, class T, class Hash = hash<Key>, class KeyEqual = std::equal_to<Key>, class
+              AllocatorOrContainer = std::allocator<std::pair<Key, T>>, class Bucket = bucket_type::standard>
     using segmented_map = detail::table<Key, T, Hash, KeyEqual, AllocatorOrContainer, Bucket, true>;
-    template<class Key,
-        class Hash = hash<Key>,
-        class KeyEqual = std::equal_to<Key>,
-        class AllocatorOrContainer = std::allocator<Key>,
-        class Bucket = bucket_type::standard>
+    template <class Key, class Hash = hash<Key>, class KeyEqual = std::equal_to<Key>, class AllocatorOrContainer =
+              std::allocator<Key>, class Bucket = bucket_type::standard>
     using set = detail::table<Key, void, Hash, KeyEqual, AllocatorOrContainer, Bucket, false>;
-    template<class Key,
-        class Hash = hash<Key>,
-        class KeyEqual = std::equal_to<Key>,
-        class AllocatorOrContainer = std::allocator<Key>,
-        class Bucket = bucket_type::standard>
+    template <class Key, class Hash = hash<Key>, class KeyEqual = std::equal_to<Key>, class AllocatorOrContainer =
+              std::allocator<Key>, class Bucket = bucket_type::standard>
     using segmented_set = detail::table<Key, void, Hash, KeyEqual, AllocatorOrContainer, Bucket, true>;
 
     namespace pmr {
-        template<class Key,
-            class T,
-            class Hash = hash<Key>,
-            class KeyEqual = std::equal_to<Key>,
-            class Bucket = bucket_type::standard>
-        using map =
-        detail::table<Key, T, Hash, KeyEqual, std::pmr::polymorphic_allocator<std::pair<Key, T> >, Bucket, false>;
+        template <class Key, class T, class Hash = hash<Key>, class KeyEqual = std::equal_to<Key>, class Bucket =
+                  bucket_type::standard>
+        using map = detail::table<Key, T, Hash, KeyEqual, std::pmr::polymorphic_allocator<std::pair<Key, T>>, Bucket,
+                                  false>;
 
-        template<class Key,
-            class T,
-            class Hash = hash<Key>,
-            class KeyEqual = std::equal_to<Key>,
-            class Bucket = bucket_type::standard>
-        using segmented_map =
-        detail::table<Key, T, Hash, KeyEqual, std::pmr::polymorphic_allocator<std::pair<Key, T> >, Bucket, true>;
+        template <class Key, class T, class Hash = hash<Key>, class KeyEqual = std::equal_to<Key>, class Bucket =
+                  bucket_type::standard>
+        using segmented_map = detail::table<Key, T, Hash, KeyEqual, std::pmr::polymorphic_allocator<std::pair<Key, T>>,
+                                            Bucket, true>;
 
-        template<class Key,
-            class Hash = hash<Key>,
-            class KeyEqual = std::equal_to<Key>,
-            class Bucket = bucket_type::standard>
+        template <class Key, class Hash = hash<Key>, class KeyEqual = std::equal_to<Key>, class Bucket =
+                  bucket_type::standard>
         using set = detail::table<Key, void, Hash, KeyEqual, std::pmr::polymorphic_allocator<Key>, Bucket, false>;
 
-        template<class Key,
-            class Hash = hash<Key>,
-            class KeyEqual = std::equal_to<Key>,
-            class Bucket = bucket_type::standard>
-        using segmented_set =
-        detail::table<Key, void, Hash, KeyEqual, std::pmr::polymorphic_allocator<Key>, Bucket, true>;
+        template <class Key, class Hash = hash<Key>, class KeyEqual = std::equal_to<Key>, class Bucket =
+                  bucket_type::standard>
+        using segmented_set = detail::table<Key, void, Hash, KeyEqual, std::pmr::polymorphic_allocator<Key>, Bucket,
+                                            true>;
     } // namespace pmr
 
     // deduction guides ///////////////////////////////////////////////////////////
@@ -1669,20 +1631,15 @@ namespace bite::unordered_dense {
 namespace std {
     // NOLINT(cert-dcl58-cpp)
 
-    template<class Key,
-        class T,
-        class Hash,
-        class KeyEqual,
-        class AllocatorOrContainer,
-        class Bucket,
-        class Pred,
-        bool IsSegmented>
+    template <class Key, class T, class Hash, class KeyEqual, class AllocatorOrContainer, class Bucket, class Pred, bool
+              IsSegmented>
     // NOLINTNEXTLINE(cert-dcl58-cpp)
     auto erase_if(
-        bite::unordered_dense::detail::table<Key, T, Hash, KeyEqual, AllocatorOrContainer, Bucket, IsSegmented> &map,
-        Pred pred) -> size_t {
+        bite::unordered_dense::detail::table<Key, T, Hash, KeyEqual, AllocatorOrContainer, Bucket, IsSegmented>& map,
+        Pred pred
+    ) -> size_t {
         using map_t = bite::unordered_dense::detail::table<Key, T, Hash, KeyEqual, AllocatorOrContainer, Bucket,
-            IsSegmented>;
+                                                           IsSegmented>;
 
         // going back to front because erase() invalidates the end iterator
         auto const old_size = map.size();

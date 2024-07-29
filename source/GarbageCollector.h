@@ -25,6 +25,7 @@ public:
     [[nodiscard]] std::size_t get_memory_used() const {
         return memory_used;
     }
+
 private:
     void trace_references();
     void sweep();
@@ -33,7 +34,6 @@ private:
     std::queue<Object*> grey_objects;
     std::size_t memory_used = 0;
 };
-
 
 
 #endif //GARBAGECOLLECTOR_H

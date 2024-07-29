@@ -4,8 +4,8 @@
 
 class InputStreamBase {
 public:
-    template<class Self>
-    bool match(this Self &&self, char c) {
+    template <class Self>
+    bool match(this Self&& self, char c) {
         if (self.peek() == c) {
             self.advance();
             return true;
@@ -17,9 +17,9 @@ public:
 // TODO: check errors!
 class FileInputStream : public InputStreamBase {
 public:
-    [[nodiscard]] explicit FileInputStream(const std::string &path) : file(path) {}
+    [[nodiscard]] explicit FileInputStream(const std::string& path) : file(path) {}
 
-    [[nodiscard]] explicit FileInputStream(std::ifstream &&stream) : file(std::move(stream)) {}
+    [[nodiscard]] explicit FileInputStream(std::ifstream&& stream) : file(std::move(stream)) {}
 
     char advance() {
         const int output = file.get();
@@ -35,7 +35,8 @@ public:
     }
 
     [[nodiscard]] char current() const {
-        if (at_end()) return '\0';
+        if (at_end())
+            return '\0';
         return cur;
     }
 
