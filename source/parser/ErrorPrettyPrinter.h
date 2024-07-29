@@ -48,25 +48,60 @@ public:
         }
     }
 
+    // These should be in std but are missing? https://en.cppreference.com/w/cpp/io/print
+
+    template<typename... Args>
+    void print(std::format_string<Args...> string, Args&&... args) {
+        std::print(std::cout, string, std::forward<Args>(args)...);
+    }
+
+    template<typename... Args>
+    void println(std::format_string<Args...> string, Args&&... args) {
+        std::println(std::cout, string, std::forward<Args>(args)...);
+    }
+    template<typename... Args>
+    void print_repeat(std::size_t times, std::format_string<Args...> string, Args&&... args) {
+        for (std::size_t i = 0; i < times; ++i) {
+            std::print(std::cout, string, std::forward<Args>(args)...);
+        }
+    }
+
+    void print_padding(std::size_t padding) {
+        print_repeat(padding, " ");
+    }
+
+    void print_location(std::string_view path, std::size_t line_number, std::size_t line_offset) {
+        if (terminal_compatibility_mode) {
+            print("-> ");
+        } else {
+            print("┌─ ");
+        }
+        println("{}:{}:{}", path, line_number, line_offset + 1);
+    }
 
     void print_messages() {
-        std::wcout << L"┌────";
-        std::cout << "abc";
-        std::print(std::cout, "abc");
-
-        std::string vbar = terminal_compatibility_mode ? "|" : "│";
-        std::string hbar = terminal_compatibility_mode ? "-" : "─";
-        std::string corner_top_left = terminal_compatibility_mode ? "-" : "┌";
-
         for (auto& msg : messages) {
-            std::cout << "Error: " << msg.error_message << '\n';
-            std::cout << "  " << corner_top_left << hbar << ' ' << file_path << ':' << msg.line_number << ':' << msg.line_offset << '\n';
-            std::cout << "  |\n";
-            // TODO: dynamic spacing for line number
-            // TODO: truncate source code if nedded
-            std::cout << msg.line_number << " |" << ' ' << msg.line << '\n';
-            std::cout << "  |\n";
-            std::cout << '\n';
+            std::size_t padding = std::to_string(msg.line_number).size() + 1;
+            print("\033[1;31mbold red text\033[0m");
+            println( "error: {}", msg.error_message);
+            print_padding(padding);
+            print_location(file_path, msg.line_number, msg.line_offset);
+            print_padding(padding);
+            println( "│");
+            println( "{} │ {}", msg.line_number, msg.line);
+            print_padding(padding);
+            print( "│ ");
+            print_padding(msg.line_offset);
+            print_repeat(4, "^");
+            println(" {}", msg.inline_message);
+            // std::cout << "Error: " << msg.error_message << '\n';
+            // std::cout << "  " << corner_top_left << hbar << ' ' << file_path << ':' << msg.line_number << ':' << msg.line_offset << '\n';
+            // std::cout << "  |\n";
+            // // TODO: dynamic spacing for line number
+            // // TODO: truncate source code if nedded
+            // std::cout << msg.line_number << " |" << ' ' << msg.line << '\n';
+            // std::cout << "  |\n";
+            // std::cout << '\n';
         }
     }
 
