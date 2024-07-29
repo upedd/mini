@@ -146,7 +146,7 @@ public:
     };
 
 
-    explicit Compiler(std::string_view source, SharedContext* context) : parser(source, context), source(source), main("", 0) {
+    explicit Compiler(FileInputStream&& stream, SharedContext* context) : parser(std::move(stream), context), source(source), main("", 0) {
         context_stack.emplace_back(&main, FunctionType::FUNCTION);
         current_context().scopes.emplace_back(ScopeType::BLOCK, 0); // TODO: special type?
         functions.push_back(&main);

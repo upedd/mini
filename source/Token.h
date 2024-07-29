@@ -75,27 +75,15 @@ struct Token {
 
     Type type = Type::NONE;
     int source_offset = 0;
-    int length; // ideally eliminate length
     StringTable::Handle string;
 
     static std::string type_to_string(Type type);
-
     /**
      *
-     * @param source string used by lexer to produce this token.
-     * @return lexeme of this token.
-     */
-    [[nodiscard]] std::string get_lexeme(std::string_view source) const {
-        return std::string(source.substr(source_offset, length));
-    }
-
-    /**
-     *
-     * @param source string used by lexer to produce this token.
      * @return string representation for logging purposes.
      */
-    [[nodiscard]] std::string to_string(std::string_view source) const {
-        return "Token(type=" + type_to_string(type) + ", lexeme='" + get_lexeme(source) + "')";
+    [[nodiscard]] std::string to_string() const {
+        return "Token(type=" + type_to_string(type) + ", lexeme='" + (string ? *string : "") + "')";
     }
 };
 

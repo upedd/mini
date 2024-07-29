@@ -393,7 +393,7 @@ Parser::StructureMembers Parser::structure_body(StructureType type) {
         consume(Token::Type::IDENTIFIER, "Expected identifier.");
         Token name = current;
 
-        if (name.get_lexeme(lexer.get_source()) == "init") {
+        if (*name.string == "init") {
             if (type == StructureType::OBJECT) error(current, "Constructors cannot be defined inside of objects.");
             if (type == StructureType::TRAIT) error(current, "Constructors cannot be defined inside of traits.");
             // constructor call
@@ -789,7 +789,7 @@ std::optional<Expr> Parser::prefix() {
 }
 
 Expr Parser::integer() {
-    std::string literal = current.get_lexeme(lexer.get_source());
+    std::string literal = *current.string;
     std::expected<bite_int, ConversionError> result = string_to_int(literal);
     if (!result) {
         error(current, result.error().what());
@@ -798,7 +798,7 @@ Expr Parser::integer() {
 }
 
 Expr Parser::number() {
-    std::string literal = current.get_lexeme(lexer.get_source());
+    std::string literal = *current.string;
     std::expected<bite_float, ConversionError> result = string_to_floating(literal);
     if (!result) {
         error(current, result.error().what());
@@ -807,7 +807,7 @@ Expr Parser::number() {
 }
 
 Expr Parser::string() const {
-    return StringLiteral{std::string(current.get_lexeme(lexer.get_source()))};
+    return StringLiteral{current.string()};
 }
 
 Expr Parser::identifier() {

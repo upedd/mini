@@ -27,7 +27,7 @@ public:
 
     const std::vector<Error>& get_errors();
 
-    explicit Parser(const std::string_view source, SharedContext* context) : lexer(source, context) {}
+    explicit Parser(FileInputStream&& stream, SharedContext* context) : lexer(std::move(stream), context) {}
 
     std::vector<Stmt> parse();
 private:

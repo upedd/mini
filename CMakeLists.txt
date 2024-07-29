@@ -5,8 +5,8 @@ set(CMAKE_CXX_STANDARD 23)
 
 add_executable(bite source/main.cpp
         source/main.cpp
-        source/Lexer.cpp
-        source/Lexer.h
+        source/parser/Lexer.cpp
+        source/parser/Lexer.h
         source/Token.h
         source/common.h
         source/Parser.cpp
@@ -30,7 +30,7 @@ add_executable(bite source/main.cpp
         source/debug.h
         source/GarbageCollector.cpp
         source/GarbageCollector.h
-        source/parser/perfect_map.h
+        source/base/perfect_map.h
         source/shared/StringTable.h
         source/shared/SharedContext.h
         source/base/unordered_dense.h

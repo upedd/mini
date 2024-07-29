@@ -220,7 +220,7 @@ inline std::string expr_to_string(const Expr &expr, std::string_view source);
 inline std::string stmt_to_string(const Stmt &stmt, std::string_view source) {
     return std::visit(overloaded{
                           [source](const VarStmt &stmt) {
-                              return std::format("(define {} {})", stmt.name.get_lexeme(source),
+                              return std::format("(define {} {})", *stmt.name.string,
                                                  expr_to_string(*stmt.value, source));
                           },
                           [source](const ExprStmt &stmt) {
@@ -229,22 +229,22 @@ inline std::string stmt_to_string(const Stmt &stmt, std::string_view source) {
                           [source](const FunctionStmt &stmt) {
                               std::string parameters_string;
                               for (auto &param: stmt.params) {
-                                  parameters_string += param.get_lexeme(source);
-                                  if (param.get_lexeme(source) != stmt.params.back().get_lexeme(source)) {
+                                  parameters_string += *param.string;
+                                  if (*param.string != *stmt.params.back().string) {
                                       parameters_string += " ";
                                   }
                               }
                               return std::format("(fun {} ({}) {})",
-                                                 stmt.name.get_lexeme(source),
+                                                 *stmt.name.string,
                                                  parameters_string,
                                                  expr_to_string(*stmt.body, source));
                           },
 
                           [source](const ClassStmt &stmt) {
-                              return std::format("(class {})", stmt.name.get_lexeme(source));
+                              return std::format("(class {})", *stmt.name.string);
                           },
                           [source](const NativeStmt &stmt) {
-                              return std::format("(native {})", stmt.name.get_lexeme(source));
+                              return std::format("(native {})", *stmt.name.string);
                           },
                           [source](const MethodStmt &) {
                               return std::string("method");
@@ -285,7 +285,7 @@ inline std::string expr_to_string(const Expr &expr, std::string_view source) {
                               return std::format("\"{}\"", expr.string);
                           },
                           [source](const VariableExpr &expr) {
-                              return expr.identifier.get_lexeme(source);
+                              return *expr.identifier.string;
                           },
                           [source](const CallExpr &expr) {
                               std::string arguments_string;
@@ -297,10 +297,10 @@ inline std::string expr_to_string(const Expr &expr, std::string_view source) {
                           },
                           [source](const GetPropertyExpr &expr) {
                               return std::format("({}.{})", expr_to_string(*expr.left, source),
-                                                 expr.property.get_lexeme(source));
+                                                 *expr.property.string);
                           },
                           [source](const SuperExpr &expr) {
-                              return std::format("super.{}", expr.method.get_lexeme(source));
+                              return std::format("super.{}", *expr.method.string);
                           },
                           [source](const BlockExpr &stmt) {
                               std::string blocks;

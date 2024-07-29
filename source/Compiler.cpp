@@ -105,7 +105,7 @@ void Compiler::start_context(Function *function, FunctionType type) {
     current_context().scopes.emplace_back(ScopeType::BLOCK, 0); // TODO: should be function?
 }
 
-#define COMPILER_PRINT_BYTECODE
+//#define COMPILER_PRINT_BYTECODE
 
 void Compiler::end_context() {
 #ifdef COMPILER_PRINT_BYTECODE
@@ -269,19 +269,19 @@ void Compiler::visit_stmt(const Stmt &statement) {
 }
 
 void Compiler::variable_declaration(const VarStmt &expr) {
-    auto name = expr.name.get_lexeme(source);
+    std::string name = *expr.name.string;
     visit_expr(*expr.value);
     current_scope().pop_temporary();
     define_variable(name);
 }
 
 void Compiler::function_declaration(const FunctionStmt &stmt) {
-    define_variable(stmt.name.get_lexeme(source));
+    define_variable(*stmt.name.string);
     function(stmt, FunctionType::FUNCTION);
 }
 
 void Compiler::native_declaration(const NativeStmt &stmt) {
-    std::string name = stmt.name.get_lexeme(source);
+    std::string name = *stmt.name.string;
     natives.push_back(name);
     int idx = current_function()->add_constant(name);
     emit(OpCode::GET_NATIVE, idx);
@@ -290,7 +290,7 @@ void Compiler::native_declaration(const NativeStmt &stmt) {
 
 void Compiler::block(const BlockExpr &expr) {
     int break_idx = current_function()->add_empty_jump_destination();
-    begin_scope(ScopeType::BLOCK, expr.label ? expr.label->get_lexeme(source) : "");
+    begin_scope(ScopeType::BLOCK, expr.label ? *expr.label->string : "");
     current_scope().break_idx = break_idx;
     emit(OpCode::NIL);
     define_variable("$scope_return");
@@ -309,7 +309,7 @@ void Compiler::block(const BlockExpr &expr) {
 }
 
 void Compiler::loop_expression(const LoopExpr &expr) {
-    std::string label = expr.label ? expr.label->get_lexeme(source) : "";
+    std::string label = expr.label ? *expr.label->string : "";
     begin_scope(ScopeType::LOOP, label);
     // to support breaking with values before loop body we create special invisible variable used for returing
     emit(OpCode::NIL);
@@ -332,7 +332,7 @@ void Compiler::loop_expression(const LoopExpr &expr) {
 
 void Compiler::while_expr(const WhileExpr &expr) {
     // Tons of overlap with normal loop maybe abstract this away?
-    std::string label = expr.label ? expr.label->get_lexeme(source) : "";
+    std::string label = expr.label ? *expr.label->string : "";
     begin_scope(ScopeType::LOOP, label);
     emit(OpCode::NIL);
     define_variable("$scope_return");
@@ -374,7 +374,7 @@ void Compiler::for_expr(const ForExpr &expr) {
     define_variable("$iterator");
     current_scope().pop_temporary();
     // end define iterator
-    std::string label = expr.label ? expr.label->get_lexeme(source) : "";
+    std::string label = expr.label ? *expr.label->string : "";
     begin_scope(ScopeType::LOOP, label);
     emit(OpCode::NIL);
     define_variable("$scope_return");
@@ -402,7 +402,7 @@ void Compiler::for_expr(const ForExpr &expr) {
     int item_constant = current_function()->add_constant("next");
     emit(OpCode::GET_PROPERTY, item_constant);
     emit(OpCode::CALL, 0);
-    define_variable(expr.name.get_lexeme(source));
+    define_variable(*expr.name.string);
     current_scope().pop_temporary();
     // end item
 
@@ -429,7 +429,7 @@ void Compiler::break_expr(const BreakExpr &expr) {
     int scope_depth = 0;
     for (auto &scope: std::views::reverse(current_context().scopes)) {
         if (expr.label) {
-            if (scope.get_name() == expr.label->get_lexeme(source)) {
+            if (scope.get_name() == *expr.label->string) {
                 break;
             }
         } else if (scope.get_type() == ScopeType::LOOP) {
@@ -456,7 +456,7 @@ void Compiler::continue_expr(const ContinueExpr &expr) {
         if (scope.get_type() == ScopeType::LOOP) {
             // can only continue from loops
             if (expr.label) {
-                if (expr.label->get_lexeme(source) == scope.get_name()) {
+                if (*expr.label->string == scope.get_name()) {
                     break;
                 }
             } else break;
@@ -470,7 +470,7 @@ void Compiler::continue_expr(const ContinueExpr &expr) {
 
 
 void Compiler::function(const FunctionStmt &stmt, FunctionType type) {
-    auto function_name = stmt.name.get_lexeme(source);
+    auto function_name = *stmt.name.string;
     auto *function = new Function(function_name, stmt.params.size());
     functions.push_back(function);
 
@@ -478,7 +478,7 @@ void Compiler::function(const FunctionStmt &stmt, FunctionType type) {
     begin_scope(ScopeType::BLOCK);
     current_scope().define(""); // reserve slot for receiver
     for (const Token &param: stmt.params) {
-        define_variable(param.get_lexeme(source));
+        define_variable(*param.string);
     }
 
     visit_expr(*stmt.body);
@@ -511,7 +511,7 @@ void Compiler::constructor(const ConstructorStmt &stmt, const std::vector<std::u
     current_scope().define(""); // reserve slot for receiver
 
     for (const Token &param: stmt.parameters) {
-        define_variable(param.get_lexeme(source));
+        define_variable(*param.string);
     }
 
     if (stmt.has_super) {
@@ -541,7 +541,7 @@ void Compiler::constructor(const ConstructorStmt &stmt, const std::vector<std::u
         if (field->attributes[ClassAttributes::ABSTRACT]) continue;
         visit_expr(*field->variable->value);
         emit(OpCode::THIS);
-        int property_name = current_function()->add_constant(field->variable->name.get_lexeme(source));
+        int property_name = current_function()->add_constant(*field->variable->name.string);
         emit(OpCode::SET_PROPERTY, property_name);
         emit(OpCode::POP); // pop value;
     }
@@ -584,7 +584,7 @@ void Compiler::default_constructor(const std::vector<std::unique_ptr<FieldStmt> 
         if ( field->attributes[ClassAttributes::ABSTRACT]) continue;
         visit_expr(*field->variable->value);
         emit(OpCode::THIS);
-        int property_name = current_function()->add_constant(field->variable->name.get_lexeme(source));
+        int property_name = current_function()->add_constant(*field->variable->name.string);
         emit(OpCode::SET_PROPERTY, property_name);
         emit(OpCode::POP); // pop value;
     }
@@ -611,7 +611,7 @@ void Compiler::default_constructor(const std::vector<std::unique_ptr<FieldStmt> 
 // refactor: maybe could use Parser::StructrueMembers and type?
 void Compiler::class_core(int class_slot, std::optional<Token> super_class, const std::vector<std::unique_ptr<MethodStmt>>& methods, const std::vector<std::unique_ptr<FieldStmt>>& fields, const std::vector<std::unique_ptr<UsingStmt>>& using_stmts, bool is_abstract) {
     if (super_class) {
-        std::string super_class_name = super_class->get_lexeme(source);
+        std::string super_class_name = *super_class->string;
         emit(OpCode::GET,
              std::get<Context::LocalResolution>(current_context().resolve_variable(super_class_name)).slot);
         emit(OpCode::GET, class_slot);
@@ -635,7 +635,7 @@ void Compiler::class_core(int class_slot, std::optional<Token> super_class, cons
     // Traits!
     for (auto& stmt : using_stmts) {
         for (auto& item : stmt->items) {
-            std::string item_name = item.name.get_lexeme(source);
+            std::string item_name = *item.name.string;
 
             auto trait_fields = current_context().resolved_classes[item_name].fields;
             for (auto& [field_name, info] : trait_fields) {
@@ -643,7 +643,7 @@ void Compiler::class_core(int class_slot, std::optional<Token> super_class, cons
                 bool is_excluded = false;
                 // possibly use some ranges here
                 for (auto& exclusion : item.exclusions) {
-                    if (exclusion.get_lexeme(source) == field_name) {
+                    if (*exclusion.string == field_name) {
                         is_excluded = true;
                         break;
                     }
@@ -656,8 +656,8 @@ void Compiler::class_core(int class_slot, std::optional<Token> super_class, cons
                 // should aliasing methods that are requierments be allowed?
                 std::string aliased_name = field_name;
                 for (auto& [before, after] : item.aliases) {
-                    if (before.get_lexeme(source) == field_name) {
-                        aliased_name = after.get_lexeme(source);
+                    if (*before.string == field_name) {
+                        aliased_name = *after.string;
                         break;
                     }
                 }
@@ -712,7 +712,7 @@ void Compiler::class_core(int class_slot, std::optional<Token> super_class, cons
     // TODO: should all be moved to some sort of resolving step
     // TODO: should check for invalid attributes combinations
     for (auto &field: fields) {
-        std::string field_name = field->variable->name.get_lexeme(source);
+        std::string field_name = *field->variable->name.string;
         int idx = current_function()->add_constant(field_name);
         emit(OpCode::FIELD, idx);
         emit(field->attributes.to_ullong()); // size check?
@@ -736,7 +736,7 @@ void Compiler::class_core(int class_slot, std::optional<Token> super_class, cons
     // hoist methods
     for (auto &method: methods) {
         // TODO: much overlap with above loop
-        std::string method_name = method->function->name.get_lexeme(source);
+        std::string method_name = *method->function->name.string;
         bool already_partially_declared = false;
         if (member_declarations.contains(method_name)) {
             // special case for getters and setters methods
@@ -810,7 +810,7 @@ void Compiler::class_core(int class_slot, std::optional<Token> super_class, cons
     }
 
     for (auto &method: methods) {
-        std::string method_name = method->function->name.get_lexeme(source);
+        std::string method_name = *method->function->name.string;
         if (!method->attributes[ClassAttributes::ABSTRACT]) {
             function(*method->function, FunctionType::METHOD);
         }
@@ -845,7 +845,7 @@ void Compiler::object_constructor(const std::vector<std::unique_ptr<FieldStmt>> 
         if (field->attributes[ClassAttributes::ABSTRACT]) continue;
         visit_expr(*field->variable->value);
         emit(OpCode::THIS);
-        int property_name = current_function()->add_constant(field->variable->name.get_lexeme(source));
+        int property_name = current_function()->add_constant(*field->variable->name.string);
         emit(OpCode::SET_PROPERTY, property_name);
         emit(OpCode::POP); // pop value;
     }
@@ -903,11 +903,11 @@ void Compiler::object_expression(const ObjectExpr &expr) {
 void Compiler::object_statement(const ObjectStmt &stmt) {
     visit_expr(*stmt.object);
     current_scope().pop_temporary();
-    define_variable(stmt.name.get_lexeme(source));
+    define_variable(*stmt.name.string);
 }
 
 void Compiler::trait_statement(const TraitStmt &stmt) {
-    std::string name = stmt.name.get_lexeme(source);
+    std::string name = *stmt.name.string;
     uint8_t name_constanst = current_function()->add_constant(name);
 
     emit(OpCode::TRAIT, name_constanst);
@@ -922,7 +922,7 @@ void Compiler::trait_statement(const TraitStmt &stmt) {
     // Traits!
     for (auto& stmt : stmt.using_stmts) {
         for (auto& item : stmt->items) {
-            std::string item_name = item.name.get_lexeme(source);
+            std::string item_name = *item.name.string;
 
             auto trait_fields = current_context().resolved_classes[item_name].fields;
             for (auto& [field_name, info] : trait_fields) {
@@ -930,7 +930,7 @@ void Compiler::trait_statement(const TraitStmt &stmt) {
                 bool is_excluded = false;
                 // possibly use some ranges here
                 for (auto& exclusion : item.exclusions) {
-                    if (exclusion.get_lexeme(source) == field_name) {
+                    if (*exclusion.string == field_name) {
                         is_excluded = true;
                         break;
                     }
@@ -943,8 +943,8 @@ void Compiler::trait_statement(const TraitStmt &stmt) {
                 // should aliasing methods that are requierments be allowed?
                 std::string aliased_name = field_name;
                 for (auto& [before, after] : item.aliases) {
-                    if (before.get_lexeme(source) == field_name) {
-                        aliased_name = after.get_lexeme(source);
+                    if (*before.string == field_name) {
+                        aliased_name = *after.string;
                         break;
                     }
                 }
@@ -969,7 +969,7 @@ void Compiler::trait_statement(const TraitStmt &stmt) {
 
     // mess
     for (auto& field : stmt.fields) {
-        std::string field_name = field->variable->name.get_lexeme(source);
+        std::string field_name = *field->variable->name.string;
         if (current_scope().has_field(field_name)) {
             assert(false && "field redeclaration is disallowed.");
         }
@@ -978,7 +978,7 @@ void Compiler::trait_statement(const TraitStmt &stmt) {
 
     // hoist methods
     for (auto& method : stmt.methods) {
-        std::string method_name = method->function->name.get_lexeme(source);
+        std::string method_name = *method->function->name.string;
         bool partially_defined = false;
         // TODO this allowes clashes with real methods???
         if (current_scope().has_field(method_name)) {
@@ -1001,7 +1001,7 @@ void Compiler::trait_statement(const TraitStmt &stmt) {
         if (!method->attributes[ClassAttributes::ABSTRACT]) {
             function(*method->function, FunctionType::METHOD);
         }
-        int method_name_constant = current_function()->add_constant(method->function->name.get_lexeme(source));
+        int method_name_constant = current_function()->add_constant(*method->function->name.string);
         emit(OpCode::TRAIT_METHOD, method_name_constant);
         emit(method->attributes.to_ullong()); // check!
     }
@@ -1027,7 +1027,7 @@ void Compiler::trait_statement(const TraitStmt &stmt) {
 
 void Compiler::class_declaration(const ClassStmt &stmt) {
     // TODO: refactor!
-    std::string name = stmt.name.get_lexeme(source);
+    std::string name = *stmt.name.string;
     uint8_t name_constant = current_function()->add_constant(name);
 
     if (stmt.class_object) {
@@ -1055,10 +1055,10 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
     if (stmt.constructor) {
         current_scope().constructor_argument_count = stmt.constructor->parameters.size();
         constructor(*stmt.constructor, stmt.fields, static_cast<bool>(stmt.super_class),
-                    current_context().resolved_classes[stmt.super_class->get_lexeme(source)].
+                    current_context().resolved_classes[*stmt.super_class->string].
                     constructor_argument_count);
     } else {
-        if (stmt.super_class && current_context().resolved_classes[stmt.super_class->get_lexeme(source)].
+        if (stmt.super_class && current_context().resolved_classes[*stmt.super_class->string].
             constructor_argument_count != 0) {
             assert(false && "Class must implement constructor because it needs to call superclass constructor");
         }
@@ -1268,7 +1268,7 @@ void Compiler::binary(const BinaryExpr &expr) {
 // TODO: total mess and loads of overlap with Compiler::resolve_variable
 void Compiler::update_lvalue(const Expr &lvalue) {
     if (std::holds_alternative<VariableExpr>(lvalue)) {
-        std::string name = std::get<VariableExpr>(lvalue).identifier.get_lexeme(source);
+        std::string name = *std::get<VariableExpr>(lvalue).identifier.string;
         auto resolution = current_context().resolve_variable(name);
         if (std::holds_alternative<Context::LocalResolution>(resolution)) {
             emit(OpCode::SET, std::get<Context::LocalResolution>(resolution).slot); // todo: handle overflow
@@ -1289,13 +1289,13 @@ void Compiler::update_lvalue(const Expr &lvalue) {
         }
     } else if (std::holds_alternative<GetPropertyExpr>(lvalue)) {
         const auto &property_expr = std::get<GetPropertyExpr>(lvalue);
-        std::string name = property_expr.property.get_lexeme(source);
+        std::string name = *property_expr.property.string;
         int constant = current_function()->add_constant(name);
         visit_expr(*property_expr.left);
         emit(OpCode::SET_PROPERTY, constant);
     } else if (std::holds_alternative<SuperExpr>(lvalue)) {
         const auto &super_expr = std::get<SuperExpr>(lvalue);
-        int constant = current_function()->add_constant(super_expr.method.get_lexeme(source));
+        int constant = current_function()->add_constant(*super_expr.method.string);
         emit(OpCode::THIS);
         emit(OpCode::SET_SUPER, constant);
     } else {
@@ -1304,7 +1304,7 @@ void Compiler::update_lvalue(const Expr &lvalue) {
 }
 
 void Compiler::variable(const VariableExpr &expr) {
-    std::string name = expr.identifier.get_lexeme(source);
+    std::string name = *expr.identifier.string;
     resolve_variable(name);
 }
 
@@ -1327,13 +1327,13 @@ void Compiler::call(const CallExpr &expr) {
 
 void Compiler::get_property(const GetPropertyExpr &expr) {
     visit_expr(*expr.left);
-    std::string name = expr.property.get_lexeme(source);
+    std::string name = *expr.property.string;
     int constant = current_function()->add_constant(name);
     emit(OpCode::GET_PROPERTY, constant);
 }
 
 void Compiler::super(const SuperExpr &expr) {
-    int constant = current_function()->add_constant(expr.method.get_lexeme(source));
+    int constant = current_function()->add_constant(*expr.method.string);
     // or just resolve this in vm?
     emit(OpCode::THIS);
     //resolve_variable("super");

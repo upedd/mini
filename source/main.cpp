@@ -12,12 +12,8 @@ int main(int argc, char** argv) {
         std::cerr << "Usage: ./bite [path to bite file]\n";
         return -1;
     }
-    std::ifstream in(argv[1]);
-    std::stringstream ss;
-    ss << in.rdbuf();
     SharedContext context;
-    std::string source = ss.str();
-    Compiler compiler(source, &context);
+    Compiler compiler(FileInputStream(argv[1]), &context);
     compiler.compile();
     auto& func = compiler.get_main();
     // Disassembler disassembler(func);
