@@ -3,7 +3,7 @@
 
 #include <vector>
 
-#include "Lexer.h"
+#include "parser/Lexer.h"
 #include "Ast.h"
 
 /**

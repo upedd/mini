@@ -1,18 +1,14 @@
 #ifndef LEXER_H
 #define LEXER_H
 #include <expected>
-#include <istream>
 #include <vector>
 
-#include "Token.h"
-#include "shared/SharedContext.h"
-
-// maybe lexer should work on streams
-// should be an easy rewrite if needed.
+#include "../Token.h"
+#include "InputStream.h"
+#include "../shared/SharedContext.h"
 
 /**
- * Given string with code produces tokens.\n
- * Source must be valid for entire lexer lifetime.
+ * Given input stream with code produces tokens.
  */
 class Lexer {
 public:
@@ -21,19 +17,10 @@ public:
         std::string message;
     };
 
-    explicit Lexer(const std::string_view source, SharedContext* context) : source(source), context(context) {};
-
-
+    explicit Lexer(FileInputStream&& stream, SharedContext* context) : context(context), stream(std::move(stream)) {};
 
     std::expected<Token, Error> next_token();
-
-    [[nodiscard]] std::string_view get_source() const;
 private:
-    char advance();
-    [[nodiscard]] char current() const;
-    bool match(char c);
-    [[nodiscard]] bool at_end() const;
-
     void skip_whitespace();
     void consume_identifier();
 
@@ -45,14 +32,12 @@ private:
     Token integer_or_number();
     Token label();
 
-    int current_pos = 0;
-    int start_pos = 0;
-
-    std::string_view source;
-    // buffer for literals
+    int start_pos {};
     std::string buffer;
     SharedContext* context;
+    FileInputStream stream;
 };
+
 
 
 #endif //LEXER_H

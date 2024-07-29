@@ -36,4 +36,5 @@ add_executable(bite source/main.cpp
         source/base/unordered_dense.h
         source/base/common.h
         source/base/hash.h
+        source/parser/InputStream.h
 )
