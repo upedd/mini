@@ -807,7 +807,7 @@ Expr Parser::number() {
 }
 
 Expr Parser::string() const {
-    return StringLiteral{current.string()};
+    return StringLiteral{*current.string};
 }
 
 Expr Parser::identifier() {

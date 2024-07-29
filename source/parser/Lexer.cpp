@@ -104,9 +104,9 @@ std::expected<Token, Lexer::Error> Lexer::next_token() {
 
 void Lexer::skip_whitespace() {
     while (true) {
-        if (is_space(stream.current()) || stream.current() == '\n') {
+        if (is_space(stream.peek()) || stream.peek() == '\n') {
             stream.advance();
-        } else if (stream.current() == '#') {
+        } else if (stream.peek() == '#') {
             while (!stream.at_end() && !stream.match('\n')) stream.advance();
         } else {
             break;
@@ -115,7 +115,7 @@ void Lexer::skip_whitespace() {
 }
 
 void Lexer::consume_identifier() {
-    while (is_identifier(stream.current())) {
+    while (is_identifier(stream.peek())) {
         buffer.push_back(stream.advance());
     }
 }
@@ -175,11 +175,11 @@ Token Lexer::keyword_or_identifier() {
 }
 
 std::expected<Token, Lexer::Error> Lexer::string() {
-    while (!stream.at_end() && stream.current() != '"') {
+    while (!stream.at_end() && stream.peek() != '"') {
         buffer.push_back(stream.advance());
     }
 
-    if (stream.current() != '"') {
+    if (stream.peek() != '"') {
         return make_error("Expected '\"' after string literal.'");
     }
 
@@ -188,7 +188,7 @@ std::expected<Token, Lexer::Error> Lexer::string() {
 }
 
 Token Lexer::integer_or_number() {
-    while (is_number_literal_char(stream.current())) {
+    while (is_number_literal_char(stream.peek())) {
         buffer.push_back(stream.advance());
     }
     // if no dot separator
@@ -196,14 +196,14 @@ Token Lexer::integer_or_number() {
         return make_token(Token::Type::INTEGER);
     }
     // handle part after dot
-    while (is_number_literal_char(stream.current())) {
+    while (is_number_literal_char(stream.peek())) {
         buffer.push_back(stream.advance());
     }
     return make_token(Token::Type::NUMBER);
 }
 
 Token Lexer::label() {
-    buffer.push_back(stream.advance()); // skip @
+    buffer.push_back(stream.current()); // skip @
     consume_identifier();
     return make_token(Token::Type::LABEL);
 }

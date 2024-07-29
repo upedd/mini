@@ -1054,9 +1054,10 @@ void Compiler::class_declaration(const ClassStmt &stmt) {
 
     if (stmt.constructor) {
         current_scope().constructor_argument_count = stmt.constructor->parameters.size();
-        constructor(*stmt.constructor, stmt.fields, static_cast<bool>(stmt.super_class),
-                    current_context().resolved_classes[*stmt.super_class->string].
-                    constructor_argument_count);
+        bool has_super_class = static_cast<bool>(stmt.super_class);
+        constructor(*stmt.constructor, stmt.fields, has_super_class,
+                    has_super_class ? current_context().resolved_classes[*stmt.super_class->string].
+                    constructor_argument_count : 0);
     } else {
         if (stmt.super_class && current_context().resolved_classes[*stmt.super_class->string].
             constructor_argument_count != 0) {
@@ -1145,7 +1146,7 @@ void Compiler::literal(const LiteralExpr &expr) {
 
 void Compiler::string_literal(const StringLiteral &expr) {
     current_scope().mark_temporary();
-    std::string s = expr.string.substr(1, expr.string.size() - 2);
+    std::string s = expr.string;
     int index = current_function()->add_constant(s); // memory!
     emit(OpCode::CONSTANT, index); // handle overflow!!!
 }

@@ -6,7 +6,7 @@ class InputStreamBase {
 public:
     template<class Self>
     bool match(this Self &&self, char c) {
-        if (self.current == c) {
+        if (self.peek() == c) {
             self.advance();
             return true;
         }
@@ -17,16 +17,12 @@ public:
 // TODO: check errors!
 class FileInputStream : public InputStreamBase {
 public:
-    [[nodiscard]] explicit FileInputStream(const std::string &path) : file(path) { // NOLINT(*-pro-type-member-init)
-        advance();
-    }
+    [[nodiscard]] explicit FileInputStream(const std::string &path) : file(path) {}
 
-    [[nodiscard]] explicit FileInputStream(std::ifstream &&stream) : file(std::move(stream)) { // NOLINT(*-pro-type-member-init)
-        advance();
-    }
+    [[nodiscard]] explicit FileInputStream(std::ifstream &&stream) : file(std::move(stream)) {}
 
     char advance() {
-        int output = file.get();
+        const int output = file.get();
         if (output == std::ifstream::traits_type::eof()) {
             return '\0';
         }
@@ -46,8 +42,17 @@ public:
     int position() {
         return file.tellg();
     }
+
+    char peek() {
+        const int output = file.peek();
+        if (output == std::ifstream::traits_type::eof()) {
+            return '\0';
+        }
+        return static_cast<char>(output);
+    }
+
 private:
-    char cur;
+    char cur = '\0';
     std::ifstream file;
 };
 
