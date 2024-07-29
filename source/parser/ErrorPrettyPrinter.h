@@ -72,39 +72,51 @@ public:
 
     void print_location(std::string_view path, std::size_t line_number, std::size_t line_offset) {
         if (terminal_compatibility_mode) {
-            print("-> ");
+            print("--> ");
         } else {
-            print("┌─ ");
+            print("\033[90m┌─>\033[0m ");
         }
         println("{}:{}:{}", path, line_number, line_offset + 1);
+    }
+
+    void print_main_message(std::string_view message) {
+        if (terminal_compatibility_mode) {
+            println("error: {}", message);
+        } else {
+            println( "\033[1;31merror\033[0m\033[1m: {}\033[0m", message);
+        }
+    }
+
+    void print_vbar() {
+        if (terminal_compatibility_mode) {
+            print("|");
+        } else {
+            print( "\033[90m│\033[0m");
+        }
     }
 
     void print_messages() {
         for (auto& msg : messages) {
             std::size_t padding = std::to_string(msg.line_number).size() + 1;
-            print("\033[1;31mbold red text\033[0m");
-            println( "error: {}", msg.error_message);
+            print_main_message(msg.error_message);
+
             print_padding(padding);
             print_location(file_path, msg.line_number, msg.line_offset);
+
             print_padding(padding);
-            println( "│");
+            print_vbar();
+            println("");
+
             println( "{} │ {}", msg.line_number, msg.line);
+
             print_padding(padding);
             print( "│ ");
+
             print_padding(msg.line_offset);
             print_repeat(4, "^");
             println(" {}", msg.inline_message);
-            // std::cout << "Error: " << msg.error_message << '\n';
-            // std::cout << "  " << corner_top_left << hbar << ' ' << file_path << ':' << msg.line_number << ':' << msg.line_offset << '\n';
-            // std::cout << "  |\n";
-            // // TODO: dynamic spacing for line number
-            // // TODO: truncate source code if nedded
-            // std::cout << msg.line_number << " |" << ' ' << msg.line << '\n';
-            // std::cout << "  |\n";
-            // std::cout << '\n';
         }
     }
-
 
     // should be sorted by deafult
     std::vector<Message> messages;
