@@ -1,6 +1,7 @@
 #ifndef CONTEXT_H
 #define CONTEXT_H
 #include "StringTable.h"
+#include "../parser/CompilationMessage.h"
 #include "../parser/Lexer.h"
 
 
@@ -13,14 +14,15 @@ public:
         return string_table.intern(string);
     }
 
-    void add_error(std::size_t start_offset, std::size_t end_offset, const std::string& message) {
-        errors.emplace_back(start_offset, message);
+    void add_compilation_message(CompilationMessage message) {
+        messages.push_back(std::move(message));
     }
-    const std::vector<Lexer::Error>& get_errors() {
-        return errors;
+
+    const std::vector<CompilationMessage>& get_compilation_messages() {
+        return messages;
     }
 private:
     StringTable string_table;
-    std::vector<Lexer::Error> errors;
+    std::vector<CompilationMessage> messages;
 };
 #endif //CONTEXT_H

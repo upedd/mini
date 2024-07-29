@@ -90,7 +90,7 @@ struct Token {
     };
 
     Type type = Type::NONE;
-    int source_offset = 0;
+    std::size_t source_offset = 0;
     StringTable::Handle string;
 
     static std::string type_to_string(Type type);

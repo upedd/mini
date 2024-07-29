@@ -28,14 +28,14 @@ private:
     void consume_identifier();
 
     [[nodiscard]] Token make_token(Token::Type type);
-    [[nodiscard]] std::unexpected<Error> make_error(const std::string& message);
+    [[nodiscard]] std::unexpected<Error> make_error(const std::string& reason, const std::string& inline_message = "") const;
 
     Token keyword_or_identifier();
     std::expected<Token, Error> string();
     Token integer_or_number();
     Token label();
 
-    int start_pos {};
+    std::size_t start_pos {};
     std::string buffer;
     SharedContext* context;
     FileInputStream stream;

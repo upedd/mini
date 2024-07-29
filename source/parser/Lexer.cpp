@@ -77,7 +77,7 @@ std::expected<Token, Lexer::Error> Lexer::next_token() {
             if (is_identifier(c)) {
                 return keyword_or_identifier();
             }
-            return make_error("Unexpected character.");
+            return make_error("invalid character", "here");
         }
     }
 }
@@ -108,9 +108,18 @@ Token Lexer::make_token(const Token::Type type) {
     return { .type = type, .source_offset = start_pos, .string = string };
 }
 
-std::unexpected<Lexer::Error> Lexer::make_error(const std::string& message) {
-    context->add_error(start_pos, stream.position() - start_pos, message);
-    return std::unexpected<Error>({ start_pos, message });
+std::unexpected<Lexer::Error> Lexer::make_error(const std::string& reason, const std::string& inline_message) const {
+    context->add_compilation_message(
+        {
+            .type = CompilationMessage::Type::ERROR,
+            .reason = reason,
+            .inline_message = inline_message,
+            .source_offset_start = start_pos,
+            .source_offset_end = stream.position()
+        }
+    );
+    // TODO:
+    return std::unexpected<Error>({ static_cast<int>(start_pos), reason });
 }
 
 constexpr static perfect_map<Token::Type, 30> identifiers(
@@ -165,7 +174,7 @@ std::expected<Token, Lexer::Error> Lexer::string() {
     }
 
     if (stream.peek() != '"') {
-        return make_error("Expected '\"' after string literal.'");
+        return make_error("unterminated string", "expected \" after this ");
     }
 
     stream.advance(); // eat closing "

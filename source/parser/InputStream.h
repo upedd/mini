@@ -26,6 +26,7 @@ public:
         if (output == std::ifstream::traits_type::eof()) {
             return '\0';
         }
+        ++pos;
         cur = static_cast<char>(output);
         return cur;
     }
@@ -40,8 +41,8 @@ public:
         return cur;
     }
 
-    int position() {
-        return file.tellg();
+    [[nodiscard]] std::size_t position() const {
+        return pos;
     }
 
     char peek() {
@@ -53,6 +54,7 @@ public:
     }
 
 private:
+    std::size_t pos = 0;
     char cur = '\0';
     std::ifstream file;
 };

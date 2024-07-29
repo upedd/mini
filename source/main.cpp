@@ -18,7 +18,7 @@ int main(int argc, char** argv) {
     Compiler compiler(FileInputStream(argv[1]), &context);
     compiler.compile();
     auto& func = compiler.get_main();
-    std::vector<Lexer::Error> errors = context.get_errors();
+    std::vector<CompilationMessage> errors = context.get_compilation_messages();
     if (!errors.empty()) {
         ErrorPrettyPrinter printer(argv[1], std::list(errors.begin(), errors.end()));
         printer.prepare_messages();
