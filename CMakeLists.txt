@@ -35,4 +35,5 @@ add_executable(bite source/main.cpp
         source/shared/SharedContext.h
         source/base/unordered_dense.h
         source/base/common.h
+        source/base/hash.h
 )

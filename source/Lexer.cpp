@@ -128,9 +128,9 @@ bool Lexer::at_end() const {
 void Lexer::skip_whitespace() {
     while (true) {
         if (is_space(current()) || current() == '\n') {
-            advance();
+            current_pos++;
         } else if (current() == '#') {
-            while (!at_end() && !match('\n')) advance();
+            while (!at_end() && !match('\n')) current_pos++;
         } else {
             break;
         }

@@ -21,7 +21,7 @@ public:
         std::string message;
     };
 
-    explicit Lexer(const std::string_view source, SharedContext* context) : source(source) {};
+    explicit Lexer(const std::string_view source, SharedContext* context) : source(source), context(context) {};
 
 
 

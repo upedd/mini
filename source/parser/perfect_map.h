@@ -23,6 +23,8 @@ public:
     // heavily inspired from http://stevehanov.ca/blog/index.php?id=119
     // optim: investigate gperf for better performance
 
+    // TODO: swap hash for rapidhash!
+
     using kv_pair = std::pair<std::string_view, V>;
     using dict_t = std::array<kv_pair, size>;
 

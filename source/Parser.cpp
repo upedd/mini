@@ -44,7 +44,6 @@ Token Parser::advance() {
             error(current, token.error().message);
         } else {
             next = *token;
-            std::cout << token->string << '\n';
             break;
         }
     }
