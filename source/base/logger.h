@@ -16,17 +16,22 @@ namespace bite {
             off,
         };
 
+        std::strong_ordering operator<=>(Level& lhs, Level& rhs) const {
+            return static_cast<int>(lhs) <=> static_cast<int>(rhs);
+        }
+
 
         Logger(std::ostream& ostream, const Level level, const bool is_terminal_output = false) :
-            is_terminal_output(is_terminal_output),
-            current_level(level),
+            m_is_terminal_output(is_terminal_output),
+            log_level(level),
             ostream(ostream) {}
 
         explicit Logger(std::ostream& ostream, const bool is_terminal_output = false) : Logger(ostream, Level::info, is_terminal_output) {}
 
         template <typename... Args>
         void log(const Level level, std::format_string<Args...> string, Args&&... args) {
-            bite::print(
+            if (level < log_level) return;
+            bite::println(
                 ostream,
                 "{}: {}",
                 formatted_level_string(level),
@@ -34,9 +39,20 @@ namespace bite {
             );
         }
 
+        [[nodiscard]] bool is_terminal_output() const {
+            return m_is_terminal_output;
+        }
+
+        void set_log_level(const Level& level) {
+            this->log_level = level;
+        }
+
+        [[nodiscard]] Level level() const {
+            return log_level;
+        }
     private:
         [[nodiscard]] std::string formatted_level_string(const Level level) const {
-            if (is_terminal_output) {
+            if (m_is_terminal_output) {
                 return std::format("{}", styled(level_string(level), foreground(level_color(level)) | emphasis::bold));
             }
             return level_string(level);
@@ -64,9 +80,16 @@ namespace bite {
             }
         }
 
-        bool is_terminal_output;
-        Level current_level;
+        bool m_is_terminal_output;
+        Level log_level;
         std::ostream& ostream;
+    };
+
+    template<typename T>
+    struct LogFormatter {
+        void operator ()(const T&, const Logger* logger) {
+
+        }
     };
 }
 

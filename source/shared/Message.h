@@ -6,9 +6,14 @@
 #include "../base/logger.h"
 
 namespace bite {
+    struct SourceLocation {
+        std::string file_path;
+        std::size_t start_offset;
+        std::size_t end_offset;
+    };
+
     struct InlineMessage {
-        std::size_t source_start;
-        std::size_t source_end;
+        SourceLocation location;
         std::string Message;
     };
 
@@ -18,11 +23,5 @@ namespace bite {
         std::optional<InlineMessage> inline_msg;
     };
 }
-
-
-#if __has_include(<format>)
-
-#endif
-
 
 #endif //MESSAGE_H
