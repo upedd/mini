@@ -29,7 +29,7 @@ public:
 
     const std::vector<Error>& get_errors();
 
-    explicit Parser(FileInputStream&& stream, SharedContext* context) : lexer(std::move(stream), context) {}
+    explicit Parser(bite::file_input_stream&& stream, SharedContext* context) : lexer(std::move(stream), context) {}
 
     std::vector<Stmt> parse();
 

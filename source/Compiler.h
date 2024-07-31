@@ -149,7 +149,7 @@ public:
     };
 
 
-    explicit Compiler(FileInputStream&& stream, SharedContext* context) : parser(std::move(stream), context),
+    explicit Compiler(bite::file_input_stream&& stream, SharedContext* context) : parser(std::move(stream), context),
                                                                           source(source),
                                                                           main("", 0) {
         context_stack.emplace_back(&main, FunctionType::FUNCTION);

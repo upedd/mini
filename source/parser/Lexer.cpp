@@ -85,10 +85,10 @@ std::expected<Token, Lexer::Error> Lexer::next_token() {
 
 void Lexer::skip_whitespace() {
     while (true) {
-        if (is_space(stream.peek()) || stream.peek() == '\n') {
+        if (is_space(stream.next()) || stream.next() == '\n') {
             stream.advance();
-        } else if (stream.peek() == '#') {
-            while (!stream.at_end() && !stream.match('\n'))
+        } else if (stream.next() == '#') {
+            while (!stream.ended() && !stream.match('\n'))
                 stream.advance();
         } else {
             break;
@@ -97,7 +97,7 @@ void Lexer::skip_whitespace() {
 }
 
 void Lexer::consume_identifier() {
-    while (is_identifier(stream.peek())) {
+    while (is_identifier(stream.next())) {
         buffer.push_back(stream.advance());
     }
 }
@@ -109,15 +109,6 @@ Token Lexer::make_token(const Token::Type type) {
 }
 
 std::unexpected<Lexer::Error> Lexer::make_error(const std::string& reason, const std::string& inline_message) const {
-    // context->add_compilation_message(
-    //     {
-    //         .type = CompilationMessage::Type::ERROR,
-    //         .reason = reason,
-    //         .inline_message = inline_message,
-    //         .source_offset_start = start_pos,
-    //         .source_offset_end = stream.position()
-    //     }
-    // );
     context->add_compilation_message(
         {
             .level = bite::Logger::Level::error,
@@ -132,7 +123,6 @@ std::unexpected<Lexer::Error> Lexer::make_error(const std::string& reason, const
             }
         }
     );
-    // TODO:
     return std::unexpected<Error>({ static_cast<int>(start_pos), reason });
 }
 
@@ -183,35 +173,34 @@ Token Lexer::keyword_or_identifier() {
 }
 
 std::expected<Token, Lexer::Error> Lexer::string() {
-    while (!stream.at_end() && stream.peek() != '"') {
+    while (!stream.ended() && stream.next() != '"') {
         buffer.push_back(stream.advance());
     }
 
-    if (stream.peek() != '"') {
-        return make_error("unterminated string", "expected \" after this ");
+    if (!stream.match('"')) {
+        return make_error("unterminated string", "expected \" after this");
     }
 
-    stream.advance(); // eat closing "
     return make_token(Token::Type::STRING);
 }
 
 Token Lexer::integer_or_number() {
-    while (is_number_literal_char(stream.peek())) {
+    while (is_number_literal_char(stream.next())) {
         buffer.push_back(stream.advance());
     }
-    // if no dot separator
+    // if no dot exists separator it is a integer
     if (!stream.match('.')) {
         return make_token(Token::Type::INTEGER);
     }
-    // handle part after dot
-    while (is_number_literal_char(stream.peek())) {
+    // otherwise it is a fraction
+    while (is_number_literal_char(stream.next())) {
         buffer.push_back(stream.advance());
     }
     return make_token(Token::Type::NUMBER);
 }
 
 Token Lexer::label() {
-    buffer.push_back(stream.current()); // skip @
+    buffer.push_back(stream.current()); // get @
     consume_identifier();
     return make_token(Token::Type::LABEL);
 }

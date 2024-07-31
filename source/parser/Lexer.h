@@ -4,7 +4,7 @@
 #include <vector>
 
 #include "../Token.h"
-#include "InputStream.h"
+#include "../base/stream.h"
 
 class SharedContext;
 
@@ -18,7 +18,7 @@ public:
         std::string message;
     };
 
-    explicit Lexer(FileInputStream&& stream, SharedContext* context) : context(context),
+    explicit Lexer(bite::file_input_stream&& stream, SharedContext* context) : context(context),
                                                                        stream(std::move(stream)) {};
 
     std::expected<Token, Error> next_token();
@@ -35,10 +35,10 @@ private:
     Token integer_or_number();
     Token label();
 
-    std::size_t start_pos {};
+    std::size_t start_pos = 0;
     std::string buffer;
     SharedContext* context;
-    FileInputStream stream;
+    bite::file_input_stream stream;
 };
 
 

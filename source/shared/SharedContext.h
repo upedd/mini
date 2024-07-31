@@ -3,7 +3,6 @@
 #include "Message.h"
 #include "StringTable.h"
 #include "../base/logger.h"
-#include "../parser/CompilationMessage.h"
 #include "../parser/Lexer.h"
 
 
