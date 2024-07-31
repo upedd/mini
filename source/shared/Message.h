@@ -14,7 +14,7 @@ namespace bite {
 
     struct InlineMessage {
         SourceLocation location;
-        std::string Message;
+        std::string content;
     };
 
     struct Message {

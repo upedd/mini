@@ -2,12 +2,12 @@
 #define ERRORPRETTYPRINTER_H
 #include <filesystem>
 
-#include "CompilationMessage.h"
 #include "../shared/Message.h"
 
 namespace bite {
     struct EnchancedInfo {
         std::string line;
+        std::size_t line_number;
         std::size_t in_line_start;
     };
 
@@ -23,7 +23,7 @@ namespace bite {
             const std::vector<Message const*>& messages
         ) {
             std::ifstream file(path);
-            int line_counter = 0;
+            std::size_t line_counter = 0;
             std::string current_line;
             std::size_t previous_line_offset = 0;
             while (std::getline(file, current_line)) {
@@ -34,7 +34,11 @@ namespace bite {
                     if (start_offset < current_line_offset) {
                         output.emplace_back(
                             *message,
-                            EnchancedInfo { .line = current_line, .in_line_start = start_offset - previous_line_offset }
+                            EnchancedInfo {
+                                .line = current_line,
+                                .line_number = line_counter,
+                                .in_line_start = start_offset - previous_line_offset
+                            }
                         );
                     }
                 }
@@ -50,7 +54,7 @@ namespace bite {
             if (processed[i])
                 continue;
             auto& message = messages[i];
-            if (message.inline_msg) {
+            if (!message.inline_msg) {
                 // Cannot enchance messages without inline messages
                 output[i] = { message };
             } else {
@@ -70,6 +74,81 @@ namespace bite {
         }
         return output;
     }
+
+
+    template <>
+    struct LogPrinter<EnchancedMessage> {
+        void operator()(const EnchancedMessage& enchanced, Logger* logger) const {
+            if (logger->is_terminal_output()) {
+                logger->log(enchanced.message.level, "{}", styled(enchanced.message.content, emphasis::bold));
+            } else {
+                logger->log(enchanced.message.level, enchanced.message.content);
+            }
+            if (!enchanced.info)
+                return;
+            std::size_t padding = std::to_string(enchanced.info->line_number).size() + 1;
+            // location line
+            bite::print(logger->raw_ostream(), "{}", repeated(" ", padding));
+            if (logger->is_terminal_output()) {
+                bite::print(foreground(terminal_color::bright_black), logger->raw_ostream(), "┌─> ");
+            } else {
+                bite::print(logger->raw_ostream(), "--> ");
+            }
+            bite::println(logger->raw_ostream(), "{}", enchanced.message.inline_msg->location.file_path);
+            // spacer
+            bite::print(logger->raw_ostream(), "{}", repeated(" ", padding));
+            if (logger->is_terminal_output()) {
+                bite::println(foreground(terminal_color::bright_black), logger->raw_ostream(), "│");
+            } else {
+                bite::println(logger->raw_ostream(), "|");
+            }
+            // code line
+            if (logger->is_terminal_output()) {
+                bite::println(
+                    logger->raw_ostream(),
+                    "{} {} {}",
+                    styled(enchanced.info->line_number, emphasis::bold),
+                    styled("│", foreground(terminal_color::bright_black)),
+                    enchanced.info->line
+                );
+            } else {
+                bite::println(logger->raw_ostream(), "{} | {}", enchanced.info->line_number, enchanced.info->line);
+            }
+            // inline hint spacer
+            bite::print(logger->raw_ostream(), "{}", repeated(" ", padding));
+            if (logger->is_terminal_output()) {
+                bite::print(foreground(terminal_color::bright_black), logger->raw_ostream(), "│");
+            } else {
+                bite::print(logger->raw_ostream(), "|");
+            }
+            // inline hint message
+            bite::print(logger->raw_ostream(), "{}", repeated(" ", enchanced.info->in_line_start + 1));
+            if (logger->is_terminal_output()) {
+                bite::println(
+                    foreground(Logger::level_color(enchanced.message.level)),
+                    logger->raw_ostream(),
+                    "{} {}",
+                    repeated(
+                        "^",
+                        enchanced.message.inline_msg->location.end_offset - enchanced.message.inline_msg->location.
+                        start_offset
+                    ),
+                    enchanced.message.inline_msg->content
+                );
+            } else {
+                bite::println(
+                    logger->raw_ostream(),
+                    "{} {}",
+                    repeated(
+                        "^",
+                        enchanced.message.inline_msg->location.end_offset - enchanced.message.inline_msg->location.
+                        start_offset
+                    ),
+                    enchanced.message.inline_msg->content
+                );
+            }
+        }
+    };
 }
 
 // class ErrorPrettyPrinter {
@@ -80,7 +159,7 @@ namespace bite {
 //         prepare_messages();
 //     }
 //
-//     struct Message {
+//     struct content {
 //         std::string line;
 //         int line_offset_start;
 //         int line_offset_end;
@@ -190,7 +269,7 @@ namespace bite {
 //
 //     // should be sorted by deafult
 //     SharedContext* context;
-//     std::vector<Message> messages;
+//     std::vector<content> messages;
 //     std::list<CompilationMessage> errors;
 //     std::ifstream source_file;
 //     std::string file_path;

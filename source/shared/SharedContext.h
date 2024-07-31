@@ -1,5 +1,6 @@
 #ifndef CONTEXT_H
 #define CONTEXT_H
+#include "Message.h"
 #include "StringTable.h"
 #include "../base/logger.h"
 #include "../parser/CompilationMessage.h"
@@ -17,16 +18,17 @@ public:
         return string_table.intern(string);
     }
 
-    void add_compilation_message(CompilationMessage message) {
+    void add_compilation_message(bite::Message message) {
         messages.push_back(std::move(message));
     }
 
-    const std::vector<CompilationMessage>& get_compilation_messages() {
+    const std::vector<bite::Message>& get_compilation_messages() {
         return messages;
     }
-private:
+
     bite::Logger logger;
+private:
     StringTable string_table;
-    std::vector<CompilationMessage> messages;
+    std::vector<bite::Message > messages;
 };
 #endif //CONTEXT_H

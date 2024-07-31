@@ -107,6 +107,7 @@ public:
      * @return returns mapped value if found
      */
     std::optional<V> constexpr operator[](std::string_view key) const {
+
         std::uint64_t key_hash = fnv1(key);
         Offset offset = offsets[key_hash % offsets.size()];
         ValueHashPair value_hash_pair;

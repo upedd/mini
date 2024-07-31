@@ -109,13 +109,27 @@ Token Lexer::make_token(const Token::Type type) {
 }
 
 std::unexpected<Lexer::Error> Lexer::make_error(const std::string& reason, const std::string& inline_message) const {
+    // context->add_compilation_message(
+    //     {
+    //         .type = CompilationMessage::Type::ERROR,
+    //         .reason = reason,
+    //         .inline_message = inline_message,
+    //         .source_offset_start = start_pos,
+    //         .source_offset_end = stream.position()
+    //     }
+    // );
     context->add_compilation_message(
         {
-            .type = CompilationMessage::Type::ERROR,
-            .reason = reason,
-            .inline_message = inline_message,
-            .source_offset_start = start_pos,
-            .source_offset_end = stream.position()
+            .level = bite::Logger::Level::error,
+            .content = reason,
+            .inline_msg = bite::InlineMessage {
+                .location = bite::SourceLocation {
+                    .file_path = "debug.bite",
+                    .start_offset = start_pos,
+                    .end_offset = stream.position()
+                },
+                .content = inline_message
+            }
         }
     );
     // TODO:

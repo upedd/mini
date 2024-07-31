@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cstdint>
 #include <format>
+#include <iostream>
 #include <ranges>
 #include <string>
 #include <utility>
@@ -150,7 +151,7 @@ namespace bite {
             terminal_style style;
         };
 
-        template<typename T>
+        template <typename T>
         struct RepatedArg {
             const T& value;
             std::size_t times;
@@ -219,12 +220,15 @@ struct std::formatter<bite::detail::StyledArg<T>, Char> : std::formatter<T, Char
         return std::format_to(ctx.out(), "{}{}\033[0m", bite::detail::get_ansi_escape(arg.style), arg.value);
     }
 };
+
 template <typename T, typename Char>
-struct std::formatter<bite::detail::RepatedArg<T>, Char> : std::formatter<T, Char> { // NOLINT(*-dcl58-cpp)
+struct std::formatter<bite::detail::RepatedArg<T>, Char> : std::formatter<basic_string_view<Char>> { // NOLINT(*-dcl58-cpp)
     auto format(const bite::detail::RepatedArg<T>& arg, std::format_context& ctx) const {
+        std::basic_string<Char> temp;
         for (std::size_t i = 0; i < arg.times; ++i) {
-            std::format_to(ctx.out(), "{}", arg.value); // optim?
+            std::format_to(std::back_inserter(temp), "{}", arg.value); // optim?
         }
+        return std::formatter<basic_string_view<Char>>::format(temp, ctx);
     }
 };
 
@@ -234,9 +238,10 @@ namespace bite {
     constexpr auto styled(const T& value, terminal_style style) {
         return detail::StyledArg<std::remove_cvref_t<T>>(value, style);
     }
+
     template <typename T>
     constexpr auto repeated(const T& value, std::size_t times) {
-        return detail::StyledArg<std::remove_cvref_t<T>>(value, times);
+        return detail::RepatedArg<std::remove_cvref_t<T>>(value, times);
     }
 }
 #endif //PRINT_H
