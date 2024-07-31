@@ -40,6 +40,8 @@ add_executable(bite source/main.cpp
         source/parser/ErrorPrettyPrinter.h
         source/parser/CompilationMessage.h
         source/base/print.h
+        source/base/logger.h
+        source/shared/Message.h
 )
 
 target_link_libraries(bite "-lstdc++exp")

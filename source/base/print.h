@@ -2,6 +2,7 @@
 #define PRINT_H
 #include <cassert>
 #include <cstdint>
+#include <format>
 #include <ranges>
 #include <string>
 #include <utility>
@@ -142,6 +143,12 @@ namespace bite {
 
             return "\033[" + parameters_string + 'm';
         }
+
+        template <typename T>
+        struct StyledArg {
+            const T& value;
+            terminal_style style;
+        };
     }
 
 
@@ -165,12 +172,17 @@ namespace bite {
 
     template <typename... Args>
     void println(std::format_string<Args...> string, Args&&... args) {
-        bite::println(std::cout, "{}\n", string, std::forward<Args>(args)...);
+        bite::println(std::cout, string, std::forward<Args>(args)...);
     }
 
     // Repeated printing helper
     template <typename... Args>
-    void print_repeat(const std::size_t times, std::ostream& ostream, std::format_string<Args...> string, Args&&... args) {
+    void print_repeat(
+        const std::size_t times,
+        std::ostream& ostream,
+        std::format_string<Args...> string,
+        Args&&... args
+    ) {
         for (std::size_t i = 0; i < times; ++i) {
             bite::print(ostream, string, std::forward<Args>(args)...);
         }
@@ -184,7 +196,12 @@ namespace bite {
     // ===== Styled printing helpers
     template <typename... Args>
     void print(const terminal_style& style, std::ostream& ostream, std::format_string<Args...> string, Args&&... args) {
-        bite::print(ostream, "{}{}\033[0m", detail::get_ansi_escape(style), std::format(string, std::forward<Args>(args)...));
+        bite::print(
+            ostream,
+            "{}{}\033[0m",
+            detail::get_ansi_escape(style),
+            std::format(string, std::forward<Args>(args)...)
+        );
     }
 
     template <typename... Args>
@@ -193,7 +210,12 @@ namespace bite {
     }
 
     template <typename... Args>
-    void println(const terminal_style& style, std::ostream& ostream, std::format_string<Args...> string, Args&&... args) {
+    void println(
+        const terminal_style& style,
+        std::ostream& ostream,
+        std::format_string<Args...> string,
+        Args&&... args
+    ) {
         bite::print(style, ostream, "{}\n", std::format(string, std::forward<Args>(args)...));
     }
 
@@ -202,10 +224,14 @@ namespace bite {
         bite::println(style, std::cout, string, std::forward<Args>(args)...);
     }
 
-
-    // Repeated printing helper
     template <typename... Args>
-    void print_repeat(const terminal_style& style, const std::size_t times, std::ostream& ostream, std::format_string<Args...> string, Args&&... args) {
+    void print_repeat(
+        const terminal_style& style,
+        const std::size_t times,
+        std::ostream& ostream,
+        std::format_string<Args...> string,
+        Args&&... args
+    ) {
         // optim: print ansi escape before printing these chars
         for (std::size_t i = 0; i < times; ++i) {
             bite::print(style, ostream, string, std::forward<Args>(args)...);
@@ -213,9 +239,27 @@ namespace bite {
     }
 
     template <typename... Args>
-    void print_repeat(const terminal_style& style, const std::size_t times, std::format_string<Args...> string, Args&&... args) {
+    void print_repeat(
+        const terminal_style& style,
+        const std::size_t times,
+        std::format_string<Args...> string,
+        Args&&... args
+    ) {
         bite::print_repeat(style, times, std::cout, string, std::forward<Args>(args)...);
     }
 }
 
+template <typename T, typename Char>
+struct std::formatter<bite::detail::StyledArg<T>, Char> : std::formatter<T, Char> { // NOLINT(*-dcl58-cpp)
+    auto format(const bite::detail::StyledArg<T>& arg, std::format_context& ctx) const {
+        return std::format_to(ctx.out(), "{}{}\033[0m", bite::detail::get_ansi_escape(arg.style), arg.value);
+    }
+};
+
+namespace bite {
+    template <typename T>
+    constexpr auto styled(const T& value, terminal_style style) {
+        return detail::StyledArg<std::remove_cvref_t<T>>(value, style);
+    }
+}
 #endif //PRINT_H
