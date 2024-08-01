@@ -3,12 +3,19 @@ project(mini)
 
 set(CMAKE_CXX_STANDARD 23)
 
+if (MSVC)
+    # warning level 4
+    add_compile_options(/W4)
+else()
+    # additional warnings
+    add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
 add_executable(bite source/main.cpp
         source/main.cpp
         source/parser/Lexer.cpp
         source/parser/Lexer.h
         source/parser/Token.h
-        source/common.h
         source/parser/Parser.cpp
         source/parser/Parser.h
         source/Ast.h
@@ -42,6 +49,10 @@ add_executable(bite source/main.cpp
         source/api/enhance_messages.h
         source/base/stream.h
         source/base/box.h
+        source/base/overloaded.h
+        source/base/chars.h
+        source/base/bitflags.h
 )
 
+# workaround (or not?) to make std::print work on gcc
 target_link_libraries(bite "-lstdc++exp")

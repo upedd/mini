@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-#include "../common.h"
+#include "../base/chars.h"
 
 std::unexpected<ConversionError> make_conversion_error(const std::string& what) {
     return std::unexpected(ConversionError(what));

@@ -2,7 +2,7 @@
 
 #include <expected>
 
-#include "../common.h"
+#include "../base/chars.h"
 #include "../base/perfect_map.h"
 #include "../shared/SharedContext.h"
 

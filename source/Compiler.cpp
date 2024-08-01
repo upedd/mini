@@ -4,6 +4,7 @@
 #include <ranges>
 
 #include "api/enhance_messages.h"
+#include "base/overloaded.h"
 #include "shared/SharedContext.h"
 
 void Compiler::Scope::mark_temporary(int count) {
@@ -1203,7 +1204,7 @@ void Compiler::visit_expr(const Expr& expression) {
             [this](const bite::box<WhileExpr>& expr) { while_expr(*expr); },
             [this](const bite::box<ForExpr>& expr) { for_expr(*expr); },
             [this](const bite::box<ReturnExpr>& expr) { retrun_expression(*expr); },
-            [this](const bite::box<ThisExpr>& expr) { this_expr(); },
+            [this](const bite::box<ThisExpr>&) { this_expr(); },
             [this](const bite::box<ObjectExpr>& expr) { object_expression(*expr); },
             [](const bite::box<InvalidExpr>&) {}
         },

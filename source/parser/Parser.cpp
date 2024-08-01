@@ -1,9 +1,10 @@
 #include "Parser.h"
 
-#include <cassert>
+#include <experimental/scope>
 
 #include "conversions.h"
 #include "../shared/SharedContext.h"
+
 
 // TODO: refactor message system. this stinks a bit
 void Parser::emit_message(const bite::Message& message) {
@@ -152,13 +153,11 @@ Ast Parser::parse() {
 }
 
 Stmt Parser::statement_or_expression() {
-    auto exit = scope_exit(
-       [this] {
-           if (panic_mode) {
-               synchronize();
-           }
-       }
-   );
+    auto handle = std::experimental::scope_exit([this] {
+        if (panic_mode) {
+            synchronize();
+        }
+    });
 
     if (auto stmt = statement()) {
         return *stmt;

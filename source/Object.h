@@ -1,6 +1,7 @@
 #ifndef FUNCTION_H
 #define FUNCTION_H
 
+#include <cassert>
 #include <functional>
 #include <unordered_map>
 #include <utility>
@@ -19,7 +20,7 @@ public:
 
     virtual std::string to_string() = 0;
 
-    virtual void mark_references(GarbageCollector& gc) {}
+    virtual void mark_references(GarbageCollector& /*unused*/) {}
 
     virtual ~Object() = default;
 };

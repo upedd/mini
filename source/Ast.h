@@ -6,6 +6,7 @@
 
 #include "parser/Token.h"
 #include "Value.h"
+#include "base/bitflags.h"
 #include "base/box.h"
 
 // Reference: https://lesleylai.info/en/ast-in-cpp-part-1-variant/
@@ -124,6 +125,16 @@ struct VarStmt {
 
 struct ExprStmt {
     Expr expr;
+};
+
+enum class ClassAttributes: std::uint8_t {
+    PRIVATE,
+    OVERRIDE,
+    ABSTRACT,
+    GETTER,
+    SETTER,
+    OPERATOR,
+    size // tracks ClassAttributes size. Must be at end!
 };
 
 struct FieldStmt {

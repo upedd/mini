@@ -3,7 +3,6 @@
 #include <unordered_set>
 
 #include "Ast.h"
-#include "debug.h"
 #include "Object.h"
 #include "parser/Parser.h"
 
@@ -48,8 +47,8 @@ public:
     class Scope {
     public:
         Scope(ScopeType type, int slot_start, std::string name = "") : type(type),
-                                                                       slot_start(slot_start),
-                                                                       name(std::move(name)) {}
+                                                                       name(std::move(name)),
+                                                                       slot_start(slot_start) {}
 
         void mark_temporary(int count = 1);
 
@@ -150,7 +149,6 @@ public:
 
 
     explicit Compiler(bite::file_input_stream&& stream, SharedContext* context) : parser(std::move(stream), context),
-        source(source),
         main("", 0),
         shared_context(context) {
         context_stack.emplace_back(&main, FunctionType::FUNCTION);
@@ -261,7 +259,6 @@ private:
     Parser parser;
     Function main;
     std::vector<Context> context_stack;
-    std::string_view source;
     std::vector<Function*> functions;
     std::vector<std::string> natives;
     SharedContext* shared_context;

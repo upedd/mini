@@ -1,5 +1,6 @@
 #include "Value.h"
 #include "Object.h"
+#include "base/overloaded.h"
 
 std::string Value::to_string() const {
     return std::visit(

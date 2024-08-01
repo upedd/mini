@@ -7,7 +7,6 @@
 #include <cmath>
 #include <optional>
 
-#include "common.h"
 #include "shared/types.h"
 
 // disambiguation tag for nil value
@@ -79,10 +78,14 @@ public:
     }
 
     [[nodiscard]] bite_int convert_to_int() const {
-        if (is_integer())
+        if (is_integer()) {
             return get_integer();
-        if (is_floating())
-            static_cast<bite_int>(get_floating());
+        }
+        if (is_floating()) {
+            return static_cast<bite_int>(get_floating());
+        }
+
+
         throw Error("Expected type convertible to number");
     }
 

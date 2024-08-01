@@ -1,5 +1,6 @@
 #ifndef VM_H
 #define VM_H
+#include <expected>
 #include <stdexcept>
 #include <vector>
 

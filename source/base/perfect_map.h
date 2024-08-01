@@ -83,7 +83,7 @@ public:
         // Now only buckets with one item remain
         // insert those item into remaining free slots
         std::vector<std::size_t> empty_positions;
-        for (int i = 0; i < size; ++i) {
+        for (std::size_t i = 0; i < size; ++i) {
             if (!has_value[i]) {
                 empty_positions.push_back(i);
             }
