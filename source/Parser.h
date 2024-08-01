@@ -31,7 +31,7 @@ public:
 
     explicit Parser(bite::file_input_stream&& stream, SharedContext* context) : lexer(std::move(stream), context) {}
 
-    std::vector<Stmt> parse();
+    std::unique_ptr<Ast> parse();
 
 private:
     bool panic_mode = false;
@@ -46,9 +46,9 @@ private:
     void consume(Token::Type type, std::string_view message);
 
 
-    Stmt statement_or_expression();
+    std::unique_ptr<Stmt> statement_or_expression();
 
-    Stmt native_declaration();
+    std::unique_ptr<Stmt> native_declaration();
 
     Expr for_expression(std::optional<Token> label = {});
 

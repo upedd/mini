@@ -4,9 +4,6 @@
 #include <fstream>
 
 // === Common abstraction for streams and file stream
-// TODO: off by one
-// TODO: encapsulate
-// TODO: constructor?
 namespace bite {
     template <typename T>
     class input_stream_base {
@@ -31,9 +28,14 @@ namespace bite {
             return self.m_next;
         }
 
+        template<class Self>
+        bool check(this Self&& self, T c) {
+            return self.next() == c;
+        }
+
         template <class Self>
         bool match(this Self&& self, T c) {
-            if (self.next() == c) {
+            if (self.check()) {
                 self.advance();
                 return true;
             }
@@ -44,7 +46,7 @@ namespace bite {
         [[nodiscard]] std::size_t position(this Self&& self)  {
             return self.m_position;
         }
-
+    protected:
         T m_current;
         T m_next;
         std::size_t m_position = 0;
@@ -55,10 +57,12 @@ namespace bite {
     public:
         [[nodiscard]] explicit file_input_stream(const std::string& path) :file(path) {
             advance();
+            m_position = 0;
         }
 
         [[nodiscard]] explicit file_input_stream(std::ifstream&& stream) : file(std::move(stream)) {
             advance();
+            m_position = 0;
         }
 
         [[nodiscard]] bool ended() const {

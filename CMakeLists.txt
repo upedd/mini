@@ -41,6 +41,7 @@ add_executable(bite source/main.cpp
         source/shared/Message.h
         source/api/enhance_messages.h
         source/base/stream.h
+        source/base/box.h
 )
 
 target_link_libraries(bite "-lstdc++exp")

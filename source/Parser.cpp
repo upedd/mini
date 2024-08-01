@@ -19,9 +19,9 @@ void Parser::synchronize() {
     while (!check(Token::Type::END)) {
         if (current.type == Token::Type::SEMICOLON)
             return;
-
         // synchonization points (https://www.ssw.uni-linz.ac.at/Misc/CC/slides/03.Parsing.pdf)
         // should synchronize on start of statement or declaration
+        // TODO: more synchronization points!
         switch (next.type) {
             case Token::Type::LET:
             case Token::Type::LEFT_BRACE:
@@ -41,21 +41,19 @@ const std::vector<Parser::Error>& Parser::get_errors() {
 Token Parser::advance() {
     current = next;
     while (true) {
-        auto token = lexer.next_token();
-        if (!token) {
-            error(current, token.error().message);
-        } else {
+        if (auto token = lexer.next_token()) {
             next = *token;
             break;
+        } else {
+            error(current, token.error().message);
         }
     }
-    return next;
+    return current;
 }
 
 bool Parser::check(const Token::Type type) const {
     return next.type == type;
 }
-
 
 void Parser::consume(const Token::Type type, const std::string_view message) {
     if (check(type)) {
@@ -73,16 +71,16 @@ bool Parser::match(Token::Type type) {
     return false;
 }
 
-std::vector<Stmt> Parser::parse() {
+std::unique_ptr<Ast> Parser::parse() {
     advance(); // populate next
-    std::vector<Stmt> stmts;
+    std::vector<std::unique_ptr<Stmt>> stmts;
     while (!match(Token::Type::END)) {
         stmts.push_back(statement_or_expression());
     }
-    return stmts;
+    return std::make_unique<Ast>(std::move(stmts));
 }
 
-Stmt Parser::statement_or_expression() {
+std::unique_ptr<Stmt> Parser::statement_or_expression() {
     if (auto stmt = statement()) {
         return std::move(*stmt);
     }
@@ -121,14 +119,14 @@ Stmt Parser::statement_or_expression() {
     return ExprStmt(std::move(expr));
 }
 
-Stmt Parser::native_declaration() {
+std::unique_ptr<Stmt> Parser::native_declaration() {
     consume(Token::Type::IDENTIFIER, "Expected identifier after 'native' keyword.");
     Token name = current;
     consume(Token::Type::SEMICOLON, "Expected ';' after native declaration.");
-    return NativeStmt(name);
+    return make_stmt_handle<ForExpr>(name);
 }
 
-Expr Parser::for_expression(std::optional<Token> label) {
+std::unique_ptr<Expr> Parser::for_expression(std::optional<Token> label) {
     consume(Token::Type::IDENTIFIER, "Expected an identifier after 'for'.");
     Token name = current;
     consume(Token::Type::IN, "Expected 'in' after item name in for loop.");

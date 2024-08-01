@@ -41,5 +41,4 @@ private:
     bite::file_input_stream stream;
 };
 
-
 #endif //LEXER_H
