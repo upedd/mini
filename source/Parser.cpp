@@ -71,62 +71,62 @@ bool Parser::match(Token::Type type) {
     return false;
 }
 
-std::unique_ptr<Ast> Parser::parse() {
+Ast Parser::parse() {
     advance(); // populate next
-    std::vector<std::unique_ptr<Stmt>> stmts;
+    std::vector<Stmt> stmts;
     while (!match(Token::Type::END)) {
         stmts.push_back(statement_or_expression());
     }
-    return std::make_unique<Ast>(std::move(stmts));
+    return Ast(std::move(stmts));
 }
 
-std::unique_ptr<Stmt> Parser::statement_or_expression() {
+Stmt Parser::statement_or_expression() {
     if (auto stmt = statement()) {
         return std::move(*stmt);
     }
     if (match(Token::Type::IF)) {
         auto expr = if_expression();
         match(Token::Type::SEMICOLON);
-        return ExprStmt(std::make_unique<Expr>(std::move(expr)));
+        return ExprStmt(std::move(expr));
     }
     if (match(Token::Type::LOOP)) {
         auto expr = loop_expression();
         match(Token::Type::SEMICOLON);
-        return ExprStmt(std::make_unique<Expr>(std::move(expr)));
+        return ExprStmt(std::move(expr));
     }
     if (match(Token::Type::WHILE)) {
         auto expr = while_expression();
         match(Token::Type::SEMICOLON);
-        return ExprStmt(std::make_unique<Expr>(std::move(expr)));
+        return ExprStmt(std::move(expr));
     }
     if (match(Token::Type::FOR)) {
         auto expr = for_expression();
         match(Token::Type::SEMICOLON);
-        return ExprStmt(std::make_unique<Expr>(std::move(expr)));
+        return ExprStmt(std::move(expr));
     }
     if (match(Token::Type::LABEL)) {
         auto expr = labeled_expression();
         match(Token::Type::SEMICOLON);
-        return ExprStmt(std::make_unique<Expr>(std::move(expr)));
+        return ExprStmt(std::move(expr));
     }
     if (match(Token::Type::RETURN)) {
         auto expr = return_expression();
         match(Token::Type::SEMICOLON);
-        return ExprStmt(std::make_unique<Expr>(std::move(expr)));
+        return ExprStmt(std::move(expr));
     }
-    auto expr = std::make_unique<Expr>(expression());
+    Expr expr = expression();
     consume(Token::Type::SEMICOLON, "Expected ';' after expression.");
     return ExprStmt(std::move(expr));
 }
 
-std::unique_ptr<Stmt> Parser::native_declaration() {
+Stmt Parser::native_declaration() {
     consume(Token::Type::IDENTIFIER, "Expected identifier after 'native' keyword.");
     Token name = current;
     consume(Token::Type::SEMICOLON, "Expected ';' after native declaration.");
-    return make_stmt_handle<ForExpr>(name);
+    return NativeStmt(name);
 }
 
-std::unique_ptr<Expr> Parser::for_expression(std::optional<Token> label) {
+Expr Parser::for_expression(std::optional<Token> label) {
     consume(Token::Type::IDENTIFIER, "Expected an identifier after 'for'.");
     Token name = current;
     consume(Token::Type::IN, "Expected 'in' after item name in for loop.");
@@ -135,18 +135,13 @@ std::unique_ptr<Expr> Parser::for_expression(std::optional<Token> label) {
         error(current, "Expected '{' before loop body.");
     }
     Expr body = block();
-    return ForExpr {
-            .name = name,
-            .iterable = make_expr_handle(std::move(iterable)),
-            .body = make_expr_handle(std::move(body)),
-            .label = label
-        };
+    return ForExpr { .name = name, .iterable = std::move(iterable), .body = std::move(body), .label = label };
 }
 
 Expr Parser::return_expression() {
-    ExprHandle expr = nullptr;
+    std::optional<Expr> expr = {};
     if (!match(Token::Type::SEMICOLON)) {
-        expr = make_expr_handle(expression());
+        expr = expression();
         consume(Token::Type::SEMICOLON, "Exepected ';' after return value.");
     }
     return ReturnExpr { std::move(expr) };
@@ -155,7 +150,7 @@ Expr Parser::return_expression() {
 Stmt Parser::object_declaration() {
     consume(Token::Type::IDENTIFIER, "Expected object name.");
     Token name = current;
-    return ObjectStmt { .name = name, .object = make_expr_handle(object_expression()) };
+    return ObjectStmt { .name = name, .object = object_expression() };
 }
 
 std::optional<Stmt> Parser::statement() {
@@ -199,7 +194,7 @@ Stmt Parser::var_declaration() {
 VarStmt Parser::var_declaration_after_name(const Token name) {
     Expr expr = match(Token::Type::EQUAL) ? expression() : LiteralExpr { nil_t };
     consume(Token::Type::SEMICOLON, "Expected ';' after variable declaration.");
-    return VarStmt { .name = name, .value = make_expr_handle(std::move(expr)) };
+    return VarStmt { .name = name, .value = std::move(expr) };
 }
 
 FunctionStmt Parser::function_declaration() {
@@ -221,11 +216,7 @@ FunctionStmt Parser::function_declaration_after_name(const Token name, bool skip
     }
     consume(Token::Type::LEFT_BRACE, "Expected '{' before function body");
     auto body = block();
-    return FunctionStmt {
-            .name = name,
-            .params = std::move(parameters),
-            .body = std::make_unique<Expr>(std::move(body))
-        };
+    return FunctionStmt { .name = name, .params = std::move(parameters), .body = std::move(body) };
 }
 
 ConstructorStmt Parser::constructor_statement() {
@@ -240,7 +231,7 @@ ConstructorStmt Parser::constructor_statement() {
     }
     consume(Token::Type::RIGHT_PAREN, "Expected ')' after constructor parameters");
 
-    std::vector<ExprHandle> super_arguments;
+    std::vector<Expr> super_arguments;
     bool has_super = false;
     // init(parameters*) : super(arguments*) [block]
     if (match(Token::Type::COLON)) {
@@ -250,7 +241,7 @@ ConstructorStmt Parser::constructor_statement() {
         consume(Token::Type::LEFT_PAREN, "Expected '(' after superclass constructor call");
         if (!check(Token::Type::RIGHT_PAREN)) {
             do {
-                super_arguments.emplace_back(make_expr_handle(expression()));
+                super_arguments.emplace_back(expression());
             } while (match(Token::Type::COMMA));
         }
         consume(Token::Type::RIGHT_PAREN, "Expected ')' after superclass constructor call arguments.");
@@ -261,7 +252,7 @@ ConstructorStmt Parser::constructor_statement() {
             .parameters = parameters,
             .has_super = has_super,
             .super_arguments = std::move(super_arguments),
-            .body = make_expr_handle(block())
+            .body = block()
         };
 }
 
@@ -279,23 +270,23 @@ FunctionStmt Parser::abstract_method(Token name, bool skip_params) {
         consume(Token::Type::RIGHT_PAREN, "Expected ')' after function parameters");
     }
     consume(Token::Type::SEMICOLON, "Expected ';' after abstract function declaration");
-    return FunctionStmt { .name = name, .params = std::move(parameters), .body = nullptr };
+    return FunctionStmt { .name = name, .params = std::move(parameters), .body = {} };
 }
 
 VarStmt Parser::abstract_field(Token name) {
     Expr expr = match(Token::Type::EQUAL) ? expression() : LiteralExpr { nil_t };
     consume(Token::Type::SEMICOLON, "Expected ';' after variable declaration.");
-    return VarStmt { .name = name, .value = nullptr };
+    return VarStmt { .name = name, .value = {} };
 }
 
 // refactor: use across whole parser
-std::vector<ExprHandle> Parser::arguments_list() {
-    std::vector<ExprHandle> arguments;
+std::vector<Expr> Parser::arguments_list() {
+    std::vector<Expr> arguments;
     do {
-        arguments.emplace_back(make_expr_handle(expression()));
+        arguments.emplace_back(expression());
     } while (match(Token::Type::COMMA));
     consume(Token::Type::RIGHT_PAREN, "Expected ')' after arguments.");
-    return std::move(arguments);
+    return arguments;
 }
 
 bitflags<ClassAttributes> Parser::member_attributes(StructureType outer_type) {
@@ -382,12 +373,12 @@ Parser::StructureMembers Parser::structure_body(StructureType type) {
             advance();
             if (type == StructureType::OBJECT)
                 error(current, "Class objects cannot be defined inside of objects.");
-            members.class_object = make_expr_handle(object_expression());
+            members.class_object = object_expression();
             continue;
         }
         if (check(Token::Type::USING)) {
             advance();
-            members.using_statements.push_back(std::make_unique<UsingStmt>(using_statement()));
+            members.using_statements.push_back(using_statement());
             continue;
         }
         bitflags<ClassAttributes> attributes = member_attributes(type);
@@ -409,21 +400,12 @@ Parser::StructureMembers Parser::structure_body(StructureType type) {
                 attributes += ClassAttributes::ABSTRACT;
                 if (!check(Token::Type::SEMICOLON))
                     error(current, "Expected ';' after trait declared field.");
-                members.fields.push_back(
-                    std::make_unique<FieldStmt>(std::make_unique<VarStmt>(abstract_field(name)), attributes)
-                );
+                members.fields.emplace_back(abstract_field(name), attributes);
             } else {
                 if (attributes[ClassAttributes::ABSTRACT]) {
-                    members.fields.push_back(
-                        std::make_unique<FieldStmt>(std::make_unique<VarStmt>(abstract_field(name)), attributes)
-                    );
+                    members.fields.emplace_back(abstract_field(name), attributes);
                 } else {
-                    members.fields.push_back(
-                        std::make_unique<FieldStmt>(
-                            std::make_unique<VarStmt>(var_declaration_after_name(name)),
-                            attributes
-                        )
-                    );
+                    members.fields.emplace_back(var_declaration_after_name(name), attributes);
                 }
             }
         } else {
@@ -444,37 +426,20 @@ Parser::StructureMembers Parser::structure_body(StructureType type) {
                 if (check(Token::Type::SEMICOLON)) {
                     attributes += ClassAttributes::ABSTRACT;
                     advance();
-                    members.methods.push_back(
-                        std::make_unique<MethodStmt>(
-                            std::make_unique<FunctionStmt>(name, std::move(parameters), nullptr),
-                            attributes
-                        )
-                    );
+                    members.methods.emplace_back(FunctionStmt(name, std::move(parameters), {}), attributes);
                 } else {
                     consume(Token::Type::LEFT_BRACE, "Expected '{' before function body");
-                    members.methods.push_back(
-                        std::make_unique<MethodStmt>(
-                            std::make_unique<FunctionStmt>(name, std::move(parameters), make_expr_handle(block())),
-                            attributes
-                        )
-                    );
+                    members.methods.emplace_back(FunctionStmt(name, std::move(parameters), block()), attributes);
                 }
             } else {
                 if (attributes[ClassAttributes::ABSTRACT]) {
                     bool skip_params = attributes[ClassAttributes::GETTER];
-                    members.methods.push_back(
-                        std::make_unique<MethodStmt>(
-                            std::make_unique<FunctionStmt>(abstract_method(current, skip_params)),
-                            attributes
-                        )
-                    );
+                    members.methods.emplace_back(FunctionStmt(abstract_method(current, skip_params)), attributes);
                 } else {
                     bool skip_params = attributes[ClassAttributes::GETTER] && !check(Token::Type::LEFT_PAREN);
-                    members.methods.push_back(
-                        std::make_unique<MethodStmt>(
-                            std::make_unique<FunctionStmt>(function_declaration_after_name(current, skip_params)),
-                            attributes
-                        )
+                    members.methods.emplace_back(
+                        FunctionStmt(function_declaration_after_name(current, skip_params)),
+                        attributes
                     );
                 }
             }
@@ -486,7 +451,7 @@ Parser::StructureMembers Parser::structure_body(StructureType type) {
 ObjectExpr Parser::object_expression() {
     // superclass list
     std::optional<Token> superclass;
-    std::vector<ExprHandle> superclass_arguments;
+    std::vector<Expr> superclass_arguments;
     if (match(Token::Type::COLON)) {
         consume(Token::Type::IDENTIFIER, "Expected superclass name.");
         superclass = current;
@@ -534,7 +499,7 @@ Stmt Parser::class_declaration(bool is_abstract) {
 }
 
 Stmt Parser::expr_statement() {
-    Stmt stmt = ExprStmt { make_expr_handle(expression()) };
+    Stmt stmt = ExprStmt { expression() };
     consume(Token::Type::SEMICOLON, "Expected ';' after expression");
     return stmt;
 }
@@ -545,18 +510,18 @@ Expr Parser::if_expression() {
         error(current, "Expected '{' after 'if' condition.");
     }
     auto then_stmt = block();
-    ExprHandle else_stmt = nullptr;
+    std::optional<Expr> else_stmt = {};
     if (match(Token::Type::ELSE)) {
         if (match(Token::Type::IF)) {
-            else_stmt = make_expr_handle(if_expression());
+            else_stmt = if_expression();
         } else {
             consume(Token::Type::LEFT_BRACE, "Expected '{' after 'else' keyword.");
-            else_stmt = make_expr_handle(block());
+            else_stmt = block();
         }
     }
     return IfExpr {
-            .condition = make_expr_handle(std::move(condition)),
-            .then_expr = make_expr_handle(std::move(then_stmt)),
+            .condition = std::move(condition),
+            .then_expr = std::move(then_stmt),
             .else_expr = std::move(else_stmt)
         };
 }
@@ -612,7 +577,8 @@ Expr Parser::expression(const Precedence precedence) {
     auto left = prefix();
     if (!left) {
         error(current, "Expected expression.");
-        return {};
+        // TODO: recover!!!
+        //return {};
     }
     while (precedence < get_precendece(next.type)) {
         advance();
@@ -665,19 +631,19 @@ bool starts_block_expression(Token::Type type) {
 }
 
 Expr Parser::block(std::optional<Token> label) {
-    std::vector<StmtHandle> stmts;
-    ExprHandle expr_at_end = nullptr;
+    std::vector<Stmt> stmts;
+    std::optional<Expr> expr_at_end = {};
     while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
         if (auto stmt = statement()) {
-            stmts.push_back(std::make_unique<Stmt>(std::move(*stmt)));
+            stmts.push_back(std::move(*stmt));
         } else {
             bool is_block_expression = starts_block_expression(next.type);
             auto expr = expression();
             if (match(Token::Type::SEMICOLON) || (is_block_expression && (!check(Token::Type::RIGHT_BRACE) || current.
                 type == Token::Type::SEMICOLON))) {
-                stmts.push_back(std::make_unique<Stmt>(ExprStmt(std::make_unique<Expr>(std::move(expr)))));
+                stmts.push_back(ExprStmt(std::move(expr)));
             } else {
-                expr_at_end = std::make_unique<Expr>(std::move(expr));
+                expr_at_end = std::move(expr);
                 break;
             }
         }
@@ -688,7 +654,7 @@ Expr Parser::block(std::optional<Token> label) {
 
 Expr Parser::loop_expression(std::optional<Token> label) {
     consume(Token::Type::LEFT_BRACE, "Expected '{' after loop keyword.");
-    return LoopExpr(make_expr_handle(block()), label);
+    return LoopExpr(block(), label);
 }
 
 Expr Parser::break_expression() {
@@ -697,9 +663,9 @@ Expr Parser::break_expression() {
         label = current;
     }
     if (!has_prefix(next.type)) {
-        return BreakExpr { .label = label };
+        return BreakExpr { .expr = {}, .label = label };
     }
-    return BreakExpr { make_expr_handle(expression()), label };
+    return BreakExpr { .expr = expression(), .label = label };
 }
 
 Expr Parser::continue_expression() {
@@ -715,7 +681,7 @@ Expr Parser::while_expression(std::optional<Token> label) {
         error(current, "Expected '{' after while loop condition");
     }
     auto body = block();
-    return WhileExpr(make_expr_handle(std::move(condition)), make_expr_handle(std::move(body)), label);
+    return WhileExpr(std::move(condition), std::move(body), label);
 }
 
 Expr Parser::labeled_expression() {
@@ -735,7 +701,8 @@ Expr Parser::labeled_expression() {
         return block(label);
     }
     error(label, "Only loops and blocks can be labeled.");
-    return {};
+    // TODO: recover!
+    // return {};
 }
 
 
@@ -810,12 +777,12 @@ Expr Parser::grouping() {
 }
 
 Expr Parser::unary(Token::Type operator_type) {
-    return UnaryExpr { .expr = make_expr_handle(expression(Precedence::UNARY)), .op = operator_type };
+    return UnaryExpr { .expr = expression(Precedence::UNARY), .op = operator_type };
 }
 
 Expr Parser::dot(Expr left) {
     consume(Token::Type::IDENTIFIER, "Expected property name after '.'");
-    return GetPropertyExpr { .left = make_expr_handle(std::move(left)), .property = current };
+    return GetPropertyExpr { .left = std::move(left), .property = current };
 }
 
 Expr Parser::infix(Expr left) {
@@ -858,8 +825,8 @@ Expr Parser::infix(Expr left) {
 }
 
 Expr Parser::binary(Expr left, bool expect_lvalue) {
-    if (expect_lvalue && !std::holds_alternative<VariableExpr>(left) && !std::holds_alternative<GetPropertyExpr>(left)
-        && !std::holds_alternative<SuperExpr>(left)) {
+    if (expect_lvalue && !std::holds_alternative<bite::box<VariableExpr>>(left) && !std::holds_alternative<bite::box<
+        GetPropertyExpr>>(left) && !std::holds_alternative<bite::box<SuperExpr>>(left)) {
         error(current, "Expected lvalue as left hand side of an binary expression.");
     }
     Token::Type op = current.type;
@@ -868,16 +835,16 @@ Expr Parser::binary(Expr left, bool expect_lvalue) {
     if (precedence == Precedence::ASSIGMENT) {
         precedence = static_cast<Precedence>(static_cast<int>(precedence) - 1);
     }
-    return BinaryExpr { make_expr_handle(std::move(left)), make_expr_handle(expression(precedence)), op };
+    return BinaryExpr { std::move(left), expression(precedence), op };
 }
 
 Expr Parser::call(Expr left) {
-    std::vector<ExprHandle> arguments;
+    std::vector<Expr> arguments;
     if (!check(Token::Type::RIGHT_PAREN)) {
         do {
-            arguments.push_back(make_expr_handle(expression()));
+            arguments.push_back(expression());
         } while (match(Token::Type::COMMA));
     }
     consume(Token::Type::RIGHT_PAREN, "Expected ')' after call arguments.");
-    return CallExpr { .callee = make_expr_handle(std::move(left)), .arguments = std::move(arguments) };
+    return CallExpr { .callee = std::move(left), .arguments = std::move(arguments) };
 }

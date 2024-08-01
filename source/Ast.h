@@ -98,14 +98,14 @@ struct SuperExpr {
 
 struct BlockExpr {
     std::vector<Stmt> stmts;
-    Expr expr;
+    std::optional<Expr> expr;
     std::optional<Token> label;
 };
 
 struct IfExpr {
     Expr condition;
     Expr then_expr;
-    Expr else_expr;
+    std::optional<Expr> else_expr;
 };
 
 struct LoopExpr {
@@ -120,7 +120,7 @@ struct WhileExpr {
 };
 
 struct BreakExpr {
-    Expr expr;
+    std::optional<Expr> expr;
     std::optional<Token> label;
 };
 
@@ -136,7 +136,7 @@ struct ForExpr {
 };
 
 struct ReturnExpr {
-    Expr value;
+    std::optional<Expr> value;
 };
 
 
@@ -153,12 +153,12 @@ struct ObjectExpr {
 struct FunctionStmt {
     Token name;
     std::vector<Token> params;
-    Expr body;
+    std::optional<Expr> body;
 };
 
 struct VarStmt {
     Token name;
-    Expr value;
+    std::optional<Expr> value;
 };
 
 struct ExprStmt {
@@ -180,7 +180,7 @@ struct ClassStmt {
     std::unique_ptr<ConstructorStmt> constructor;
     std::vector<MethodStmt> methods;
     std::vector<FieldStmt> fields;
-    Expr class_object;
+    std::optional<Expr> class_object;
     std::optional<Token> super_class;
     bool is_abstract = false;
     std::vector<UsingStmt> using_statements;

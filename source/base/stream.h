@@ -35,7 +35,7 @@ namespace bite {
 
         template <class Self>
         bool match(this Self&& self, T c) {
-            if (self.check()) {
+            if (self.check(c)) {
                 self.advance();
                 return true;
             }

@@ -72,7 +72,7 @@ void Compiler::Context::close_upvalue(int index) {
 }
 
 void Compiler::compile() {
-    for (auto& stmt : parser.parse()) {
+    for (auto& stmt : parser.parse().statements) {
         for (auto& err : parser.get_errors()) {
             std::cerr << err.message << '\n';
         }
@@ -259,17 +259,17 @@ Compiler::Context::Resolution Compiler::resolve_upvalue(const std::string& name)
 void Compiler::visit_stmt(const Stmt& statement) {
     std::visit(
         overloaded {
-            [this](const VarStmt& stmt) { variable_declaration(stmt); },
-            [this](const FunctionStmt& stmt) { function_declaration(stmt); },
-            [this](const ExprStmt& stmt) { expr_statement(stmt); },
-            [this](const ClassStmt& stmt) { class_declaration(stmt); },
-            [this](const NativeStmt& stmt) { native_declaration(stmt); },
-            [this](const ObjectStmt& stmt) { object_statement(stmt); },
-            [this](const TraitStmt& stmt) { trait_statement(stmt); },
-            [this](const MethodStmt&) { assert("unreachable"); },
-            [this](const FieldStmt&) { assert("unreachable"); },
-            [this](const ConstructorStmt&) { assert("unreachable"); },
-            [this](const UsingStmt&) {}
+            [this](const bite::box<VarStmt>& stmt) { variable_declaration(*stmt); },
+            [this](const bite::box<FunctionStmt>& stmt) { function_declaration(*stmt); },
+            [this](const bite::box<ExprStmt>& stmt) { expr_statement(*stmt); },
+            [this](const bite::box<ClassStmt>& stmt) { class_declaration(*stmt); },
+            [this](const bite::box<NativeStmt>& stmt) { native_declaration(*stmt); },
+            [this](const bite::box<ObjectStmt>& stmt) { object_statement(*stmt); },
+            [this](const bite::box<TraitStmt>& stmt) { trait_statement(*stmt); },
+            [this](const bite::box<MethodStmt>&) { assert("unreachable"); },
+            [this](const bite::box<FieldStmt>&) { assert("unreachable"); },
+            [this](const bite::box<ConstructorStmt>&) { assert("unreachable"); },
+            [this](const bite::box<UsingStmt>&) {}
         },
         statement
     );
@@ -303,7 +303,7 @@ void Compiler::block(const BlockExpr& expr) {
     define_variable("$scope_return");
     current_scope().return_slot = *current_scope().get("$scope_return");
     for (auto& stmt : expr.stmts) {
-        visit_stmt(*stmt);
+        visit_stmt(stmt);
     }
     if (expr.expr) {
         visit_expr(*expr.expr);
@@ -328,7 +328,7 @@ void Compiler::loop_expression(const LoopExpr& expr) {
     int break_idx = current_function()->add_empty_jump_destination();
     current_scope().continue_idx = continue_idx;
     current_scope().break_idx = break_idx;
-    visit_expr(*expr.body);
+    visit_expr(expr.body);
     // ignore body expression result
     emit(OpCode::POP);
     current_scope().pop_temporary();
@@ -354,11 +354,11 @@ void Compiler::while_expr(const WhileExpr& expr) {
     current_scope().continue_idx = continue_idx;
     current_scope().break_idx = break_idx;
 
-    visit_expr(*expr.condition);
+    visit_expr(expr.condition);
     emit(OpCode::JUMP_IF_FALSE, end_idx);
     emit(OpCode::POP); // pop evaluation condition result
     current_scope().pop_temporary();
-    visit_expr(*expr.body);
+    visit_expr(expr.body);
     // ignore block expression result
     emit(OpCode::POP);
     current_scope().pop_temporary();
@@ -376,7 +376,7 @@ void Compiler::for_expr(const ForExpr& expr) {
     emit(OpCode::NIL);
     define_variable("$scope_return");
     // begin define iterator
-    visit_expr(*expr.iterable);
+    visit_expr(expr.iterable);
     int iterator_constant = current_function()->add_constant("iterator");
     emit(OpCode::GET_PROPERTY, iterator_constant);
     emit(OpCode::CALL, 0);
@@ -416,7 +416,7 @@ void Compiler::for_expr(const ForExpr& expr) {
     current_scope().pop_temporary();
     // end item
 
-    visit_expr(*expr.body);
+    visit_expr(expr.body);
     // ignore block expression result
     emit(OpCode::POP);
     current_scope().pop_temporary();
@@ -512,7 +512,7 @@ void Compiler::function(const FunctionStmt& stmt, FunctionType type) {
 
 void Compiler::constructor(
     const ConstructorStmt& stmt,
-    const std::vector<std::unique_ptr<FieldStmt>>& fields,
+    const std::vector<FieldStmt>& fields,
     bool has_superclass,
     int superclass_arguments_count
 ) {
@@ -533,8 +533,8 @@ void Compiler::constructor(
         if (!has_superclass) {
             assert(false && "No superclass to be constructed");
         }
-        for (const ExprHandle& expr : stmt.super_arguments) {
-            visit_expr(*expr);
+        for (const Expr& expr : stmt.super_arguments) {
+            visit_expr(expr);
         }
         // maybe better way to do this instead of this superinstruction?
         emit(OpCode::CALL_SUPER_CONSTRUCTOR, stmt.super_arguments.size());
@@ -553,16 +553,16 @@ void Compiler::constructor(
     // default initialize fields
     for (auto& field : fields) {
         // ast builder
-        if (field->attributes[ClassAttributes::ABSTRACT])
+        if (field.attributes[ClassAttributes::ABSTRACT])
             continue;
-        visit_expr(*field->variable->value);
+        visit_expr(*field.variable.value);
         emit(OpCode::THIS);
-        int property_name = current_function()->add_constant(*field->variable->name.string);
+        int property_name = current_function()->add_constant(*field.variable.name.string);
         emit(OpCode::SET_PROPERTY, property_name);
         emit(OpCode::POP); // pop value;
     }
 
-    visit_expr(*stmt.body);
+    visit_expr(stmt.body);
     emit_default_return();
     end_scope();
 
@@ -580,7 +580,7 @@ void Compiler::constructor(
     }
 }
 
-void Compiler::default_constructor(const std::vector<std::unique_ptr<FieldStmt>>& fields, bool has_superclass) {
+void Compiler::default_constructor(const std::vector<FieldStmt>& fields, bool has_superclass) {
     // TODO: ideally in future default constructor has just default parameters!
     auto* function = new Function("constructor", 0);
     functions.push_back(function);
@@ -597,11 +597,11 @@ void Compiler::default_constructor(const std::vector<std::unique_ptr<FieldStmt>>
     // default initialize fields
     for (auto& field : fields) {
         // ast builder
-        if (field->attributes[ClassAttributes::ABSTRACT])
+        if (field.attributes[ClassAttributes::ABSTRACT])
             continue;
-        visit_expr(*field->variable->value);
+        visit_expr(*field.variable.value);
         emit(OpCode::THIS);
-        int property_name = current_function()->add_constant(*field->variable->name.string);
+        int property_name = current_function()->add_constant(*field.variable.name.string);
         emit(OpCode::SET_PROPERTY, property_name);
         emit(OpCode::POP); // pop value;
     }
@@ -629,9 +629,9 @@ void Compiler::default_constructor(const std::vector<std::unique_ptr<FieldStmt>>
 void Compiler::class_core(
     int class_slot,
     std::optional<Token> super_class,
-    const std::vector<std::unique_ptr<MethodStmt>>& methods,
-    const std::vector<std::unique_ptr<FieldStmt>>& fields,
-    const std::vector<std::unique_ptr<UsingStmt>>& using_stmts,
+    const std::vector<MethodStmt>& methods,
+    const std::vector<FieldStmt>& fields,
+    const std::vector<UsingStmt>& using_stmts,
     bool is_abstract
 ) {
     if (super_class) {
@@ -661,7 +661,7 @@ void Compiler::class_core(
     std::unordered_set<std::string> requirements;
     // Traits!
     for (auto& stmt : using_stmts) {
-        for (auto& item : stmt->items) {
+        for (auto& item : stmt.items) {
             std::string item_name = *item.name.string;
 
             auto trait_fields = current_context().resolved_classes[item_name].fields;
@@ -745,10 +745,10 @@ void Compiler::class_core(
     // TODO: should all be moved to some sort of resolving step
     // TODO: should check for invalid attributes combinations
     for (auto& field : fields) {
-        std::string field_name = *field->variable->name.string;
+        std::string field_name = *field.variable.name.string;
         int idx = current_function()->add_constant(field_name);
         emit(OpCode::FIELD, idx);
-        emit(field->attributes.to_ullong()); // size check?
+        emit(field.attributes.to_ullong()); // size check?
         if (member_declarations.contains(field_name)) {
             assert(false && "Member redeclaration is disallowed.");
         }
@@ -757,26 +757,26 @@ void Compiler::class_core(
             // if field is already declared in current scope then it comes from superclass
             should_override = true;
         }
-        if (should_override && !field->attributes[ClassAttributes::OVERRIDE]) {
+        if (should_override && !field.attributes[ClassAttributes::OVERRIDE]) {
             assert(false && "override attribute expected");
         }
-        if (!should_override && field->attributes[ClassAttributes::OVERRIDE]) {
+        if (!should_override && field.attributes[ClassAttributes::OVERRIDE]) {
             assert(false && "no member to override.");
         }
-        member_declarations[field_name] = FieldInfo(field->attributes);
+        member_declarations[field_name] = FieldInfo(field.attributes);
     }
 
     // hoist methods
     for (auto& method : methods) {
         // TODO: much overlap with above loop
-        std::string method_name = *method->function->name.string;
+        std::string method_name = *method.function.name.string;
         bool already_partially_declared = false;
         if (member_declarations.contains(method_name)) {
             // special case for getters and setters methods
-            if (member_declarations[method_name].attributes[ClassAttributes::SETTER] && method->attributes[
+            if (member_declarations[method_name].attributes[ClassAttributes::SETTER] && method.attributes[
                 ClassAttributes::GETTER]) {
                 already_partially_declared = true;
-            } else if (member_declarations[method_name].attributes[ClassAttributes::GETTER] && method->attributes[
+            } else if (member_declarations[method_name].attributes[ClassAttributes::GETTER] && method.attributes[
                 ClassAttributes::SETTER]) {
                 already_partially_declared = true;
             } else {
@@ -790,23 +790,22 @@ void Compiler::class_core(
 
             // special case for getters and setters methods
             // TODO: mess
-            if ((!field_info.attributes[ClassAttributes::GETTER] && method->attributes[ClassAttributes::GETTER]) || (!
-                field_info.attributes[ClassAttributes::SETTER] && method->attributes[
-                    ClassAttributes::SETTER])) {} else {
+            if ((!field_info.attributes[ClassAttributes::GETTER] && method.attributes[ClassAttributes::GETTER]) || (!
+                field_info.attributes[ClassAttributes::SETTER] && method.attributes[ClassAttributes::SETTER])) {} else {
                 should_override = true;
             }
         }
-        if (should_override && !method->attributes[ClassAttributes::OVERRIDE]) {
+        if (should_override && !method.attributes[ClassAttributes::OVERRIDE]) {
             assert(false && "override attribute expected");
         }
-        if (!should_override && method->attributes[ClassAttributes::OVERRIDE]) {
+        if (!should_override && method.attributes[ClassAttributes::OVERRIDE]) {
             assert(false && "no member to override.");
         }
         // TODO: this does not allow mixing private and public setters and getters!
         if (!already_partially_declared) {
-            member_declarations[method_name] = FieldInfo(method->attributes);
+            member_declarations[method_name] = FieldInfo(method.attributes);
         } else {
-            member_declarations[method_name].attributes += method->attributes[ClassAttributes::GETTER]
+            member_declarations[method_name].attributes += method.attributes[ClassAttributes::GETTER]
                                                                ? ClassAttributes::GETTER
                                                                : ClassAttributes::SETTER;
         }
@@ -843,22 +842,22 @@ void Compiler::class_core(
     }
 
     for (auto& method : methods) {
-        std::string method_name = *method->function->name.string;
-        if (!method->attributes[ClassAttributes::ABSTRACT]) {
-            function(*method->function, FunctionType::METHOD);
+        std::string method_name = *method.function.name.string;
+        if (!method.attributes[ClassAttributes::ABSTRACT]) {
+            function(method.function, FunctionType::METHOD);
         }
         int idx = current_function()->add_constant(method_name);
         emit(OpCode::METHOD, idx);
-        emit(method->attributes.to_ullong()); // check size?
+        emit(method.attributes.to_ullong()); // check size?
         current_scope().pop_temporary();
     }
 }
 
 // overlaps
 void Compiler::object_constructor(
-    const std::vector<std::unique_ptr<FieldStmt>>& fields,
+    const std::vector<FieldStmt>& fields,
     bool has_superclass,
-    const std::vector<ExprHandle>& superclass_arguments
+    const std::vector<Expr>& superclass_arguments
 ) {
     auto* function = new Function("constructor", 0);
     functions.push_back(function);
@@ -867,8 +866,8 @@ void Compiler::object_constructor(
     current_scope().define(""); // reserve slot for receiver
 
     if (has_superclass) {
-        for (const ExprHandle& expr : superclass_arguments) {
-            visit_expr(*expr);
+        for (const Expr& expr : superclass_arguments) {
+            visit_expr(expr);
         }
         // maybe better way to do this instead of this superinstruction?
         emit(OpCode::CALL_SUPER_CONSTRUCTOR, superclass_arguments.size());
@@ -878,11 +877,11 @@ void Compiler::object_constructor(
     // default initialize fields
     for (auto& field : fields) {
         // ast builder
-        if (field->attributes[ClassAttributes::ABSTRACT])
+        if (field.attributes[ClassAttributes::ABSTRACT])
             continue;
-        visit_expr(*field->variable->value);
+        visit_expr(*field.variable.value);
         emit(OpCode::THIS);
-        int property_name = current_function()->add_constant(*field->variable->name.string);
+        int property_name = current_function()->add_constant(*field.variable.name.string);
         emit(OpCode::SET_PROPERTY, property_name);
         emit(OpCode::POP); // pop value;
     }
@@ -945,7 +944,7 @@ void Compiler::object_expression(const ObjectExpr& expr) {
 }
 
 void Compiler::object_statement(const ObjectStmt& stmt) {
-    visit_expr(*stmt.object);
+    visit_expr(stmt.object);
     current_scope().pop_temporary();
     define_variable(*stmt.name.string);
 }
@@ -965,7 +964,7 @@ void Compiler::trait_statement(const TraitStmt& stmt) {
     std::unordered_set<std::string> requirements;
     // Traits!
     for (auto& stmt : stmt.using_stmts) {
-        for (auto& item : stmt->items) {
+        for (auto& item : stmt.items) {
             std::string item_name = *item.name.string;
 
             auto trait_fields = current_context().resolved_classes[item_name].fields;
@@ -1014,22 +1013,22 @@ void Compiler::trait_statement(const TraitStmt& stmt) {
 
     // mess
     for (auto& field : stmt.fields) {
-        std::string field_name = *field->variable->name.string;
+        std::string field_name = *field.variable.name.string;
         if (current_scope().has_field(field_name)) {
             assert(false && "field redeclaration is disallowed.");
         }
-        current_scope().add_field(field_name, FieldInfo(field->attributes));
+        current_scope().add_field(field_name, FieldInfo(field.attributes));
     }
 
     // hoist methods
     for (auto& method : stmt.methods) {
-        std::string method_name = *method->function->name.string;
+        std::string method_name = *method.function.name.string;
         bool partially_defined = false;
         // TODO this allowes clashes with real methods???
         if (current_scope().has_field(method_name)) {
-            if ((!current_scope().get_fields()[method_name].attributes[ClassAttributes::SETTER] && method->attributes[
+            if ((!current_scope().get_fields()[method_name].attributes[ClassAttributes::SETTER] && method.attributes[
                 ClassAttributes::SETTER]) || (!current_scope().get_fields()[method_name].attributes[
-                ClassAttributes::GETTER] && method->attributes[ClassAttributes::GETTER])) {
+                ClassAttributes::GETTER] && method.attributes[ClassAttributes::GETTER])) {
                 partially_defined = true;
             } else {
                 assert(false && "member redeclaration is disallowed.");
@@ -1042,17 +1041,17 @@ void Compiler::trait_statement(const TraitStmt& stmt) {
                     ? ClassAttributes::SETTER
                     : ClassAttributes::GETTER;
         } else {
-            current_scope().add_field(method_name, FieldInfo(method->attributes));
+            current_scope().add_field(method_name, FieldInfo(method.attributes));
         }
     }
 
     for (auto& method : stmt.methods) {
-        if (!method->attributes[ClassAttributes::ABSTRACT]) {
-            function(*method->function, FunctionType::METHOD);
+        if (!method.attributes[ClassAttributes::ABSTRACT]) {
+            function(method.function, FunctionType::METHOD);
         }
-        int method_name_constant = current_function()->add_constant(*method->function->name.string);
+        int method_name_constant = current_function()->add_constant(*method.function.name.string);
         emit(OpCode::TRAIT_METHOD, method_name_constant);
-        emit(method->attributes.to_ullong()); // check!
+        emit(method.attributes.to_ullong()); // check!
     }
 
     // shadowing requierments?
@@ -1137,14 +1136,14 @@ void Compiler::class_declaration(const ClassStmt& stmt) {
 }
 
 void Compiler::expr_statement(const ExprStmt& stmt) {
-    visit_expr(*stmt.expr);
+    visit_expr(stmt.expr);
 
     emit(OpCode::POP);
     current_scope().pop_temporary();
 }
 
 void Compiler::retrun_expression(const ReturnExpr& stmt) {
-    if (stmt.value != nullptr) {
+    if (stmt.value) {
         visit_expr(*stmt.value);
     } else {
         emit(OpCode::NIL);
@@ -1156,12 +1155,12 @@ void Compiler::retrun_expression(const ReturnExpr& stmt) {
 }
 
 void Compiler::if_expression(const IfExpr& stmt) {
-    visit_expr(*stmt.condition);
+    visit_expr(stmt.condition);
     int jump_to_else = current_function()->add_empty_jump_destination();
     emit(OpCode::JUMP_IF_FALSE, jump_to_else);
     emit(OpCode::POP);
     current_scope().pop_temporary();
-    visit_expr(*stmt.then_expr);
+    visit_expr(stmt.then_expr);
     auto jump_to_end = current_function()->add_empty_jump_destination();
     emit(OpCode::JUMP, jump_to_end);
     current_function()->patch_jump_destination(jump_to_else, current_program().size());
@@ -1178,24 +1177,24 @@ void Compiler::if_expression(const IfExpr& stmt) {
 void Compiler::visit_expr(const Expr& expression) {
     std::visit(
         overloaded {
-            [this](const LiteralExpr& expr) { literal(expr); },
-            [this](const UnaryExpr& expr) { unary(expr); },
-            [this](const BinaryExpr& expr) { binary(expr); },
-            [this](const StringLiteral& expr) { string_literal(expr); },
-            [this](const VariableExpr& expr) { variable(expr); },
-            [this](const CallExpr& expr) { call(expr); },
-            [this](const GetPropertyExpr& expr) { get_property(expr); },
-            [this](const SuperExpr& expr) { super(expr); },
-            [this](const BlockExpr& expr) { block(expr); },
-            [this](const IfExpr& expr) { if_expression(expr); },
-            [this](const LoopExpr& expr) { loop_expression(expr); },
-            [this](const BreakExpr& expr) { break_expr(expr); },
-            [this](const ContinueExpr& expr) { continue_expr(expr); },
-            [this](const WhileExpr& expr) { while_expr(expr); },
-            [this](const ForExpr& expr) { for_expr(expr); },
-            [this](const ReturnExpr& expr) { retrun_expression(expr); },
-            [this](const ThisExpr& expr) { this_expr(); },
-            [this](const ObjectExpr& expr) { object_expression(expr); }
+            [this](const bite::box<LiteralExpr>& expr) { literal(*expr); },
+            [this](const bite::box<UnaryExpr>& expr) { unary(*expr); },
+            [this](const bite::box<BinaryExpr>& expr) { binary(*expr); },
+            [this](const bite::box<StringLiteral>& expr) { string_literal(*expr); },
+            [this](const bite::box<VariableExpr>& expr) { variable(*expr); },
+            [this](const bite::box<CallExpr>& expr) { call(*expr); },
+            [this](const bite::box<GetPropertyExpr>& expr) { get_property(*expr); },
+            [this](const bite::box<SuperExpr>& expr) { super(*expr); },
+            [this](const bite::box<BlockExpr>& expr) { block(*expr); },
+            [this](const bite::box<IfExpr>& expr) { if_expression(*expr); },
+            [this](const bite::box<LoopExpr>& expr) { loop_expression(*expr); },
+            [this](const bite::box<BreakExpr>& expr) { break_expr(*expr); },
+            [this](const bite::box<ContinueExpr>& expr) { continue_expr(*expr); },
+            [this](const bite::box<WhileExpr>& expr) { while_expr(*expr); },
+            [this](const bite::box<ForExpr>& expr) { for_expr(*expr); },
+            [this](const bite::box<ReturnExpr>& expr) { retrun_expression(*expr); },
+            [this](const bite::box<ThisExpr>& expr) { this_expr(); },
+            [this](const bite::box<ObjectExpr>& expr) { object_expression(*expr); }
         },
         expression
     );
@@ -1216,7 +1215,7 @@ void Compiler::string_literal(const StringLiteral& expr) {
 }
 
 void Compiler::unary(const UnaryExpr& expr) {
-    visit_expr(*expr.expr);
+    visit_expr(expr.expr);
     switch (expr.op) {
         case Token::Type::MINUS: emit(OpCode::NEGATE);
             break;
@@ -1231,13 +1230,13 @@ void Compiler::unary(const UnaryExpr& expr) {
 void Compiler::binary(const BinaryExpr& expr) {
     // we don't need to actually visit lhs for plain assigment
     if (expr.op == Token::Type::EQUAL) {
-        visit_expr(*expr.right);
-        update_lvalue(*expr.left);
+        visit_expr(expr.right);
+        update_lvalue(expr.left);
         current_scope().pop_temporary();
         return;
     }
 
-    visit_expr(*expr.left);
+    visit_expr(expr.left);
     // we need handle logical expressions before we execute right side as they can short circut
     if (expr.op == Token::Type::AND_AND || expr.op == Token::Type::BAR_BAR) {
         logical(expr);
@@ -1245,7 +1244,7 @@ void Compiler::binary(const BinaryExpr& expr) {
         return;
     }
 
-    visit_expr(*expr.right);
+    visit_expr(expr.right);
     switch (expr.op) {
         case Token::Type::PLUS: emit(OpCode::ADD);
             break;
@@ -1282,37 +1281,37 @@ void Compiler::binary(const BinaryExpr& expr) {
         case Token::Type::SLASH_SLASH: emit(OpCode::FLOOR_DIVISON);
             break;
         case Token::Type::PLUS_EQUAL: emit(OpCode::ADD);
-            update_lvalue(*expr.left);
+            update_lvalue(expr.left);
             break;
         case Token::Type::MINUS_EQUAL: emit(OpCode::SUBTRACT);
-            update_lvalue(*expr.left);
+            update_lvalue(expr.left);
             break;
         case Token::Type::STAR_EQUAL: emit(OpCode::MULTIPLY);
-            update_lvalue(*expr.left);
+            update_lvalue(expr.left);
             break;
         case Token::Type::SLASH_EQUAL: emit(OpCode::DIVIDE);
-            update_lvalue(*expr.left);
+            update_lvalue(expr.left);
             break;
         case Token::Type::SLASH_SLASH_EQUAL: emit(OpCode::FLOOR_DIVISON);
-            update_lvalue(*expr.left);
+            update_lvalue(expr.left);
             break;
         case Token::Type::PERCENT_EQUAL: emit(OpCode::MODULO);
-            update_lvalue(*expr.left);
+            update_lvalue(expr.left);
             break;
         case Token::Type::LESS_LESS_EQUAL: emit(OpCode::LEFT_SHIFT);
-            update_lvalue(*expr.left);
+            update_lvalue(expr.left);
             break;
         case Token::Type::GREATER_GREATER_EQUAL: emit(OpCode::RIGHT_SHIFT);
-            update_lvalue(*expr.left);
+            update_lvalue(expr.left);
             break;
         case Token::Type::AND_EQUAL: emit(OpCode::BITWISE_AND);
-            update_lvalue(*expr.left);
+            update_lvalue(expr.left);
             break;
         case Token::Type::CARET_EQUAL: emit(OpCode::BITWISE_XOR);
-            update_lvalue(*expr.left);
+            update_lvalue(expr.left);
             break;
         case Token::Type::BAR_EQUAL: emit(OpCode::BITWISE_OR);
-            update_lvalue(*expr.left);
+            update_lvalue(expr.left);
             break;
         default: assert("unreachable");
     }
@@ -1321,8 +1320,8 @@ void Compiler::binary(const BinaryExpr& expr) {
 
 // TODO: total mess and loads of overlap with Compiler::resolve_variable
 void Compiler::update_lvalue(const Expr& lvalue) {
-    if (std::holds_alternative<VariableExpr>(lvalue)) {
-        std::string name = *std::get<VariableExpr>(lvalue).identifier.string;
+    if (std::holds_alternative<bite::box<VariableExpr>>(lvalue)) {
+        std::string name = *std::get<bite::box<VariableExpr>>(lvalue)->identifier.string;
         auto resolution = current_context().resolve_variable(name);
         if (std::holds_alternative<Context::LocalResolution>(resolution)) {
             emit(OpCode::SET, std::get<Context::LocalResolution>(resolution).slot); // todo: handle overflow
@@ -1341,15 +1340,15 @@ void Compiler::update_lvalue(const Expr& lvalue) {
                 emit(OpCode::SET_PROPERTY, current_function()->add_constant(name));
             }
         }
-    } else if (std::holds_alternative<GetPropertyExpr>(lvalue)) {
-        const auto& property_expr = std::get<GetPropertyExpr>(lvalue);
-        std::string name = *property_expr.property.string;
+    } else if (std::holds_alternative<bite::box<GetPropertyExpr>>(lvalue)) {
+        const auto& property_expr = std::get<bite::box<GetPropertyExpr>>(lvalue);
+        std::string name = *property_expr->property.string;
         int constant = current_function()->add_constant(name);
-        visit_expr(*property_expr.left);
+        visit_expr(property_expr->left);
         emit(OpCode::SET_PROPERTY, constant);
-    } else if (std::holds_alternative<SuperExpr>(lvalue)) {
-        const auto& super_expr = std::get<SuperExpr>(lvalue);
-        int constant = current_function()->add_constant(*super_expr.method.string);
+    } else if (std::holds_alternative<bite::box<SuperExpr>>(lvalue)) {
+        const auto& super_expr = std::get<bite::box<SuperExpr>>(lvalue);
+        int constant = current_function()->add_constant(*super_expr->method.string);
         emit(OpCode::THIS);
         emit(OpCode::SET_SUPER, constant);
     } else {
@@ -1366,21 +1365,21 @@ void Compiler::logical(const BinaryExpr& expr) {
     int jump = current_function()->add_empty_jump_destination();
     emit(expr.op == Token::Type::AND_AND ? OpCode::JUMP_IF_FALSE : OpCode::JUMP_IF_TRUE, jump);
     emit(OpCode::POP);
-    visit_expr(*expr.right);
+    visit_expr(expr.right);
     current_function()->patch_jump_destination(jump, current_program().size());
 }
 
 void Compiler::call(const CallExpr& expr) {
-    visit_expr(*expr.callee);
-    for (const ExprHandle& argument : expr.arguments) {
-        visit_expr(*argument);
+    visit_expr(expr.callee);
+    for (const Expr& argument : expr.arguments) {
+        visit_expr(argument);
     }
     current_scope().pop_temporary(expr.arguments.size());
     emit(OpCode::CALL, expr.arguments.size()); // TODO: check
 }
 
 void Compiler::get_property(const GetPropertyExpr& expr) {
-    visit_expr(*expr.left);
+    visit_expr(expr.left);
     std::string name = *expr.property.string;
     int constant = current_function()->add_constant(name);
     emit(OpCode::GET_PROPERTY, constant);

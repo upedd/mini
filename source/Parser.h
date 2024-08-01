@@ -31,7 +31,7 @@ public:
 
     explicit Parser(bite::file_input_stream&& stream, SharedContext* context) : lexer(std::move(stream), context) {}
 
-    std::unique_ptr<Ast> parse();
+    Ast parse();
 
 private:
     bool panic_mode = false;
@@ -46,9 +46,9 @@ private:
     void consume(Token::Type type, std::string_view message);
 
 
-    std::unique_ptr<Stmt> statement_or_expression();
+    Stmt statement_or_expression();
 
-    std::unique_ptr<Stmt> native_declaration();
+    Stmt native_declaration();
 
     Expr for_expression(std::optional<Token> label = {});
 
@@ -73,7 +73,7 @@ private:
 
     VarStmt abstract_field(Token name);
 
-    std::vector<ExprHandle> arguments_list();
+    std::vector<Expr> arguments_list();
 
 
     Stmt class_declaration(bool is_abstract = false);
@@ -133,11 +133,11 @@ private:
     };
 
     struct StructureMembers {
-        std::vector<std::unique_ptr<MethodStmt>> methods;
-        std::vector<std::unique_ptr<FieldStmt>> fields;
+        std::vector<MethodStmt> methods;
+        std::vector<FieldStmt> fields;
         std::unique_ptr<ConstructorStmt> constructor;
-        ExprHandle class_object;
-        std::vector<std::unique_ptr<UsingStmt>> using_statements;
+        std::optional<Expr> class_object;
+        std::vector<UsingStmt> using_statements;
     };
 
     UsingStmt using_statement();

@@ -14,6 +14,7 @@ namespace bite {
         std::unique_ptr<T> ptr;
 
     public:
+        // box() : ptr(nullptr) {}
         box(T&& value) : ptr(new T(std::move(value))) {}
         box(const T& value) : ptr(new T(value)) {}
 
@@ -34,6 +35,8 @@ namespace bite {
 
         box(box&& other) noexcept = default;
         box& operator=(box&& other) noexcept = default;
+
+        //[[nodiscard]] bool is_empty() const { return ptr == nullptr; }
     };
 }
 #endif //BOX_H

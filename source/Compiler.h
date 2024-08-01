@@ -167,9 +167,9 @@ public:
     void this_expr();
 
     void object_constructor(
-        const std::vector<std::unique_ptr<FieldStmt>>& fields,
+        const std::vector<FieldStmt>& fields,
         bool has_superclass,
-        const std::vector<ExprHandle>& superclass_arguments
+        const std::vector<Expr>& superclass_arguments
     );
 
     void object_expression(const ObjectExpr& expr);
@@ -208,21 +208,21 @@ private:
 
     void constructor(
         const ConstructorStmt& stmt,
-        const std::vector<std::unique_ptr<FieldStmt>>& fields,
+        const std::vector<FieldStmt>& fields,
         bool has_superclass,
         int superclass_arguments_count
     );
 
-    void default_constructor(const std::vector<std::unique_ptr<FieldStmt>>& fields, bool has_superclass);
+    void default_constructor(const std::vector<FieldStmt>& fields, bool has_superclass);
 
     void using_core(const std::vector<std::unique_ptr<UsingStmt>>& using_stmts);
 
     void class_core(
         int class_slot,
         std::optional<Token> super_class,
-        const std::vector<std::unique_ptr<MethodStmt>>& methods,
-        const std::vector<std::unique_ptr<FieldStmt>>& fields,
-        const std::vector<std::unique_ptr<UsingStmt>>& using_stmts,
+        const std::vector<MethodStmt>& methods,
+        const std::vector<FieldStmt>& fields,
+        const std::vector<UsingStmt>& using_stmts,
         bool is_abstract
     );
 
