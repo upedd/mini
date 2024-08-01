@@ -9,12 +9,12 @@ namespace bite {
 
     template <typename T>
     struct LogPrinter {
-        void operator ()(const T& value, Logger*);
+        void operator ()(const T& value, Logger* /*logger*/);
     };
 
     class Logger {
     public:
-        enum class Level {
+        enum class Level : std::uint8_t {
             debug,
             info,
             warn,
@@ -36,8 +36,9 @@ namespace bite {
 
         template <typename... Args>
         void log(const Level level, std::format_string<Args...> string, Args&&... args) {
-            if (level < log_level)
+            if (level < log_level) {
                 return;
+            }
             // refactor?
             if (is_terminal_output()) {
                 bite::println(
@@ -59,8 +60,9 @@ namespace bite {
 
         template <typename T> // add concept
         void log(const Level level, const T& value) {
-            if (level < log_level)
+            if (level < log_level) {
                 return;
+            }
             LogPrinter<T>()(value, this);
         }
 
@@ -111,7 +113,7 @@ namespace bite {
 
         bool m_is_terminal_output;
         Level log_level;
-        std::ostream& ostream;
+        std::ostream& ostream; // NOLINT(*-avoid-const-or-ref-data-members)
     };
 
     inline std::strong_ordering operator<=>(Logger::Level& lhs, Logger::Level& rhs) {
@@ -122,6 +124,6 @@ namespace bite {
     void LogPrinter<T>::operator()(const T& value, Logger* logger) {
         logger->log(Logger::Level::info, "{}", value);
     }
-}
+}  // namespace bite
 
 #endif //LOGGER_H

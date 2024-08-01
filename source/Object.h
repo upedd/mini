@@ -27,8 +27,7 @@ public:
 class Function final : public Object {
 public:
     Function(std::string name, const int arity) : name(std::move(name)),
-                                                  arity(arity),
-                                                  upvalue_count(0) {}
+                                                  arity(arity) {}
 
     Program& get_program() { return program; }
     [[nodiscard]] int get_arity() const { return arity; }
@@ -64,7 +63,7 @@ public:
 
     void add_allocated(Object* object);
 
-    const std::vector<Object*> get_allocated();
+    const std::vector<Object*>& get_allocated();
 
     std::size_t get_size() override {
         return sizeof(Function);
@@ -93,7 +92,7 @@ private:
     Program program; // code of function
     std::vector<Value> constants;
     std::vector<uint32_t> jump_table;
-    int upvalue_count;
+    int upvalue_count{0};
 };
 
 class NativeFunction final : public Object {
@@ -305,8 +304,10 @@ public:
     }
 
     std::optional<Instance*> get_super() {
-        if (super_instances.empty())
+        if (super_instances.empty()) {
             return {};
+        }
+
         return super_instances[0];
     }
 
@@ -325,7 +326,7 @@ public:
     }
 
     std::string to_string() override {
-        return std::string("<trait>"); // TODO: implement
+        return { "<trait>" }; // TODO: implement
     }
 
     void mark_references(GarbageCollector& gc) override {

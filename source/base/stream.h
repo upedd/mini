@@ -66,7 +66,7 @@ namespace bite {
             return file.eof();
         }
 
-        [[nodiscard]] char get(std::size_t) {
+        [[nodiscard]] char get(std::size_t /*unused*/) {
             return static_cast<char>(file.get()); // safe?
         }
 
@@ -82,5 +82,5 @@ namespace bite {
         std::string path;
         std::ifstream file;
     };
-}
+}  // namespace bite
 #endif //STREAM_H

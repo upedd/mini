@@ -4,7 +4,7 @@
 
 struct Token {
     // todo: organize
-    enum class Type {
+    enum class Type : std::uint8_t {
         IDENTIFIER,
         NUMBER,
         INTEGER,

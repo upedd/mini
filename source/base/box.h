@@ -15,8 +15,8 @@ namespace bite {
 
     public:
         //box() : ptr(nullptr) {}
-        box(T&& value) : ptr(new T(std::move(value))) {}
-        box(const T& value) : ptr(new T(value)) {}
+        box(T&& value) : ptr(new T(std::move(value))) {} // NOLINT(*-explicit-constructor)
+        box(const T& value) : ptr(new T(value)) {} // NOLINT(*-explicit-constructor)
 
         box(const box& other) : box(*other.ptr) {}
 
@@ -38,5 +38,5 @@ namespace bite {
 
         //[[nodiscard]] bool is_empty() const { return ptr == nullptr; }
     };
-}
+}  // namespace bite
 #endif //BOX_H

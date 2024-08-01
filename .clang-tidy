@@ -1,1 +1,3 @@
-Checks: '*, -altera*, -android*, -boost*, -darwin*, -fuschia*, -llvm*, -mpi*, -objc*, -zircon, -*-use-trailing-return-type'
+Checks: '*, -altera*, -android*, -boost*, -darwin*, -fuchsia*, -llvm*, -mpi*, -objc*, -zircon, -*-use-trailing-return-type, -*-no-recursion, -*-avoid-do-while, -*-implicit-bool-conversion ,-*-magic-numbers, -*-identifier-length'
+CheckOptions:
+  misc-non-private-member-variables-in-classes.IgnoreClassesWithAllMemberVariablesBeingPublic: true

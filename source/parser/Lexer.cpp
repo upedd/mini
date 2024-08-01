@@ -88,8 +88,9 @@ void Lexer::skip_whitespace() {
         if (is_space(stream.next()) || stream.next() == '\n') {
             stream.advance();
         } else if (stream.next() == '#') {
-            while (!stream.ended() && !stream.match('\n'))
+            while (!stream.ended() && !stream.match('\n')) {
                 stream.advance();
+            }
         } else {
             break;
         }

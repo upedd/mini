@@ -12,8 +12,9 @@ void GarbageCollector::collect() {
 }
 
 void GarbageCollector::mark(Object* object) {
-    if (object == nullptr || object->is_marked)
+    if (object == nullptr || object->is_marked) {
         return;
+    }
     GC_LOG(std::format("Marked {}", object->to_string()));
     object->is_marked = true;
     grey_objects.push(object);

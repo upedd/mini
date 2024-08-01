@@ -3,6 +3,7 @@
 #include <bitset>
 #include <cassert>
 #include <expected>
+#include <cstdint>
 
 inline bool is_space(const char c) {
     return c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\v' || c == '\f';
@@ -87,7 +88,7 @@ public:
 
     bitflags() = default;
 
-    explicit bitflags(unsigned long long value) : storage(value) {}
+    explicit bitflags(std::uint64_t value) : storage(value) {}
 
     // turn flag on
     constexpr bitflags& operator+=(const T& rhs) {
@@ -105,7 +106,7 @@ public:
         return storage.test(static_cast<std::size_t>(rhs));
     }
 
-    [[nodiscard]] constexpr unsigned long long to_ullong() const {
+    [[nodiscard]] constexpr std::uint64_t to_ullong() const {
         return storage.to_ullong();
     }
 
@@ -114,7 +115,7 @@ private:
 };
 
 // TODO: find better place for this!
-enum class ClassAttributes {
+enum class ClassAttributes: std::uint8_t {
     PRIVATE,
     OVERRIDE,
     ABSTRACT,

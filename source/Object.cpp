@@ -17,7 +17,7 @@ void Function::add_allocated(Object* object) {
     allocated_objects.push_back(object);
 }
 
-const std::vector<Object*> Function::get_allocated() {
+const std::vector<Object*>& Function::get_allocated() {
     return allocated_objects;
 }
 

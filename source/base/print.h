@@ -36,18 +36,19 @@ namespace bite {
 
     enum class emphasis : std::uint8_t {
         bold = 1,
-        faint = 1 << 1,
-        italic = 1 << 2,
-        underline = 1 << 3,
-        blink = 1 << 4,
-        reverse = 1 << 5,
-        conceal = 1 << 6,
-        strikethrough = 1 << 7
+        faint = 1U << 1U,
+        italic = 1U << 2U,
+        underline = 1U << 3U,
+        blink = 1U << 4U,
+        reverse = 1U << 5U,
+        conceal = 1U << 6U,
+        strikethrough = 1U << 7U
     };
 
 
     class terminal_style {
     public:
+        // NOLINT(*-explicit-constructor)
         constexpr terminal_style(emphasis em) : emphasis(static_cast<uint8_t>(em)) {}
 
         constexpr terminal_style(const bool is_foreground, const terminal_color color) {
@@ -132,8 +133,8 @@ namespace bite {
                 parameters.push_back(static_cast<std::uint8_t>(style.get_background_color()) + 10);
             }
             for (std::uint8_t i = 0; i < 8; ++i) {
-                if (style.get_emphasis() & 1 << i) {
-                    parameters.push_back(map_emphasis_to_escape(static_cast<emphasis>(1 << i)));
+                if (style.get_emphasis() & 1U << i) {
+                    parameters.push_back(map_emphasis_to_escape(static_cast<emphasis>(1U << i)));
                 }
             }
 
@@ -147,16 +148,16 @@ namespace bite {
 
         template <typename T>
         struct StyledArg {
-            const T& value;
+            const T& value; // NOLINT(*-avoid-const-or-ref-data-members)
             terminal_style style;
         };
 
         template <typename T>
         struct RepatedArg {
-            const T& value;
+            const T& value; // NOLINT(*-avoid-const-or-ref-data-members)
             std::size_t times;
         };
-    }
+    }  // namespace detail
 
 
     // Helpers for printing directly into cout
@@ -212,7 +213,7 @@ namespace bite {
     void println(const terminal_style& style, std::format_string<Args...> string, Args&&... args) {
         bite::println(style, std::cout, string, std::forward<Args>(args)...);
     }
-}
+}  // namespace bite
 
 template <typename T, typename Char>
 struct std::formatter<bite::detail::StyledArg<T>, Char> : std::formatter<T, Char> { // NOLINT(*-dcl58-cpp)
@@ -243,5 +244,5 @@ namespace bite {
     constexpr auto repeated(const T& value, std::size_t times) {
         return detail::RepatedArg<std::remove_cvref_t<T>>(value, times);
     }
-}
+}  // namespace bite
 #endif //PRINT_H

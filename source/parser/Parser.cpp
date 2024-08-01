@@ -7,9 +7,9 @@
 
 // TODO: refactor message system. this stinks a bit
 void Parser::emit_message(const bite::Message& message) {
-    if (panic_mode)
+    if (panic_mode) {
         return;
-
+    }
     if (message.level == bite::Logger::Level::error) {
         panic_mode = true;
         m_has_errors = true;
@@ -59,14 +59,16 @@ bool is_control_flow_start(const Token::Type type) {
 }
 
 void Parser::synchronize() {
-    if (!panic_mode)
+    if (!panic_mode) {
         return;
+    }
     panic_mode = false;
     // synchonization points (https://www.ssw.uni-linz.ac.at/Misc/CC/slides/03.Parsing.pdf)
     // should synchronize on start of statement or declaration
     while (!check(Token::Type::END)) {
-        if (current.type == Token::Type::SEMICOLON)
+        if (current.type == Token::Type::SEMICOLON) {
             return;
+        }
         if (is_control_flow_start(next.type)) {
             return;
         }
@@ -152,8 +154,9 @@ Ast Parser::parse() {
 Stmt Parser::statement_or_expression() {
     auto exit = scope_exit(
        [this] {
-           if (panic_mode)
+           if (panic_mode) {
                synchronize();
+           }
        }
    );
 
@@ -419,7 +422,7 @@ bitflags<ClassAttributes> Parser::member_attributes() {
         }
     }
 
-    return std::move(attributes);
+    return attributes;
 }
 
 ConstructorStmt Parser::constructor_statement() {

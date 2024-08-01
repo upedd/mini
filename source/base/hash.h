@@ -238,7 +238,7 @@ namespace bite {
         inline std::uint64_t hash(std::uint64_t x) noexcept {
             return detail::mix(x, 0x9E3779B97F4A7C15ull);
         }
-    }
+    }  // namespace rapidhash
 
     // Hash integration from: https://github.com/martinus/unordered_dense/blob/main/include/bite/unordered_dense.h
 
@@ -405,7 +405,7 @@ namespace bite {
     #    if defined(__GNUC__) && !defined(__clang__)
     #        pragma GCC diagnostic pop
     #    endif
-}
+} // namespace bite
 
 
 #endif

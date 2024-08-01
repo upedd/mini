@@ -21,8 +21,10 @@ std::expected<bite_int, ConversionError> wrapped_stoll(const std::string& string
 std::string remove_digit_separator(const std::string& string) {
     std::string result;
     for (char c : string) {
-        if (c != '_')
+        if (c != '_') {
             result += c;
+        }
+
     }
     return result;
 }
@@ -30,32 +32,37 @@ std::string remove_digit_separator(const std::string& string) {
 
 std::optional<ConversionError> validate_decimal_string(const std::string& string) {
     for (char c : string) {
-        if (!is_digit(c))
+        if (!is_digit(c)) {
             return ConversionError(std::string("Expected decimal digit but got '") + c + "'.");
+        }
     }
     return {};
 }
 
 std::optional<ConversionError> validate_binary_string(const std::string& string) {
     for (char c : string) {
-        if (!is_binary_digit(c))
+        if (!is_binary_digit(c)) {
             return ConversionError(std::string("Expected binary digit but got '") + c + "'.");
+        }
+
     }
     return {};
 }
 
 std::optional<ConversionError> validate_hex_string(const std::string& string) {
     for (char c : string) {
-        if (!is_hex_digit(c))
+        if (!is_hex_digit(c)) {
             return ConversionError(std::string("Expected hex digit but got '") + c + "'.");
+        }
     }
     return {};
 }
 
 std::optional<ConversionError> validate_octal_string(const std::string& string) {
     for (char c : string) {
-        if (!is_octal_digit(c))
+        if (!is_octal_digit(c)) {
             return ConversionError(std::string("Expected octal digit but got '") + c + "'.");
+        }
     }
     return {};
 }
@@ -64,28 +71,36 @@ std::expected<bite_int, ConversionError> string_to_int(const std::string& string
     std::string number;
     int base = 10;
     if (string[0] == '0') {
-        if (string.size() == 1)
+        if (string.size() == 1) {
             return 0;
-        if (to_upper(string[1]) == 'X') { // hex
+        }
+
+        if (to_upper(string[1]) == 'X') {
+            // hex
             number = remove_digit_separator(string.substr(2));
-            if (auto error = validate_hex_string(number))
+            if (auto error = validate_hex_string(number)) {
                 return std::unexpected(*error);
+            }
+
             base = 16;
         } else if (to_upper(string[1]) == 'B') { // binary
             number = remove_digit_separator(string.substr(2));
-            if (auto error = validate_binary_string(number))
+            if (auto error = validate_binary_string(number)) {
                 return std::unexpected(*error);
+            }
             base = 2;
         } else { // octal
             number = remove_digit_separator(string.substr(1));
-            if (auto error = validate_octal_string(number))
+            if (auto error = validate_octal_string(number)) {
                 return std::unexpected(*error);
+            }
             base = 8;
         }
     } else { // decimal
         number = remove_digit_separator(string);
-        if (auto error = validate_decimal_string(number))
+        if (auto error = validate_decimal_string(number)) {
             return std::unexpected(*error);
+        }
     }
     return wrapped_stoll(number, base);
 }
@@ -103,8 +118,9 @@ std::optional<ConversionError> validate_floating_string(const std::string& strin
                 return ConversionError(std::string("Expected decimal digit in exponent but got '") + c + "'.");
             }
         } else {
-            if (c == '.')
+            if (c == '.') {
                 continue;
+            }
             // we don't need to validate if literal contains multiple dot separators as lexer guarantees only one will be present
             if ((is_hex && to_upper(c) == 'P') || (!is_hex && to_upper(c) == 'E')) {
                 in_exponent = true;
@@ -123,8 +139,9 @@ std::optional<ConversionError> validate_floating_string(const std::string& strin
 
 std::expected<bite_float, ConversionError> string_to_floating(const std::string& string) {
     std::string number = remove_digit_separator(string);
-    if (auto error = validate_floating_string(string))
+    if (auto error = validate_floating_string(string)) {
         return std::unexpected(*error);
+    }
 
     try {
         return std::stod(number);

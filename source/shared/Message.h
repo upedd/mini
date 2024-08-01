@@ -22,6 +22,6 @@ namespace bite {
         std::string content;
         std::optional<InlineMessage> inline_msg;
     };
-}
+}  // namespace bite
 
 #endif //MESSAGE_H

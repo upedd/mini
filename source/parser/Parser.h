@@ -34,8 +34,8 @@ public:
     }
 
     // ReSharper disable once CppPossiblyUninitializedMember
-    explicit Parser(bite::file_input_stream&& stream, SharedContext* context) : context(context),
-        lexer(std::move(stream), context) {}
+    explicit Parser(bite::file_input_stream&& stream, SharedContext* context) : lexer(std::move(stream), context),
+        context(context) {}
 
     Ast parse();
 
@@ -97,7 +97,7 @@ private:
      * https://en.wikipedia.org/wiki/Operators_in_C_and_C%2B%2B#Operator_precedence
      * https://en.cppreference.com/w/cpp/language/operator_precedence
      */
-    enum class Precedence {
+    enum class Precedence : std::uint8_t {
         NONE,
         ASSIGMENT,
         LOGICAL_OR,

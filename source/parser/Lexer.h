@@ -4,7 +4,6 @@
 #include <vector>
 
 #include "Token.h"
-#include "../Ast.h"
 #include "../base/stream.h"
 #include "../shared/Message.h"
 

@@ -2,7 +2,6 @@
 #define CONTEXT_H
 #include "StringTable.h"
 #include "../base/logger.h"
-#include "../parser/Lexer.h"
 
 
 /**
@@ -10,7 +9,7 @@
  */
 class SharedContext {
 public:
-    explicit SharedContext(bite::Logger logger) : logger(std::move(logger)) {}
+    explicit SharedContext(const bite::Logger& logger) : logger(logger) {}
 
     StringTable::Handle intern(const std::string& string) {
         return string_table.intern(string);

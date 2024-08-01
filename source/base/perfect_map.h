@@ -40,8 +40,8 @@ public:
         // Sort buckets in largest bucket first order
         std::ranges::sort(
             buckets,
-            [](auto& a, auto& b) {
-                return a.size() > b.size();
+            [](auto& lhs, auto& rhs) {
+                return lhs.size() > rhs.size();
             }
         );
 
@@ -49,9 +49,9 @@ public:
         for (; bucket_idx < buckets.size(); ++bucket_idx) {
             auto& bucket = buckets[bucket_idx];
 
-            if (bucket.size() <= 1)
+            if (bucket.size() <= 1) {
                 break;
-
+            }
             // try different offsets values until we find one that places all items into empty slots
             // optim: maybe random should try random offsets?
             std::uint64_t offset = 0;
@@ -91,8 +91,9 @@ public:
 
         for (; bucket_idx < buckets.size(); ++bucket_idx) {
             auto& bucket = buckets[bucket_idx];
-            if (bucket.empty())
+            if (bucket.empty()) {
                 break;
+            }
             std::size_t slot = empty_positions.back();
             empty_positions.pop_back();
             offsets[fnv1(bucket[0]) % size] = { .value = slot, .is_pos = true };
