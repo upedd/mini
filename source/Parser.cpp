@@ -312,22 +312,15 @@ VarStmt Parser::abstract_field(const Token& name) {
 }
 
 bitflags<ClassAttributes> Parser::member_attributes(StructureType outer_type) {
-    // TODO: better error reporting. current setup relies too much on good order of atributes
+    // TODO: order independant!
     bitflags<ClassAttributes> attributes;
     if (match(Token::Type::PRIVATE)) {
         attributes += ClassAttributes::PRIVATE;
     }
     if (match(Token::Type::OVERRDIE)) {
-        // if (attributes[ClassAttributes::PRIVATE])
-        //     error(current, "Overrides cannot be private");
         attributes += ClassAttributes::OVERRIDE;
     }
     if (match(Token::Type::ABSTRACT)) {
-        // if (outer_type != StructureType::ABSTRACT_CLASS) {
-        //     error(current, "Abstract methods can be only declared in abstract classes.");
-        // }
-        // if (attributes[ClassAttributes::PRIVATE])
-        //     error(current, "Abstract members cannot be private");
         attributes += ClassAttributes::ABSTRACT;
     }
     if (match(Token::Type::GET)) {
@@ -402,19 +395,21 @@ StructureBody Parser::structure_body() {
             continue;
         }
 
-        // Field
-        if (check(Token::Type::SEMICOLON) || check(Token::Type::EQUAL)) {
-            body.fields.emplace_back(var_declaration_body(member_name), attributes);
+        // Method
+        bool skip_params = attributes[ClassAttributes::GETTER] && !check(Token::Type::LEFT_PAREN);
+        if (check(Token::Type::LEFT_PAREN) || skip_params) {
+            if (attributes[ClassAttributes::ABSTRACT]) {
+                body.methods.emplace_back(abstract_method(member_name, skip_params), attributes);
+            } else {
+                body.methods.emplace_back(function_declaration_body(member_name, skip_params), attributes);
+            }
             continue;
         }
 
-        // Method
-        bool skip_params = attributes[ClassAttributes::GETTER] && !check(Token::Type::LEFT_PAREN);
-        if (attributes[ClassAttributes::ABSTRACT]) {
-            body.methods.emplace_back(abstract_method(member_name, skip_params), attributes);
-        } else {
-            body.methods.emplace_back(function_declaration_body(member_name, skip_params), attributes);
-        }
+        // Field
+        attributes += ClassAttributes::GETTER;
+        attributes += ClassAttributes::SETTER;
+        body.fields.emplace_back(var_declaration_body(member_name), attributes);
     }
     consume(Token::Type::RIGHT_BRACE, "unmatched }");
     return body;
@@ -460,11 +455,15 @@ ObjectExpr Parser::object_expression() {
         };
 }
 
-FunctionStmt Parser::in_trait_function(const Token& name, bool skip_params) {
+FunctionStmt Parser::in_trait_function(const Token& name, bitflags<ClassAttributes>& attributes, bool skip_params) {
     std::vector<Token> parameters = skip_params ? std::vector<Token>() : consume_functions_parameters();
     std::optional<Expr> body;
     if (match(Token::Type::LEFT_BRACE)) {
         body = block();
+    } else {
+        // TODO: this probably should not be here but must wait for compiler refactor!
+        attributes += ClassAttributes::ABSTRACT;
+        consume(Token::Type::SEMICOLON, "missing semicolon after declaration");
     }
     return FunctionStmt { .name = name, .params = std::move(parameters), .body = std::move(body) };
 }
@@ -476,7 +475,7 @@ Stmt Parser::trait_declaration() {
     std::vector<FieldStmt> fields;
     std::vector<MethodStmt> methods;
     std::vector<UsingStmt> using_statements;
-    while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::LEFT_BRACE)) {
+    while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
         if (match(Token::Type::USING)) {
             using_statements.push_back(using_statement());
             continue;
@@ -485,13 +484,19 @@ Stmt Parser::trait_declaration() {
         auto attributes = member_attributes(StructureType::TRAIT);
         consume(Token::Type::IDENTIFIER, "invalid trait member.");
         Token member_name = current;
-        if (check(Token::Type::SEMICOLON)) {
-            fields.emplace_back(abstract_field(member_name), attributes);
+
+        bool skip_params = attributes[ClassAttributes::GETTER] && !check(Token::Type::LEFT_PAREN);
+        if (check(Token::Type::LEFT_PAREN) || skip_params) {
+            methods.emplace_back(in_trait_function(member_name, attributes, skip_params), attributes);
             continue;
         }
 
-        bool skip_params = attributes[ClassAttributes::GETTER] && !check(Token::Type::LEFT_PAREN);
-        methods.emplace_back(in_trait_function(member_name, skip_params), attributes);
+        // TODO: This probably should not be here
+        attributes += ClassAttributes::GETTER;
+        attributes += ClassAttributes::SETTER;
+        attributes += ClassAttributes::ABSTRACT;
+
+        fields.emplace_back(abstract_field(member_name), attributes);
     }
 
     consume(Token::Type::RIGHT_BRACE, "missing '}' after trait body");

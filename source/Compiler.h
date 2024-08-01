@@ -177,7 +177,7 @@ public:
     void object_statement(const ObjectStmt& stmt);
 
     void trait_statement(const TraitStmt& stmt);
-
+    Parser parser;
 private:
     void start_context(Function* function, FunctionType type);
     void end_context();
@@ -257,7 +257,7 @@ private:
     void get_property(const GetPropertyExpr& expr);
     void super(const SuperExpr& expr);
 
-    Parser parser;
+
     Function main;
     std::vector<Context> context_stack;
     std::string_view source;

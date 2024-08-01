@@ -129,7 +129,7 @@ private:
     Expr labeled_expression();
 
     ObjectExpr object_expression();
-    FunctionStmt in_trait_function(const Token& name, bool skip_params);
+    FunctionStmt in_trait_function(const Token& name, bitflags<ClassAttributes>& attributes, bool skip_params);
     StringTable::Handle context_keyword(const std::string& keyword) const;
     StructureBody structure_body();
     StructureBody structure_body() const;

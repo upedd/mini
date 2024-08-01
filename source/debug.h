@@ -35,7 +35,7 @@ inline void Disassembler::class_inst(const std::string& name) {
     int x = function.get_program().get_at(offset++);
     int y = function.get_program().get_at(offset++);
     std::cout << offset - 3 << ": " << name << ' ' << x << ' ' << function.get_constant(x).to_string() << " private: "
-        << (y & 1) << " static: " << (y >> 1 & 1) << '\n';
+        << (y & 1) << " override: " << (y >> 1 & 1) << " abstract: " << (y >> 2 & 1) << " getter: " << (y >> 3 & 1) << " setter: " << (y >> 4 & 1) << '\n';
 }
 
 inline void Disassembler::arg_inst(const std::string& name) {
