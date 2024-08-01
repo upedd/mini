@@ -3,8 +3,9 @@
 
 #include <vector>
 
-#include "parser/Lexer.h"
 #include "Ast.h"
+#include "parser/Lexer.h"
+#include "shared/Message.h"
 
 /**
  * Implementation of Pratt parser
@@ -18,39 +19,37 @@ class Parser {
 public:
     // Parser handles errors by quietly storing them instead of stopping.
     // We want to continue parsing in order to provide user multiple issues in their code at once.
-    class Error {
-    public:
-        Error(Token token, std::string_view message) : message(message),
-                                                       token(token) {}
-
-        Token token;
-        std::string message;
+    [[nodiscard]] const std::vector<bite::Message>& get_messages() const {
+        return messages;
     };
-
-    const std::vector<Error>& get_errors();
+    [[nodiscard]] bool has_errors() const {
+        return m_has_errors;
+    }
 
     explicit Parser(bite::file_input_stream&& stream, SharedContext* context) : lexer(std::move(stream), context) {}
 
     Ast parse();
+    std::optional<Stmt> control_flow_expression_statement();
 
 private:
     bool panic_mode = false;
-    std::vector<Error> errors;
+    bool m_has_errors = false;
+    std::vector<bite::Message> messages;
 
-    void error(const Token& token, std::string_view message);
+    void error(const Token& token, const std::string& message, const std::string& inline_message = "");
     void synchronize();
 
     bool match(Token::Type type);
     [[nodiscard]] bool check(Token::Type type) const;
     Token advance();
-    void consume(Token::Type type, std::string_view message);
+    void consume(const Token::Type type, const std::string& message);
 
 
     Stmt statement_or_expression();
 
     Stmt native_declaration();
 
-    Expr for_expression(std::optional<Token> label = {});
+    Expr for_expression(const std::optional<Token>& label = {});
 
     Expr return_expression();
 
@@ -60,12 +59,16 @@ private:
     std::optional<Stmt> statement();
 
     Stmt var_declaration();
+    VarStmt var_declaration_body(const Token& name);
 
     VarStmt var_declaration_after_name(Token name);
 
     FunctionStmt function_declaration();
+    std::vector<Token> consume_functions_parameters();
+    std::vector<Token> consume_identifiers_list();
 
-    FunctionStmt function_declaration_after_name(const Token name, bool skip_params = false);
+    FunctionStmt function_declaration_body(const Token& name, bool skip_params = false);
+    std::vector<Expr> consume_call_arguments();
 
     ConstructorStmt constructor_statement();
 
@@ -116,11 +119,8 @@ private:
 
     Expr loop_expression(std::optional<Token> label = {});
     Expr break_expression();
-
     Expr continue_expression();
-
     Expr while_expression(std::optional<Token> label = {});
-
     Expr labeled_expression();
 
     ObjectExpr object_expression();

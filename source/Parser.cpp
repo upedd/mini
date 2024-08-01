@@ -5,11 +5,26 @@
 
 #include "conversions.h"
 
-void Parser::error(const Token& token, std::string_view message) {
+void Parser::error(const Token& token, const std::string& message, const std::string& inline_message) {
     if (panic_mode)
         return;
     panic_mode = true;
-    errors.emplace_back(token, message);
+    m_has_errors = true;
+
+    messages.push_back(
+        bite::Message {
+            .level = bite::Logger::Level::error,
+            .content = message,
+            .inline_msg = bite::InlineMessage {
+                .location = bite::SourceLocation {
+                    .file_path = "debug.bite",
+                    .start_offset = token.source_start_offset,
+                    .end_offset = token.source_end_offset
+                },
+                .content = inline_message
+            }
+        }
+    );
 }
 
 void Parser::synchronize() {
@@ -34,8 +49,32 @@ void Parser::synchronize() {
     }
 }
 
-const std::vector<Parser::Error>& Parser::get_errors() {
-    return errors;
+bool is_expression_start(Token::Type type) {
+    switch (type) {
+        case Token::Type::INTEGER:
+        case Token::Type::NUMBER:
+        case Token::Type::STRING:
+        case Token::Type::TRUE:
+        case Token::Type::FALSE:
+        case Token::Type::NIL:
+        case Token::Type::IDENTIFIER:
+        case Token::Type::LEFT_PAREN:
+        case Token::Type::LEFT_BRACE:
+        case Token::Type::BANG:
+        case Token::Type::MINUS:
+        case Token::Type::TILDE:
+        case Token::Type::THIS:
+        case Token::Type::SUPER:
+        case Token::Type::IF:
+        case Token::Type::LOOP:
+        case Token::Type::BREAK:
+        case Token::Type::CONTINUE:
+        case Token::Type::WHILE:
+        case Token::Type::FOR:
+        case Token::Type::LABEL:
+        case Token::Type::RETURN: return true;
+        default: return false;
+    }
 }
 
 Token Parser::advance() {
@@ -55,12 +94,13 @@ bool Parser::check(const Token::Type type) const {
     return next.type == type;
 }
 
-void Parser::consume(const Token::Type type, const std::string_view message) {
+void Parser::consume(const Token::Type type, const std::string& message) {
     if (check(type)) {
         advance();
         return;
     }
-    error(current, message);
+
+    error(current, message, "expected " + Token::type_to_string(type) + " here");
 }
 
 bool Parser::match(Token::Type type) {
@@ -80,59 +120,60 @@ Ast Parser::parse() {
     return Ast(std::move(stmts));
 }
 
-Stmt Parser::statement_or_expression() {
-    if (auto stmt = statement()) {
-        return std::move(*stmt);
-    }
+std::optional<Stmt> Parser::control_flow_expression_statement() {
+    std::optional<Expr> expr;
     if (match(Token::Type::IF)) {
-        auto expr = if_expression();
-        match(Token::Type::SEMICOLON);
-        return ExprStmt(std::move(expr));
+        expr = if_expression();
+    } else if (match(Token::Type::LOOP)) {
+        expr = loop_expression();
+    } else if (match(Token::Type::WHILE)) {
+        expr = while_expression();
+    } else if (match(Token::Type::FOR)) {
+        expr = for_expression();
+    } else if (match(Token::Type::LABEL)) {
+        expr = labeled_expression();
+    } else if (match(Token::Type::RETURN)) {
+        expr = return_expression();
     }
-    if (match(Token::Type::LOOP)) {
-        auto expr = loop_expression();
-        match(Token::Type::SEMICOLON);
-        return ExprStmt(std::move(expr));
+    // There is an optional semicolon after control flow expressions statements
+    match(Token::Type::SEMICOLON);
+    if (!expr) {
+        return {};
     }
-    if (match(Token::Type::WHILE)) {
-        auto expr = while_expression();
-        match(Token::Type::SEMICOLON);
-        return ExprStmt(std::move(expr));
-    }
-    if (match(Token::Type::FOR)) {
-        auto expr = for_expression();
-        match(Token::Type::SEMICOLON);
-        return ExprStmt(std::move(expr));
-    }
-    if (match(Token::Type::LABEL)) {
-        auto expr = labeled_expression();
-        match(Token::Type::SEMICOLON);
-        return ExprStmt(std::move(expr));
-    }
-    if (match(Token::Type::RETURN)) {
-        auto expr = return_expression();
-        match(Token::Type::SEMICOLON);
-        return ExprStmt(std::move(expr));
-    }
+    return ExprStmt(std::move(*expr));
+}
+
+Stmt Parser::expression_statement() {
     Expr expr = expression();
     consume(Token::Type::SEMICOLON, "Expected ';' after expression.");
     return ExprStmt(std::move(expr));
 }
 
+Stmt Parser::statement_or_expression() {
+    if (auto stmt = statement()) {
+        return *stmt;
+    }
+    if (auto stmt = control_flow_expression_statement()) {
+        return *stmt;
+    }
+    return expression_statement();
+}
+
 Stmt Parser::native_declaration() {
-    consume(Token::Type::IDENTIFIER, "Expected identifier after 'native' keyword.");
+    consume(Token::Type::IDENTIFIER, "invalid native statement");
     Token name = current;
-    consume(Token::Type::SEMICOLON, "Expected ';' after native declaration.");
+    consume(Token::Type::SEMICOLON, "missing semicolon");
     return NativeStmt(name);
 }
 
-Expr Parser::for_expression(std::optional<Token> label) {
-    consume(Token::Type::IDENTIFIER, "Expected an identifier after 'for'.");
+Expr Parser::for_expression(const std::optional<Token>& label) {
+    consume(Token::Type::IDENTIFIER, "invalid 'for' item declaration.");
     Token name = current;
-    consume(Token::Type::IN, "Expected 'in' after item name in for loop.");
+    consume(Token::Type::IN, "invalid 'for' loop range expression.");
     Expr iterable = expression();
+    // refactor maybe?
     if (current.type != Token::Type::LEFT_BRACE) {
-        error(current, "Expected '{' before loop body.");
+        error(current, "invalid 'for' loop body", "expected '{' here.");
     }
     Expr body = block();
     return ForExpr { .name = name, .iterable = std::move(iterable), .body = std::move(body), .label = label };
@@ -140,15 +181,14 @@ Expr Parser::for_expression(std::optional<Token> label) {
 
 Expr Parser::return_expression() {
     std::optional<Expr> expr = {};
-    if (!match(Token::Type::SEMICOLON)) {
+    if (!is_expression_start(next.type)) {
         expr = expression();
-        consume(Token::Type::SEMICOLON, "Exepected ';' after return value.");
     }
     return ReturnExpr { std::move(expr) };
 }
 
 Stmt Parser::object_declaration() {
-    consume(Token::Type::IDENTIFIER, "Expected object name.");
+    consume(Token::Type::IDENTIFIER, "missing object name");
     Token name = current;
     return ObjectStmt { .name = name, .object = object_expression() };
 }
@@ -171,7 +211,7 @@ std::optional<Stmt> Parser::statement() {
         return class_declaration();
     }
     if (match(Token::Type::ABSTRACT)) {
-        consume(Token::Type::CLASS, "Expected 'class' after 'abstract'.");
+        consume(Token::Type::CLASS, "missing 'class' keyword");
         return class_declaration(true);
     }
     if (match(Token::Type::NATIVE)) {
@@ -187,67 +227,67 @@ std::optional<Stmt> Parser::statement() {
 }
 
 Stmt Parser::var_declaration() {
-    consume(Token::Type::IDENTIFIER, "expected identifier");
-    return var_declaration_after_name(current);
+    consume(Token::Type::IDENTIFIER, "missing variable name");
+    return var_declaration_body(current);
 }
 
-VarStmt Parser::var_declaration_after_name(const Token name) {
+// The part after name
+VarStmt Parser::var_declaration_body(const Token& name) {
     Expr expr = match(Token::Type::EQUAL) ? expression() : LiteralExpr { nil_t };
-    consume(Token::Type::SEMICOLON, "Expected ';' after variable declaration.");
+    consume(Token::Type::SEMICOLON, "missing semicolon");
     return VarStmt { .name = name, .value = std::move(expr) };
 }
 
 FunctionStmt Parser::function_declaration() {
-    consume(Token::Type::IDENTIFIER, "expected function name");
-    return function_declaration_after_name(current);
+    consume(Token::Type::IDENTIFIER, "missing function name");
+    return function_declaration_body(current);
 }
 
-FunctionStmt Parser::function_declaration_after_name(const Token name, bool skip_params) {
+std::vector<Token> Parser::consume_functions_parameters() {
+    consume(Token::Type::LEFT_PAREN, "missing fuction parameters");
     std::vector<Token> parameters;
-    if (!skip_params) {
-        consume(Token::Type::LEFT_PAREN, "Expected '(' after function name");
-        if (!check(Token::Type::RIGHT_PAREN)) {
-            do {
-                consume(Token::Type::IDENTIFIER, "Expected identifier");
-                parameters.push_back(current);
-            } while (match(Token::Type::COMMA));
-        }
-        consume(Token::Type::RIGHT_PAREN, "Expected ')' after function parameters");
+    if (!check(Token::Type::RIGHT_PAREN)) {
+        do {
+            consume(Token::Type::IDENTIFIER, "invalid parameter."); // TODO: better error message?
+            parameters.push_back(current);
+        } while (match(Token::Type::COMMA));
     }
+    consume(Token::Type::RIGHT_PAREN, "unmatched paren"); // TODO: better error message
+    return parameters;
+}
+
+// The part after name
+FunctionStmt Parser::function_declaration_body(const Token& name, const bool skip_params) {
+    std::vector<Token> parameters = skip_params ? std::vector<Token>() : consume_functions_parameters();
     consume(Token::Type::LEFT_BRACE, "Expected '{' before function body");
     auto body = block();
     return FunctionStmt { .name = name, .params = std::move(parameters), .body = std::move(body) };
 }
 
-ConstructorStmt Parser::constructor_statement() {
-    // overlap with function declaration!
-    consume(Token::Type::LEFT_PAREN, "Expected '(' after constructor name");
-    std::vector<Token> parameters;
+std::vector<Expr> Parser::consume_call_arguments() {
+    std::vector<Expr> arguments;
+    consume(Token::Type::LEFT_PAREN, "missing call arguments");
     if (!check(Token::Type::RIGHT_PAREN)) {
         do {
-            consume(Token::Type::IDENTIFIER, "Expected identifier");
-            parameters.push_back(current);
+            arguments.emplace_back(expression());
         } while (match(Token::Type::COMMA));
     }
-    consume(Token::Type::RIGHT_PAREN, "Expected ')' after constructor parameters");
+    consume(Token::Type::RIGHT_PAREN, "unmatched paren"); // TODO: better error message
+    return arguments;
+}
 
+ConstructorStmt Parser::constructor_statement() {
+    std::vector<Token> parameters = consume_functions_parameters();
     std::vector<Expr> super_arguments;
     bool has_super = false;
     // init(parameters*) : super(arguments*) [block]
     if (match(Token::Type::COLON)) {
         has_super = true;
-        consume(Token::Type::SUPER, "Expected superclass constructor call after ':' ");
-        // overlap with function call!!!
-        consume(Token::Type::LEFT_PAREN, "Expected '(' after superclass constructor call");
-        if (!check(Token::Type::RIGHT_PAREN)) {
-            do {
-                super_arguments.emplace_back(expression());
-            } while (match(Token::Type::COMMA));
-        }
-        consume(Token::Type::RIGHT_PAREN, "Expected ')' after superclass constructor call arguments.");
+        consume(Token::Type::SUPER, "missing superclass constructor call");
+        super_arguments = consume_call_arguments();
     }
 
-    consume(Token::Type::LEFT_BRACE, "Expected '{' before constructor body");
+    consume(Token::Type::LEFT_BRACE, "missing constructor body");
     return ConstructorStmt {
             .parameters = parameters,
             .has_super = has_super,
@@ -257,36 +297,14 @@ ConstructorStmt Parser::constructor_statement() {
 }
 
 FunctionStmt Parser::abstract_method(Token name, bool skip_params) {
-    // overlap with function!
-    std::vector<Token> parameters;
-    if (!skip_params) {
-        consume(Token::Type::LEFT_PAREN, "Expected '(' after function name");
-        if (!check(Token::Type::RIGHT_PAREN)) {
-            do {
-                consume(Token::Type::IDENTIFIER, "Expected identifier");
-                parameters.push_back(current);
-            } while (match(Token::Type::COMMA));
-        }
-        consume(Token::Type::RIGHT_PAREN, "Expected ')' after function parameters");
-    }
-    consume(Token::Type::SEMICOLON, "Expected ';' after abstract function declaration");
+    std::vector<Token> parameters = skip_params ? std::vector<Token>() : consume_functions_parameters();
+    consume(Token::Type::SEMICOLON, "missing semicolon after declaration");
     return FunctionStmt { .name = name, .params = std::move(parameters), .body = {} };
 }
 
 VarStmt Parser::abstract_field(Token name) {
-    Expr expr = match(Token::Type::EQUAL) ? expression() : LiteralExpr { nil_t };
-    consume(Token::Type::SEMICOLON, "Expected ';' after variable declaration.");
+    consume(Token::Type::SEMICOLON, "missing semicolon after declaration");
     return VarStmt { .name = name, .value = {} };
-}
-
-// refactor: use across whole parser
-std::vector<Expr> Parser::arguments_list() {
-    std::vector<Expr> arguments;
-    do {
-        arguments.emplace_back(expression());
-    } while (match(Token::Type::COMMA));
-    consume(Token::Type::RIGHT_PAREN, "Expected ')' after arguments.");
-    return arguments;
 }
 
 bitflags<ClassAttributes> Parser::member_attributes(StructureType outer_type) {
@@ -438,7 +456,7 @@ Parser::StructureMembers Parser::structure_body(StructureType type) {
                 } else {
                     bool skip_params = attributes[ClassAttributes::GETTER] && !check(Token::Type::LEFT_PAREN);
                     members.methods.emplace_back(
-                        FunctionStmt(function_declaration_after_name(current, skip_params)),
+                        FunctionStmt(function_declaration_body(current, skip_params)),
                         attributes
                     );
                 }
@@ -597,33 +615,6 @@ Expr Parser::super_() {
     return SuperExpr { current };
 }
 
-bool has_prefix(Token::Type type) {
-    switch (type) {
-        case Token::Type::INTEGER:
-        case Token::Type::NUMBER:
-        case Token::Type::STRING:
-        case Token::Type::TRUE:
-        case Token::Type::FALSE:
-        case Token::Type::NIL:
-        case Token::Type::IDENTIFIER:
-        case Token::Type::LEFT_PAREN:
-        case Token::Type::LEFT_BRACE:
-        case Token::Type::BANG:
-        case Token::Type::MINUS:
-        case Token::Type::TILDE:
-        case Token::Type::THIS:
-        case Token::Type::SUPER:
-        case Token::Type::IF:
-        case Token::Type::LOOP:
-        case Token::Type::BREAK:
-        case Token::Type::CONTINUE:
-        case Token::Type::WHILE:
-        case Token::Type::FOR:
-        case Token::Type::LABEL:
-        case Token::Type::RETURN: return true;
-        default: return false;
-    }
-}
 
 bool starts_block_expression(Token::Type type) {
     return type == Token::Type::LABEL || type == Token::Type::LEFT_BRACE || type == Token::Type::LOOP || type ==

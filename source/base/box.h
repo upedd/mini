@@ -14,7 +14,7 @@ namespace bite {
         std::unique_ptr<T> ptr;
 
     public:
-        // box() : ptr(nullptr) {}
+        //box() : ptr(nullptr) {}
         box(T&& value) : ptr(new T(std::move(value))) {}
         box(const T& value) : ptr(new T(value)) {}
 

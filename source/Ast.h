@@ -11,49 +11,17 @@
 
 // Reference: https://lesleylai.info/en/ast-in-cpp-part-1-variant/
 // https://www.foonathan.net/2022/05/recursive-variant-box/
-
-// struct UnaryExpr;
-// struct BinaryExpr;
-// struct CallExpr;
-// struct LiteralExpr;
-// struct StringLiteral;
-// struct VariableExpr;
-// struct GetPropertyExpr;
-// struct SuperExpr;
-// struct BlockExpr;
-// struct IfExpr;
-// struct LoopExpr;
-// struct BreakExpr;
-// struct ContinueExpr;
-// struct WhileExpr;
-// struct ForExpr;
-// struct ReturnExpr;
-// struct ThisExpr;
-// struct ObjectExpr;
-//
-// struct ExprStmt;
-// struct VarStmt;
-// struct FunctionStmt;
-// struct ClassStmt;
-// struct NativeStmt;
-// struct FieldStmt;
-// struct MethodStmt;
-// struct ConstructorStmt;
-// struct ObjectStmt;
-// struct TraitStmt;
-// struct UsingStmt;
-
 using Expr = std::variant<bite::box<struct LiteralExpr>, bite::box<struct StringLiteral>, bite::box<struct UnaryExpr>,
                           bite::box<struct BinaryExpr>, bite::box<struct VariableExpr>, bite::box<struct CallExpr>,
                           bite::box<struct GetPropertyExpr>, bite::box<struct SuperExpr>, bite::box<struct BlockExpr>,
                           bite::box<struct IfExpr>, bite::box<struct LoopExpr>, bite::box<struct BreakExpr>, bite::box<
                               struct ContinueExpr>, bite::box<struct WhileExpr>, bite::box<struct ForExpr>, bite::box<
-                              struct ReturnExpr>, bite::box<struct ThisExpr>, bite::box<struct ObjectExpr>>;
+                              struct ReturnExpr>, bite::box<struct ThisExpr>, bite::box<struct ObjectExpr>, bite::box<struct InvalidExpr>>;
 
 using Stmt = std::variant<bite::box<struct VarStmt>, bite::box<struct ExprStmt>, bite::box<struct FunctionStmt>,
                           bite::box<struct ClassStmt>, bite::box<struct NativeStmt>, bite::box<struct FieldStmt>,
                           bite::box<struct MethodStmt>, bite::box<struct ConstructorStmt>, bite::box<struct ObjectStmt>,
-                          bite::box<struct TraitStmt>, bite::box<struct UsingStmt>>;
+                          bite::box<struct TraitStmt>, bite::box<struct UsingStmt>, bite::box<struct InvalidStmt>;
 
 struct Ast {
     std::vector<Stmt> statements;
@@ -218,6 +186,10 @@ struct UsingStmtItem {
 struct UsingStmt {
     std::vector<UsingStmtItem> items;
 };
+
+// markers for invalid ast nodes
+struct InvalidExpr {};
+struct InvalidStmt {};
 
 // inline std::string expr_to_string(const Expr& expr, std::string_view source);
 //
