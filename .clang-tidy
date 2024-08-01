@@ -1,0 +1,1 @@
+Checks: '*, -altera*, -android*, -boost*, -darwin*, -fuschia*, -llvm*, -mpi*, -objc*, -zircon, -*-use-trailing-return-type'
