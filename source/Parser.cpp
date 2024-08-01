@@ -182,7 +182,7 @@ Expr Parser::for_expression(const std::optional<Token>& label) {
 
 Expr Parser::return_expression() {
     std::optional<Expr> expr = {};
-    if (!is_expression_start(next.type)) {
+    if (is_expression_start(next.type)) {
         expr = expression();
     }
     return ReturnExpr { std::move(expr) };
@@ -242,7 +242,8 @@ VarStmt Parser::var_declaration_body(const Token& name) {
 
 FunctionStmt Parser::function_declaration() {
     consume(Token::Type::IDENTIFIER, "missing function name");
-    return function_declaration_body(current);
+    Token name = current;
+    return function_declaration_body(name);
 }
 
 std::vector<Token> Parser::consume_functions_parameters() {
@@ -317,16 +318,16 @@ bitflags<ClassAttributes> Parser::member_attributes(StructureType outer_type) {
         attributes += ClassAttributes::PRIVATE;
     }
     if (match(Token::Type::OVERRDIE)) {
-        if (attributes[ClassAttributes::PRIVATE])
-            error(current, "Overrides cannot be private");
+        // if (attributes[ClassAttributes::PRIVATE])
+        //     error(current, "Overrides cannot be private");
         attributes += ClassAttributes::OVERRIDE;
     }
     if (match(Token::Type::ABSTRACT)) {
-        if (outer_type != StructureType::ABSTRACT_CLASS) {
-            error(current, "Abstract methods can be only declared in abstract classes.");
-        }
-        if (attributes[ClassAttributes::PRIVATE])
-            error(current, "Abstract members cannot be private");
+        // if (outer_type != StructureType::ABSTRACT_CLASS) {
+        //     error(current, "Abstract methods can be only declared in abstract classes.");
+        // }
+        // if (attributes[ClassAttributes::PRIVATE])
+        //     error(current, "Abstract members cannot be private");
         attributes += ClassAttributes::ABSTRACT;
     }
     if (match(Token::Type::GET)) {
