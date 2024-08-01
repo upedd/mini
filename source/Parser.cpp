@@ -4,6 +4,7 @@
 #include <iostream>
 
 #include "conversions.h"
+#include "shared/SharedContext.h"
 
 void Parser::error(const Token& token, const std::string& message, const std::string& inline_message) {
     if (panic_mode)
@@ -335,22 +336,6 @@ bitflags<ClassAttributes> Parser::member_attributes(StructureType outer_type) {
     return std::move(attributes);
 }
 
-Stmt Parser::trait_declaration() {
-    consume(Token::Type::IDENTIFIER, "Expected trait name.");
-    Token name = current;
-
-    consume(Token::Type::LEFT_BRACE, "Expected '{' before trait body.");
-    StructureMembers members = structure_body(StructureType::TRAIT);
-    consume(Token::Type::RIGHT_BRACE, "Expected '}' after class body.");
-
-    return TraitStmt {
-            .name = name,
-            .methods = std::move(members.methods),
-            .fields = std::move(members.fields),
-            .using_stmts = std::move(members.using_statements)
-        };
-}
-
 
 UsingStmt Parser::using_statement() {
     // TODO: do this better!
@@ -383,95 +368,79 @@ UsingStmt Parser::using_statement() {
     return UsingStmt(std::move(items));
 }
 
-Parser::StructureMembers Parser::structure_body(StructureType type) {
-    // refactor: still kinda messy?
-    StructureMembers members;
-    while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
-        if (check(Token::Type::OBJECT)) {
-            advance();
-            if (type == StructureType::OBJECT)
-                error(current, "Class objects cannot be defined inside of objects.");
-            members.class_object = object_expression();
-            continue;
-        }
-        if (check(Token::Type::USING)) {
-            advance();
-            members.using_statements.push_back(using_statement());
-            continue;
-        }
-        bitflags<ClassAttributes> attributes = member_attributes(type);
-        consume(Token::Type::IDENTIFIER, "Expected identifier.");
-        Token name = current;
+StringTable::Handle Parser::context_keyword(const std::string& keyword) const {
+    return context->intern(keyword);
+}
 
-        if (*name.string == "init") {
-            if (type == StructureType::OBJECT)
-                error(current, "Constructors cannot be defined inside of objects.");
-            if (type == StructureType::TRAIT)
-                error(current, "Constructors cannot be defined inside of traits.");
-            // constructor call
-            members.constructor = std::make_unique<ConstructorStmt>(constructor_statement());
-        } else if ((check(Token::Type::SEMICOLON) || check(Token::Type::EQUAL)) && !attributes[ClassAttributes::SETTER]
-            && !attributes[ClassAttributes::GETTER]) {
-            attributes += ClassAttributes::GETTER;
-            attributes += ClassAttributes::SETTER;
-            if (type == StructureType::TRAIT) {
-                attributes += ClassAttributes::ABSTRACT;
-                if (!check(Token::Type::SEMICOLON))
-                    error(current, "Expected ';' after trait declared field.");
-                members.fields.emplace_back(abstract_field(name), attributes);
-            } else {
-                if (attributes[ClassAttributes::ABSTRACT]) {
-                    members.fields.emplace_back(abstract_field(name), attributes);
-                } else {
-                    members.fields.emplace_back(var_declaration_after_name(name), attributes);
-                }
-            }
+StructureBody Parser::structure_body() {
+    StructureBody body;
+    consume(Token::Type::LEFT_BRACE, "missing body");
+    while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
+        // Using declarataions
+        if (match(Token::Type::USING)) {
+            body.using_statements.push_back(using_statement());
+            continue;
+        }
+
+        // Object definition
+        if (match(Token::Type::OBJECT)) {
+            body.class_object = object_expression();
+            continue;
+        }
+
+        // Member
+        auto attributes = member_attributes(StructureType::CLASS);
+        consume(Token::Type::IDENTIFIER, "invalid member");
+        Token member_name = current;
+
+        // Constructor
+        if (member_name.string == context_keyword("init")) {
+            body.constructor = constructor_statement();
+            continue;
+        }
+
+        // Field
+        if (check(Token::Type::SEMICOLON) || check(Token::Type::EQUAL)) {
+            body.fields.emplace_back(var_declaration_body(member_name), attributes);
+            continue;
+        }
+
+        // Method
+        bool skip_params = attributes[ClassAttributes::GETTER] && !check(Token::Type::LEFT_PAREN);
+        if (attributes[ClassAttributes::ABSTRACT]) {
+            body.methods.emplace_back(abstract_method(member_name, skip_params), attributes);
         } else {
-            // TODO: validate get and setters function have expected number of arguments
-            if (type == StructureType::TRAIT) {
-                bool skip_params = attributes[ClassAttributes::GETTER] && !check(Token::Type::LEFT_PAREN);
-                std::vector<Token> parameters;
-                if (!skip_params) {
-                    consume(Token::Type::LEFT_PAREN, "Expected '(' after function name");
-                    if (!check(Token::Type::RIGHT_PAREN)) {
-                        do {
-                            consume(Token::Type::IDENTIFIER, "Expected identifier");
-                            parameters.push_back(current);
-                        } while (match(Token::Type::COMMA));
-                    }
-                    consume(Token::Type::RIGHT_PAREN, "Expected ')' after function parameters");
-                }
-                if (check(Token::Type::SEMICOLON)) {
-                    attributes += ClassAttributes::ABSTRACT;
-                    advance();
-                    members.methods.emplace_back(FunctionStmt(name, std::move(parameters), {}), attributes);
-                } else {
-                    consume(Token::Type::LEFT_BRACE, "Expected '{' before function body");
-                    members.methods.emplace_back(FunctionStmt(name, std::move(parameters), block()), attributes);
-                }
-            } else {
-                if (attributes[ClassAttributes::ABSTRACT]) {
-                    bool skip_params = attributes[ClassAttributes::GETTER];
-                    members.methods.emplace_back(FunctionStmt(abstract_method(current, skip_params)), attributes);
-                } else {
-                    bool skip_params = attributes[ClassAttributes::GETTER] && !check(Token::Type::LEFT_PAREN);
-                    members.methods.emplace_back(
-                        FunctionStmt(function_declaration_body(current, skip_params)),
-                        attributes
-                    );
-                }
-            }
+            body.methods.emplace_back(function_declaration_body(member_name, skip_params), attributes);
         }
     }
-    return std::move(members);
+    consume(Token::Type::RIGHT_BRACE, "unmatched }");
+    return body;
+}
+
+Stmt Parser::class_declaration(bool is_abstract) {
+    consume(Token::Type::IDENTIFIER, "missing class name");
+    Token class_name = current;
+
+    std::optional<Token> superclass;
+    if (match(Token::Type::COLON)) {
+        consume(Token::Type::IDENTIFIER, "missing superclass name");
+        superclass = current;
+    }
+    StructureBody body = structure_body();
+
+    return ClassStmt {
+            .name = class_name,
+            .super_class = superclass,
+            .is_abstract = is_abstract,
+            .body = std::move(body)
+        };
 }
 
 ObjectExpr Parser::object_expression() {
-    // superclass list
     std::optional<Token> superclass;
     std::vector<Expr> superclass_arguments;
     if (match(Token::Type::COLON)) {
-        consume(Token::Type::IDENTIFIER, "Expected superclass name.");
+        consume(Token::Type::IDENTIFIER, "missing superclass name");
         superclass = current;
 
         if (match(Token::Type::LEFT_PAREN)) {
@@ -479,40 +448,56 @@ ObjectExpr Parser::object_expression() {
         }
     }
 
-    consume(Token::Type::LEFT_BRACE, "Expected '{' after object body");
-    StructureMembers members = structure_body(StructureType::OBJECT);
-    consume(Token::Type::RIGHT_BRACE, "Expected '}' after object body.");
+    StructureBody body = structure_body();
+
     return ObjectExpr {
-            .methods = std::move(members.methods),
-            .fields = std::move(members.fields),
             .super_class = superclass,
             .superclass_arguments = std::move(superclass_arguments),
-            .using_stmts = std::move(members.using_statements)
+            .body = std::move(body)
         };
 }
 
-Stmt Parser::class_declaration(bool is_abstract) {
-    consume(Token::Type::IDENTIFIER, "Expected class name.");
-    Token name = current;
-
-    std::optional<Token> super_class;
-    if (match(Token::Type::COLON)) {
-        consume(Token::Type::IDENTIFIER, "Expected superclass name.");
-        super_class = current;
+FunctionStmt Parser::in_trait_function(const Token& name, bool skip_params) {
+    std::vector<Token> parameters = skip_params ? std::vector<Token>() : consume_functions_parameters();
+    std::optional<Expr> body;
+    if (match(Token::Type::LEFT_BRACE)) {
+        body = block();
     }
-    consume(Token::Type::LEFT_BRACE, "Expected '{' before class body.");
-    StructureMembers members = structure_body(is_abstract ? StructureType::ABSTRACT_CLASS : StructureType::CLASS);
-    consume(Token::Type::RIGHT_BRACE, "Expected '}' after class body.");
+    return FunctionStmt { .name = name, .params = std::move(parameters), .body = std::move(body) };
+}
 
-    return ClassStmt {
-            .name = name,
-            .constructor = std::move(members.constructor),
-            .methods = std::move(members.methods),
-            .fields = std::move(members.fields),
-            .class_object = std::move(members.class_object),
-            .super_class = super_class,
-            .is_abstract = is_abstract,
-            .using_statements = std::move(members.using_statements)
+Stmt Parser::trait_declaration() {
+    consume(Token::Type::IDENTIFIER, "missing trait name");
+    Token trait_name = current;
+    consume(Token::Type::LEFT_BRACE, "missing trait body");
+    std::vector<FieldStmt> fields;
+    std::vector<MethodStmt> methods;
+    std::vector<UsingStmt> using_statements;
+    while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::LEFT_BRACE)) {
+        if (match(Token::Type::USING)) {
+            using_statements.push_back(using_statement());
+            continue;
+        }
+
+        auto attributes = member_attributes(StructureType::TRAIT);
+        consume(Token::Type::IDENTIFIER, "invalid trait member.");
+        Token member_name = current;
+        if (check(Token::Type::SEMICOLON)) {
+            fields.emplace_back(abstract_field(member_name), attributes);
+            continue;
+        }
+
+        bool skip_params = attributes[ClassAttributes::GETTER] && !check(Token::Type::LEFT_PAREN);
+        methods.emplace_back(in_trait_function(member_name, skip_params), attributes);
+    }
+
+    consume(Token::Type::RIGHT_BRACE, "missing '}' after trait body");
+
+    return TraitStmt {
+            .name = trait_name,
+            .methods = std::move(methods),
+            .fields = std::move(fields),
+            .using_stmts = std::move(using_statements)
         };
 }
 

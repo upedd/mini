@@ -26,7 +26,7 @@ public:
         return m_has_errors;
     }
 
-    explicit Parser(bite::file_input_stream&& stream, SharedContext* context) : lexer(std::move(stream), context) {}
+    explicit Parser(bite::file_input_stream&& stream, SharedContext* context) : lexer(std::move(stream), context), context(context) {}
 
     Ast parse();
     std::optional<Stmt> control_flow_expression_statement();
@@ -35,6 +35,8 @@ private:
     bool panic_mode = false;
     bool m_has_errors = false;
     std::vector<bite::Message> messages;
+
+    SharedContext* context;
 
     void error(const Token& token, const std::string& message, const std::string& inline_message = "");
     void synchronize();
@@ -124,6 +126,10 @@ private:
     Expr labeled_expression();
 
     ObjectExpr object_expression();
+    FunctionStmt in_trait_function(const Token& name, bool skip_params);
+    StringTable::Handle context_keyword(const std::string& keyword) const;
+    StructureBody structure_body();
+    StructureBody structure_body() const;
 
     enum class StructureType {
         CLASS,

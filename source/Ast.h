@@ -110,13 +110,7 @@ struct ReturnExpr {
 
 struct ThisExpr {};
 
-struct ObjectExpr {
-    std::vector<MethodStmt> methods;
-    std::vector<FieldStmt> fields;
-    std::optional<Token> super_class;
-    std::vector<Expr> superclass_arguments;
-    std::vector<UsingStmt> using_stmts;
-};
+
 
 struct FunctionStmt {
     Token name;
@@ -143,15 +137,28 @@ struct MethodStmt {
     bitflags<ClassAttributes> attributes;
 };
 
-struct ClassStmt {
-    Token name;
-    std::unique_ptr<ConstructorStmt> constructor;
+/**
+ * Shared fields between ObjectExpr and ClassStmt
+ */
+struct StructureBody {
     std::vector<MethodStmt> methods;
     std::vector<FieldStmt> fields;
     std::optional<Expr> class_object;
-    std::optional<Token> super_class;
-    bool is_abstract = false;
     std::vector<UsingStmt> using_statements;
+    std::unique_ptr<ConstructorStmt> constructor;
+};
+
+struct ObjectExpr {
+    StructureBody body;
+    std::optional<Token> super_class;
+    std::vector<Expr> superclass_arguments;
+};
+
+struct ClassStmt {
+    Token name;
+    std::optional<Token> super_class;
+    StructureBody body;
+    bool is_abstract = false;
 };
 
 struct ConstructorStmt {
