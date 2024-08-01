@@ -21,7 +21,7 @@ using Expr = std::variant<bite::box<struct LiteralExpr>, bite::box<struct String
 using Stmt = std::variant<bite::box<struct VarStmt>, bite::box<struct ExprStmt>, bite::box<struct FunctionStmt>,
                           bite::box<struct ClassStmt>, bite::box<struct NativeStmt>, bite::box<struct FieldStmt>,
                           bite::box<struct MethodStmt>, bite::box<struct ConstructorStmt>, bite::box<struct ObjectStmt>,
-                          bite::box<struct TraitStmt>, bite::box<struct UsingStmt>, bite::box<struct InvalidStmt>;
+                          bite::box<struct TraitStmt>, bite::box<struct UsingStmt>, bite::box<struct InvalidStmt>>;
 
 struct Ast {
     std::vector<Stmt> statements;
@@ -137,6 +137,13 @@ struct MethodStmt {
     bitflags<ClassAttributes> attributes;
 };
 
+struct ConstructorStmt {
+    std::vector<Token> parameters;
+    bool has_super;
+    std::vector<Expr> super_arguments;
+    Expr body;
+};
+
 /**
  * Shared fields between ObjectExpr and ClassStmt
  */
@@ -145,7 +152,7 @@ struct StructureBody {
     std::vector<FieldStmt> fields;
     std::optional<Expr> class_object;
     std::vector<UsingStmt> using_statements;
-    std::unique_ptr<ConstructorStmt> constructor;
+    std::optional<ConstructorStmt> constructor;
 };
 
 struct ObjectExpr {
@@ -159,13 +166,6 @@ struct ClassStmt {
     std::optional<Token> super_class;
     StructureBody body;
     bool is_abstract = false;
-};
-
-struct ConstructorStmt {
-    std::vector<Token> parameters;
-    bool has_super;
-    std::vector<Expr> super_arguments;
-    Expr body;
 };
 
 struct NativeStmt {

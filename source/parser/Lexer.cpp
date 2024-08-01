@@ -105,7 +105,7 @@ void Lexer::consume_identifier() {
 Token Lexer::make_token(const Token::Type type) {
     const StringTable::Handle string = buffer.empty() ? nullptr : context->intern(buffer);
     buffer.clear();
-    return { .type = type, .source_offset = start_pos, .string = string };
+    return { .type = type, .source_start_offset = start_pos, .source_end_offset = stream.position(), .string = string };
 }
 
 std::unexpected<Lexer::Error> Lexer::make_error(const std::string& reason, const std::string& inline_message) const {

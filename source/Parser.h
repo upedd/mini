@@ -22,14 +22,17 @@ public:
     [[nodiscard]] const std::vector<bite::Message>& get_messages() const {
         return messages;
     };
+
     [[nodiscard]] bool has_errors() const {
         return m_has_errors;
     }
 
-    explicit Parser(bite::file_input_stream&& stream, SharedContext* context) : lexer(std::move(stream), context), context(context) {}
+    explicit Parser(bite::file_input_stream&& stream, SharedContext* context) : lexer(std::move(stream), context),
+        context(context) {}
 
     Ast parse();
     std::optional<Stmt> control_flow_expression_statement();
+    Stmt expression_statement();
 
 private:
     bool panic_mode = false;
@@ -74,9 +77,9 @@ private:
 
     ConstructorStmt constructor_statement();
 
-    FunctionStmt abstract_method(Token name, bool skip_params);
+    FunctionStmt abstract_method(const Token& name, bool skip_params);
 
-    VarStmt abstract_field(Token name);
+    VarStmt abstract_field(const Token& name);
 
     std::vector<Expr> arguments_list();
 
@@ -119,10 +122,10 @@ private:
 
     Expr block(std::optional<Token> label = {});
 
-    Expr loop_expression(std::optional<Token> label = {});
+    Expr loop_expression(const std::optional<Token>& label = {});
     Expr break_expression();
     Expr continue_expression();
-    Expr while_expression(std::optional<Token> label = {});
+    Expr while_expression(const std::optional<Token>& label = {});
     Expr labeled_expression();
 
     ObjectExpr object_expression();
@@ -165,7 +168,8 @@ private:
 
     Expr infix(Expr left);
 
-    Expr binary(Expr left, bool expect_lvalue = false);
+    Expr binary(Expr left);
+    Expr assigment(Expr left);
     Expr call(Expr left);
 
     Token current;

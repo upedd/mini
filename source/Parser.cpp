@@ -229,7 +229,8 @@ std::optional<Stmt> Parser::statement() {
 
 Stmt Parser::var_declaration() {
     consume(Token::Type::IDENTIFIER, "missing variable name");
-    return var_declaration_body(current);
+    Token name = current;
+    return var_declaration_body(name);
 }
 
 // The part after name
@@ -267,7 +268,6 @@ FunctionStmt Parser::function_declaration_body(const Token& name, const bool ski
 
 std::vector<Expr> Parser::consume_call_arguments() {
     std::vector<Expr> arguments;
-    consume(Token::Type::LEFT_PAREN, "missing call arguments");
     if (!check(Token::Type::RIGHT_PAREN)) {
         do {
             arguments.emplace_back(expression());
@@ -285,7 +285,9 @@ ConstructorStmt Parser::constructor_statement() {
     if (match(Token::Type::COLON)) {
         has_super = true;
         consume(Token::Type::SUPER, "missing superclass constructor call");
-        super_arguments = consume_call_arguments();
+        if (match(Token::Type::LEFT_PAREN)) {
+            super_arguments = consume_call_arguments();
+        }
     }
 
     consume(Token::Type::LEFT_BRACE, "missing constructor body");
@@ -297,13 +299,13 @@ ConstructorStmt Parser::constructor_statement() {
         };
 }
 
-FunctionStmt Parser::abstract_method(Token name, bool skip_params) {
+FunctionStmt Parser::abstract_method(const Token& name, const bool skip_params) {
     std::vector<Token> parameters = skip_params ? std::vector<Token>() : consume_functions_parameters();
     consume(Token::Type::SEMICOLON, "missing semicolon after declaration");
     return FunctionStmt { .name = name, .params = std::move(parameters), .body = {} };
 }
 
-VarStmt Parser::abstract_field(Token name) {
+VarStmt Parser::abstract_field(const Token& name) {
     consume(Token::Type::SEMICOLON, "missing semicolon after declaration");
     return VarStmt { .name = name, .value = {} };
 }
@@ -431,8 +433,8 @@ Stmt Parser::class_declaration(bool is_abstract) {
     return ClassStmt {
             .name = class_name,
             .super_class = superclass,
-            .is_abstract = is_abstract,
-            .body = std::move(body)
+            .body = std::move(body),
+            .is_abstract = is_abstract
         };
 }
 
@@ -444,16 +446,16 @@ ObjectExpr Parser::object_expression() {
         superclass = current;
 
         if (match(Token::Type::LEFT_PAREN)) {
-            superclass_arguments = arguments_list();
+            superclass_arguments = consume_call_arguments();
         }
     }
 
     StructureBody body = structure_body();
 
     return ObjectExpr {
+            .body = std::move(body),
             .super_class = superclass,
-            .superclass_arguments = std::move(superclass_arguments),
-            .body = std::move(body)
+            .superclass_arguments = std::move(superclass_arguments)
         };
 }
 
@@ -503,14 +505,14 @@ Stmt Parser::trait_declaration() {
 
 Stmt Parser::expr_statement() {
     Stmt stmt = ExprStmt { expression() };
-    consume(Token::Type::SEMICOLON, "Expected ';' after expression");
+    consume(Token::Type::SEMICOLON, "missing semicolon after expression");
     return stmt;
 }
 
 Expr Parser::if_expression() {
     auto condition = expression();
     if (current.type != Token::Type::LEFT_BRACE) {
-        error(current, "Expected '{' after 'if' condition.");
+        error(current, "missing 'if' expression body");
     }
     auto then_stmt = block();
     std::optional<Expr> else_stmt = {};
@@ -518,7 +520,7 @@ Expr Parser::if_expression() {
         if (match(Token::Type::IF)) {
             else_stmt = if_expression();
         } else {
-            consume(Token::Type::LEFT_BRACE, "Expected '{' after 'else' keyword.");
+            consume(Token::Type::LEFT_BRACE, "missing 'else' expression body.");
             else_stmt = block();
         }
     }
@@ -579,9 +581,8 @@ Expr Parser::expression(const Precedence precedence) {
     advance();
     auto left = prefix();
     if (!left) {
-        error(current, "Expected expression.");
-        // TODO: recover!!!
-        //return {};
+        error(current, "expression expected", "here");
+        return InvalidExpr();
     }
     while (precedence < get_precendece(next.type)) {
         advance();
@@ -590,22 +591,19 @@ Expr Parser::expression(const Precedence precedence) {
     return std::move(*left);
 }
 
-Expr Parser::this_() {
-    return ThisExpr {};
-}
-
 Expr Parser::super_() {
-    consume(Token::Type::DOT, "Expected '.' after 'super'.");
-    consume(Token::Type::IDENTIFIER, "Expected superclass method name.");
+    consume(Token::Type::DOT, "missing '.' after 'super'");
+    consume(Token::Type::IDENTIFIER, "missing superclass member identifier after 'super'");
     return SuperExpr { current };
 }
 
-
+// TODO: missing refactor
 bool starts_block_expression(Token::Type type) {
     return type == Token::Type::LABEL || type == Token::Type::LEFT_BRACE || type == Token::Type::LOOP || type ==
         Token::Type::WHILE || type == Token::Type::FOR || type == Token::Type::IF;
 }
 
+// TODO: missing refactor
 Expr Parser::block(std::optional<Token> label) {
     std::vector<Stmt> stmts;
     std::optional<Expr> expr_at_end = {};
@@ -628,8 +626,8 @@ Expr Parser::block(std::optional<Token> label) {
     return BlockExpr { .stmts = std::move(stmts), .expr = std::move(expr_at_end), .label = label };
 }
 
-Expr Parser::loop_expression(std::optional<Token> label) {
-    consume(Token::Type::LEFT_BRACE, "Expected '{' after loop keyword.");
+Expr Parser::loop_expression(const std::optional<Token>& label) {
+    consume(Token::Type::LEFT_BRACE, "missing 'loop' expression body");
     return LoopExpr(block(), label);
 }
 
@@ -638,7 +636,7 @@ Expr Parser::break_expression() {
     if (match(Token::Type::LABEL)) {
         label = current;
     }
-    if (!has_prefix(next.type)) {
+    if (!is_expression_start(next.type)) {
         return BreakExpr { .expr = {}, .label = label };
     }
     return BreakExpr { .expr = expression(), .label = label };
@@ -651,10 +649,10 @@ Expr Parser::continue_expression() {
     return ContinueExpr();
 }
 
-Expr Parser::while_expression(std::optional<Token> label) {
+Expr Parser::while_expression(const std::optional<Token>& label) {
     auto condition = expression();
     if (current.type != Token::Type::LEFT_BRACE) {
-        error(current, "Expected '{' after while loop condition");
+        error(current, "missing 'while' loop body", "Expected '{' here");
     }
     auto body = block();
     return WhileExpr(std::move(condition), std::move(body), label);
@@ -662,7 +660,7 @@ Expr Parser::while_expression(std::optional<Token> label) {
 
 Expr Parser::labeled_expression() {
     Token label = current;
-    consume(Token::Type::COLON, "Expected ':' after label");
+    consume(Token::Type::COLON, "missing colon after label");
     // all expressions we can break out of
     if (match(Token::Type::LOOP)) {
         return loop_expression(label);
@@ -676,11 +674,15 @@ Expr Parser::labeled_expression() {
     if (match(Token::Type::LEFT_BRACE)) {
         return block(label);
     }
-    error(label, "Only loops and blocks can be labeled.");
-    // TODO: recover!
-    // return {};
+    error(label, "expression cannot be labeled", "here");
+    return InvalidExpr();
 }
 
+Expr Parser::grouping() {
+    auto expr = expression();
+    consume(Token::Type::RIGHT_PAREN, "unmatched ')'");
+    return expr;
+}
 
 std::optional<Expr> Parser::prefix() {
     switch (current.type) {
@@ -689,6 +691,7 @@ std::optional<Expr> Parser::prefix() {
         case Token::Type::STRING: return string();
         case Token::Type::TRUE:
         case Token::Type::FALSE:
+        case Token::Type::THIS:
         case Token::Type::NIL: return keyword();
         case Token::Type::IDENTIFIER: return identifier();
         case Token::Type::LEFT_PAREN: return grouping();
@@ -696,7 +699,6 @@ std::optional<Expr> Parser::prefix() {
         case Token::Type::BANG:
         case Token::Type::MINUS:
         case Token::Type::TILDE: return unary(current.type);
-        case Token::Type::THIS: return this_();
         case Token::Type::SUPER: return super_();
         case Token::Type::IF: return if_expression();
         case Token::Type::LOOP: return loop_expression();
@@ -742,24 +744,11 @@ Expr Parser::keyword() const {
         case Token::Type::NIL: return LiteralExpr { nil_t };
         case Token::Type::FALSE: return LiteralExpr { false };
         case Token::Type::TRUE: return LiteralExpr { true };
-        default: assert(false); // unreachable!
+        case Token::Type::THIS: return ThisExpr {};
+        default: std::unreachable();
     }
 }
 
-Expr Parser::grouping() {
-    auto expr = expression();
-    consume(Token::Type::RIGHT_PAREN, "Expected ')' after expression.");
-    return expr;
-}
-
-Expr Parser::unary(Token::Type operator_type) {
-    return UnaryExpr { .expr = expression(Precedence::UNARY), .op = operator_type };
-}
-
-Expr Parser::dot(Expr left) {
-    consume(Token::Type::IDENTIFIER, "Expected property name after '.'");
-    return GetPropertyExpr { .left = std::move(left), .property = current };
-}
 
 Expr Parser::infix(Expr left) {
     switch (current.type) {
@@ -793,34 +782,38 @@ Expr Parser::infix(Expr left) {
         case Token::Type::GREATER_GREATER_EQUAL:
         case Token::Type::AND_EQUAL:
         case Token::Type::CARET_EQUAL:
-        case Token::Type::BAR_EQUAL: return binary(std::move(left), true);
+        case Token::Type::BAR_EQUAL: return assigment(std::move(left));
         case Token::Type::LEFT_PAREN: return call(std::move(left));
         case Token::Type::DOT: return dot(std::move(left));
         default: return left;
     }
 }
 
-Expr Parser::binary(Expr left, bool expect_lvalue) {
-    if (expect_lvalue && !std::holds_alternative<bite::box<VariableExpr>>(left) && !std::holds_alternative<bite::box<
-        GetPropertyExpr>>(left) && !std::holds_alternative<bite::box<SuperExpr>>(left)) {
-        error(current, "Expected lvalue as left hand side of an binary expression.");
-    }
+Expr Parser::unary(Token::Type operator_type) {
+    return UnaryExpr { .expr = expression(Precedence::UNARY), .op = operator_type };
+}
+
+Expr Parser::dot(Expr left) {
+    consume(Token::Type::IDENTIFIER, "missing identifier after dot"); // TODO: better error message
+    return GetPropertyExpr { .left = std::move(left), .property = current };
+}
+
+Expr Parser::binary(Expr left) {
     Token::Type op = current.type;
     Precedence precedence = get_precendece(op);
-    // handle right-associativity
-    if (precedence == Precedence::ASSIGMENT) {
-        precedence = static_cast<Precedence>(static_cast<int>(precedence) - 1);
-    }
+    return BinaryExpr { std::move(left), expression(precedence), op };
+}
+
+Expr Parser::assigment(Expr left) {
+    Token::Type op = current.type;
+    Precedence precedence = get_precendece(op);
+    // lower our precedence to handle right associativity
+    // common technique in pratt parsers
+    precedence = static_cast<Precedence>(static_cast<int>(precedence) - 1);
     return BinaryExpr { std::move(left), expression(precedence), op };
 }
 
 Expr Parser::call(Expr left) {
-    std::vector<Expr> arguments;
-    if (!check(Token::Type::RIGHT_PAREN)) {
-        do {
-            arguments.push_back(expression());
-        } while (match(Token::Type::COMMA));
-    }
-    consume(Token::Type::RIGHT_PAREN, "Expected ')' after call arguments.");
+    std::vector<Expr> arguments = consume_call_arguments();
     return CallExpr { .callee = std::move(left), .arguments = std::move(arguments) };
 }

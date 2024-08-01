@@ -73,10 +73,6 @@ void Compiler::Context::close_upvalue(int index) {
 
 void Compiler::compile() {
     for (auto& stmt : parser.parse().statements) {
-        for (auto& err : parser.get_errors()) {
-            std::cerr << err.message << '\n';
-        }
-        //std::cout << stmt_to_string(stmt, source) << '\n';
         visit_stmt(stmt);
     }
     // default return at main
@@ -269,7 +265,8 @@ void Compiler::visit_stmt(const Stmt& statement) {
             [this](const bite::box<MethodStmt>&) { assert("unreachable"); },
             [this](const bite::box<FieldStmt>&) { assert("unreachable"); },
             [this](const bite::box<ConstructorStmt>&) { assert("unreachable"); },
-            [this](const bite::box<UsingStmt>&) {}
+            [this](const bite::box<UsingStmt>&) {},
+            [](const bite::box<InvalidStmt>&) {},
         },
         statement
     );
@@ -922,13 +919,13 @@ void Compiler::object_expression(const ObjectExpr& expr) {
     class_core(
         std::get<Context::LocalResolution>(current_context().resolve_variable(name)).slot,
         expr.super_class,
-        expr.methods,
-        expr.fields,
-        expr.using_stmts,
+        expr.body.methods,
+        expr.body.fields,
+        expr.body.using_statements,
         false
     );
 
-    object_constructor(expr.fields, expr.super_class.has_value(), expr.superclass_arguments);
+    object_constructor(expr.body.fields, expr.super_class.has_value(), expr.superclass_arguments);
     emit(OpCode::CONSTRUCTOR);
 
     emit(OpCode::POP);
@@ -1078,8 +1075,8 @@ void Compiler::class_declaration(const ClassStmt& stmt) {
     std::string name = *stmt.name.string;
     uint8_t name_constant = current_function()->add_constant(name);
 
-    if (stmt.class_object) {
-        visit_expr(*stmt.class_object);
+    if (stmt.body.class_object) {
+        visit_expr(*stmt.body.class_object);
     } else {
         emit(OpCode::NIL);
         current_scope().mark_temporary();
@@ -1101,18 +1098,18 @@ void Compiler::class_declaration(const ClassStmt& stmt) {
     class_core(
         std::get<Context::LocalResolution>(current_context().resolve_variable(name)).slot,
         stmt.super_class,
-        stmt.methods,
-        stmt.fields,
-        stmt.using_statements,
+        stmt.body.methods,
+        stmt.body.fields,
+        stmt.body.using_statements,
         stmt.is_abstract
     );
 
-    if (stmt.constructor) {
-        current_scope().constructor_argument_count = stmt.constructor->parameters.size();
+    if (stmt.body.constructor) {
+        current_scope().constructor_argument_count = stmt.body.constructor->parameters.size();
         bool has_super_class = static_cast<bool>(stmt.super_class);
         constructor(
-            *stmt.constructor,
-            stmt.fields,
+            *stmt.body.constructor,
+            stmt.body.fields,
             has_super_class,
             has_super_class
                 ? current_context().resolved_classes[*stmt.super_class->string].constructor_argument_count
@@ -1123,7 +1120,7 @@ void Compiler::class_declaration(const ClassStmt& stmt) {
             != 0) {
             assert(false && "Class must implement constructor because it needs to call superclass constructor");
         }
-        default_constructor(stmt.fields, static_cast<bool>(stmt.super_class));
+        default_constructor(stmt.body.fields, static_cast<bool>(stmt.super_class));
     }
     emit(OpCode::CONSTRUCTOR);
 
@@ -1194,7 +1191,8 @@ void Compiler::visit_expr(const Expr& expression) {
             [this](const bite::box<ForExpr>& expr) { for_expr(*expr); },
             [this](const bite::box<ReturnExpr>& expr) { retrun_expression(*expr); },
             [this](const bite::box<ThisExpr>& expr) { this_expr(); },
-            [this](const bite::box<ObjectExpr>& expr) { object_expression(*expr); }
+            [this](const bite::box<ObjectExpr>& expr) { object_expression(*expr); },
+            [](const bite::box<InvalidExpr>&) {}
         },
         expression
     );
