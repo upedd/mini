@@ -1,25 +1,31 @@
 #include "Parser.h"
 
 #include <cassert>
-#include <iostream>
 
-#include "../conversions.h"
+#include "conversions.h"
 #include "../shared/SharedContext.h"
 
-void Parser::error(const Token& token, const std::string& message, const std::string& inline_message) {
+// TODO: refactor message system. this stinks a bit
+void Parser::emit_message(const bite::Message& message) {
     if (panic_mode)
         return;
-    panic_mode = true;
-    m_has_errors = true;
 
-    // TODO: refactor message system. this stinks a bit
-    messages.push_back(
+    if (message.level == bite::Logger::Level::error) {
+        panic_mode = true;
+        m_has_errors = true;
+    }
+
+    messages.push_back(message);
+}
+
+void Parser::error(const Token& token, const std::string& message, const std::string& inline_message) {
+    emit_message(
         bite::Message {
             .level = bite::Logger::Level::error,
             .content = message,
             .inline_msg = bite::InlineMessage {
                 .location = bite::SourceLocation {
-                    .file_path = "debug.bite",
+                    .file_path = lexer.get_filepath(),
                     .start_offset = token.source_start_offset,
                     .end_offset = token.source_end_offset
                 },
@@ -30,13 +36,13 @@ void Parser::error(const Token& token, const std::string& message, const std::st
 }
 
 void Parser::warning(const Token& token, const std::string& message, const std::string& inline_message) {
-    messages.push_back(
+    emit_message(
         bite::Message {
             .level = bite::Logger::Level::warn,
             .content = message,
             .inline_msg = bite::InlineMessage {
                 .location = bite::SourceLocation {
-                    .file_path = "debug.bite",
+                    .file_path = lexer.get_filepath(),
                     .start_offset = token.source_start_offset,
                     .end_offset = token.source_end_offset
                 },
@@ -46,25 +52,25 @@ void Parser::warning(const Token& token, const std::string& message, const std::
     );
 }
 
+
+bool is_control_flow_start(const Token::Type type) {
+    return type == Token::Type::LABEL || type == Token::Type::LEFT_BRACE || type == Token::Type::LOOP || type ==
+        Token::Type::WHILE || type == Token::Type::FOR || type == Token::Type::IF;
+}
+
 void Parser::synchronize() {
     if (!panic_mode)
         return;
     panic_mode = false;
+    // synchonization points (https://www.ssw.uni-linz.ac.at/Misc/CC/slides/03.Parsing.pdf)
+    // should synchronize on start of statement or declaration
     while (!check(Token::Type::END)) {
         if (current.type == Token::Type::SEMICOLON)
             return;
-        // synchonization points (https://www.ssw.uni-linz.ac.at/Misc/CC/slides/03.Parsing.pdf)
-        // should synchronize on start of statement or declaration
-        // TODO: more synchronization points!
-        switch (next.type) {
-            case Token::Type::LET:
-            case Token::Type::LEFT_BRACE:
-            case Token::Type::IF:
-            case Token::Type::WHILE:
-            case Token::Type::FUN:
-            case Token::Type::RETURN: return;
-            default: advance();
+        if (is_control_flow_start(next.type)) {
+            return;
         }
+        advance();
     }
 }
 
@@ -75,7 +81,7 @@ Token Parser::advance() {
             next = *token;
             break;
         } else {
-            error(current, token.error().message);
+            emit_message(token.error());
         }
     }
     return current;
@@ -91,7 +97,7 @@ void Parser::consume(const Token::Type type, const std::string& message) {
         return;
     }
 
-    error(next, message, "expected " + Token::type_to_string(type) + " here");
+    error(next, message, "expected " + Token::type_to_display(type) + " here");
 }
 
 bool Parser::match(Token::Type type) {
@@ -134,11 +140,6 @@ bool is_expression_start(const Token::Type type) {
     }
 }
 
-bool is_control_flow_start(const Token::Type type) {
-    return type == Token::Type::LABEL || type == Token::Type::LEFT_BRACE || type == Token::Type::LOOP || type ==
-        Token::Type::WHILE || type == Token::Type::FOR || type == Token::Type::IF;
-}
-
 Ast Parser::parse() {
     advance(); // populate next
     std::vector<Stmt> stmts;
@@ -149,6 +150,13 @@ Ast Parser::parse() {
 }
 
 Stmt Parser::statement_or_expression() {
+    auto exit = scope_exit(
+       [this] {
+           if (panic_mode)
+               synchronize();
+       }
+   );
+
     if (auto stmt = statement()) {
         return *stmt;
     }
@@ -159,13 +167,6 @@ Stmt Parser::statement_or_expression() {
 }
 
 std::optional<Stmt> Parser::statement() {
-    auto exit = scope_exit(
-        [this] {
-            if (panic_mode)
-                synchronize();
-        }
-    );
-
     if (match(Token::Type::LET)) {
         return var_declaration();
     }
@@ -298,11 +299,11 @@ Stmt Parser::class_declaration(const bool is_abstract) {
     StructureBody body = structure_body();
 
     return ClassStmt {
-        .name = class_name,
-        .super_class = superclass,
-        .body = std::move(body),
-        .is_abstract = is_abstract
-    };
+            .name = class_name,
+            .super_class = superclass,
+            .body = std::move(body),
+            .is_abstract = is_abstract
+        };
 }
 
 StructureBody Parser::structure_body() {
@@ -405,15 +406,15 @@ bitflags<ClassAttributes> Parser::member_attributes() {
     while (consume_arguments) {
         switch (next.type) {
             case Token::Type::PRIVATE: process_attribute(ClassAttributes::PRIVATE);
-            break;
+                break;
             case Token::Type::OVERRDIE: process_attribute(ClassAttributes::OVERRIDE);
-            break;
+                break;
             case Token::Type::ABSTRACT: process_attribute(ClassAttributes::ABSTRACT);
-            break;
+                break;
             case Token::Type::GET: process_attribute(ClassAttributes::GETTER);
-            break;
+                break;
             case Token::Type::SET: process_attribute(ClassAttributes::SETTER);
-            break;
+                break;
             default: consume_arguments = false;
         }
     }
@@ -436,11 +437,11 @@ ConstructorStmt Parser::constructor_statement() {
 
     consume(Token::Type::LEFT_BRACE, "missing constructor body");
     return ConstructorStmt {
-        .parameters = parameters,
-        .has_super = has_super,
-        .super_arguments = std::move(super_arguments),
-        .body = block()
-    };
+            .parameters = parameters,
+            .has_super = has_super,
+            .super_arguments = std::move(super_arguments),
+            .body = block()
+        };
 }
 
 FunctionStmt Parser::abstract_method(const Token& name, const bool skip_params) {
@@ -488,11 +489,11 @@ Stmt Parser::trait_declaration() {
     consume(Token::Type::RIGHT_BRACE, "missing '}' after trait body");
 
     return TraitStmt {
-        .name = trait_name,
-        .methods = std::move(methods),
-        .fields = std::move(fields),
-        .using_stmts = std::move(using_statements)
-    };
+            .name = trait_name,
+            .methods = std::move(methods),
+            .fields = std::move(fields),
+            .using_stmts = std::move(using_statements)
+        };
 }
 
 FunctionStmt Parser::in_trait_function(const Token& name, bitflags<ClassAttributes>& attributes, bool skip_params) {
@@ -597,75 +598,57 @@ std::optional<Expr> Parser::prefix() {
     }
 }
 
-
-
-
-Expr Parser::for_expression(const std::optional<Token>& label) {
-    consume(Token::Type::IDENTIFIER, "invalid 'for' item declaration.");
-    Token name = current;
-    consume(Token::Type::IN, "invalid 'for' loop range expression.");
-    Expr iterable = expression();
-    if (current.type != Token::Type::LEFT_BRACE) {
-        error(current, "invalid 'for' loop body", "expected '{' here.");
+Expr Parser::integer() {
+    std::string literal = *current.string;
+    std::expected<bite_int, ConversionError> result = string_to_int(literal);
+    if (!result) {
+        error(current, result.error().what());
     }
-    Expr body = block();
-    return ForExpr { .name = name, .iterable = std::move(iterable), .body = std::move(body), .label = label };
+    return LiteralExpr { *result };
 }
 
-Expr Parser::return_expression() {
-    std::optional<Expr> expr = {};
-    if (is_expression_start(next.type)) {
-        expr = expression();
+Expr Parser::number() {
+    std::string literal = *current.string;
+    std::expected<bite_float, ConversionError> result = string_to_floating(literal);
+    if (!result) {
+        error(current, result.error().what());
     }
-    return ReturnExpr { std::move(expr) };
+    return LiteralExpr { *result };
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-ObjectExpr Parser::object_expression() {
-    std::optional<Token> superclass;
-    std::vector<Expr> superclass_arguments;
-    if (match(Token::Type::COLON)) {
-        consume(Token::Type::IDENTIFIER, "missing superclass name");
-        superclass = current;
-
-        if (match(Token::Type::LEFT_PAREN)) {
-            superclass_arguments = call_arguments();
-        }
+Expr Parser::keyword() const {
+    switch (current.type) {
+        case Token::Type::NIL: return LiteralExpr { nil_t };
+        case Token::Type::FALSE: return LiteralExpr { false };
+        case Token::Type::TRUE: return LiteralExpr { true };
+        case Token::Type::THIS: return ThisExpr {};
+        default: std::unreachable();
     }
-
-    StructureBody body = structure_body();
-
-    return ObjectExpr {
-            .body = std::move(body),
-            .super_class = superclass,
-            .superclass_arguments = std::move(superclass_arguments)
-        };
 }
 
+Expr Parser::identifier() {
+    return VariableExpr { current };
+}
 
+Expr Parser::string() const {
+    return StringLiteral { *current.string };
+}
 
+Expr Parser::grouping() {
+    auto expr = expression();
+    consume(Token::Type::RIGHT_PAREN, "unmatched ')'");
+    return expr;
+}
 
+Expr Parser::unary(const Token::Type operator_type) {
+    return UnaryExpr { .expr = expression(Precedence::UNARY), .op = operator_type };
+}
 
-
+Expr Parser::super_() {
+    consume(Token::Type::DOT, "missing '.' after 'super'");
+    consume(Token::Type::IDENTIFIER, "missing superclass member identifier after 'super'");
+    return SuperExpr { current };
+}
 
 Expr Parser::if_expression() {
     auto condition = expression();
@@ -689,48 +672,11 @@ Expr Parser::if_expression() {
         };
 }
 
-
-
-
-
-Expr Parser::super_() {
-    consume(Token::Type::DOT, "missing '.' after 'super'");
-    consume(Token::Type::IDENTIFIER, "missing superclass member identifier after 'super'");
-    return SuperExpr { current };
-}
-
-Expr Parser::block(const std::optional<Token>& label) {
-    // In Bite every block is an expression which can return a value
-    // the value that will be returned is the last expression without succeding semicolon.
-    // we track that expression here in 'expr_at_end'
-    std::vector<Stmt> stmts;
-    std::optional<Expr> expr_at_end = {};
-    while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
-        if (auto stmt = statement()) {
-            stmts.push_back(std::move(*stmt));
-        } else {
-            bool is_cntrl_flow = is_control_flow_start(next.type);
-            // Note that there is a special case as control flow expressions are not required to have an succeding semicolon
-            // and still are treated as statements. We detect here if this expression is in fact the last expression that
-            // should return an value or that the user explicitly put the semicolon after to force it to be treated as a statement.
-            bool expression_is_statement = is_cntrl_flow && (!check(Token::Type::RIGHT_BRACE) || current.type ==
-                Token::Type::SEMICOLON);
-            auto expr = expression();
-            if (match(Token::Type::SEMICOLON) || expression_is_statement) {
-                stmts.emplace_back(ExprStmt(std::move(expr)));
-            } else {
-                expr_at_end = std::move(expr);
-                break;
-            }
-        }
+Expr Parser::continue_expression() {
+    if (match(Token::Type::LABEL)) {
+        return ContinueExpr(current);
     }
-    consume(Token::Type::RIGHT_BRACE, "unmatched '}'");
-    return BlockExpr { .stmts = std::move(stmts), .expr = std::move(expr_at_end), .label = label };
-}
-
-Expr Parser::loop_expression(const std::optional<Token>& label) {
-    consume(Token::Type::LEFT_BRACE, "missing 'loop' expression body");
-    return LoopExpr(block(), label);
+    return ContinueExpr();
 }
 
 Expr Parser::break_expression() {
@@ -744,20 +690,33 @@ Expr Parser::break_expression() {
     return BreakExpr { .expr = expression(), .label = label };
 }
 
-Expr Parser::continue_expression() {
-    if (match(Token::Type::LABEL)) {
-        return ContinueExpr(current);
+Expr Parser::return_expression() {
+    std::optional<Expr> expr = {};
+    if (is_expression_start(next.type)) {
+        expr = expression();
     }
-    return ContinueExpr();
+    return ReturnExpr { std::move(expr) };
 }
 
-Expr Parser::while_expression(const std::optional<Token>& label) {
-    auto condition = expression();
-    if (current.type != Token::Type::LEFT_BRACE) {
-        error(current, "missing 'while' loop body", "expected '{' here");
+ObjectExpr Parser::object_expression() {
+    std::optional<Token> superclass;
+    std::vector<Expr> superclass_arguments;
+    if (match(Token::Type::COLON)) {
+        consume(Token::Type::IDENTIFIER, "missing superclass name");
+        superclass = current;
+
+        if (match(Token::Type::LEFT_PAREN)) {
+            superclass_arguments = call_arguments();
+        }
     }
-    auto body = block();
-    return WhileExpr(std::move(condition), std::move(body), label);
+
+    StructureBody body = structure_body();
+
+    return ObjectExpr {
+            .body = std::move(body),
+            .super_class = superclass,
+            .superclass_arguments = std::move(superclass_arguments)
+        };
 }
 
 Expr Parser::labeled_expression() {
@@ -779,48 +738,60 @@ Expr Parser::labeled_expression() {
     return InvalidExpr();
 }
 
-Expr Parser::grouping() {
-    auto expr = expression();
-    consume(Token::Type::RIGHT_PAREN, "unmatched ')'");
-    return expr;
+Expr Parser::loop_expression(const std::optional<Token>& label) {
+    consume(Token::Type::LEFT_BRACE, "missing 'loop' expression body");
+    return LoopExpr(block(), label);
 }
 
-Expr Parser::integer() {
-    std::string literal = *current.string;
-    std::expected<bite_int, ConversionError> result = string_to_int(literal);
-    if (!result) {
-        error(current, result.error().what());
+Expr Parser::while_expression(const std::optional<Token>& label) {
+    auto condition = expression();
+    if (current.type != Token::Type::LEFT_BRACE) {
+        error(current, "missing 'while' loop body", "expected '{' here");
     }
-    return LiteralExpr { *result };
+    auto body = block();
+    return WhileExpr(std::move(condition), std::move(body), label);
 }
 
-Expr Parser::number() {
-    std::string literal = *current.string;
-    std::expected<bite_float, ConversionError> result = string_to_floating(literal);
-    if (!result) {
-        error(current, result.error().what());
+Expr Parser::for_expression(const std::optional<Token>& label) {
+    consume(Token::Type::IDENTIFIER, "invalid 'for' item declaration.");
+    Token name = current;
+    consume(Token::Type::IN, "invalid 'for' loop range expression.");
+    Expr iterable = expression();
+    if (current.type != Token::Type::LEFT_BRACE) {
+        error(current, "invalid 'for' loop body", "expected '{' here.");
     }
-    return LiteralExpr { *result };
+    Expr body = block();
+    return ForExpr { .name = name, .iterable = std::move(iterable), .body = std::move(body), .label = label };
 }
 
-Expr Parser::string() const {
-    return StringLiteral { *current.string };
-}
-
-Expr Parser::identifier() {
-    return VariableExpr { current };
-}
-
-Expr Parser::keyword() const {
-    switch (current.type) {
-        case Token::Type::NIL: return LiteralExpr { nil_t };
-        case Token::Type::FALSE: return LiteralExpr { false };
-        case Token::Type::TRUE: return LiteralExpr { true };
-        case Token::Type::THIS: return ThisExpr {};
-        default: std::unreachable();
+Expr Parser::block(const std::optional<Token>& label) {
+    // In Bite every block is an expression which can return a value
+    // the value that will be returned is the last expression without succeding semicolon.
+    // we track that expression here in 'expr_at_end'
+    std::vector<Stmt> stmts;
+    std::optional<Expr> expr_at_end = {};
+    while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
+        if (auto stmt = statement()) {
+            stmts.push_back(std::move(*stmt));
+        } else {
+            bool is_cntrl_flow = is_control_flow_start(next.type);
+            auto expr = expression();
+            // Note that there is a special case as control flow expressions are not required to have an succeding semicolon
+            // and still are treated as statements. We detect here if this expression is in fact the last expression that
+            // should return an value or that the user explicitly put the semicolon after to force it to be treated as a statement.
+            bool expression_is_statement = is_cntrl_flow && (!check(Token::Type::RIGHT_BRACE) || current.type ==
+                Token::Type::SEMICOLON);
+            if (match(Token::Type::SEMICOLON) || expression_is_statement) {
+                stmts.emplace_back(ExprStmt(std::move(expr)));
+            } else {
+                expr_at_end = std::move(expr);
+                break;
+            }
+        }
     }
+    consume(Token::Type::RIGHT_BRACE, "unmatched '}'");
+    return BlockExpr { .stmts = std::move(stmts), .expr = std::move(expr_at_end), .label = label };
 }
-
 
 Expr Parser::infix(Expr left) {
     switch (current.type) {
@@ -861,9 +832,6 @@ Expr Parser::infix(Expr left) {
     }
 }
 
-Expr Parser::unary(const Token::Type operator_type) {
-    return UnaryExpr { .expr = expression(Precedence::UNARY), .op = operator_type };
-}
 
 Expr Parser::dot(Expr left) {
     consume(Token::Type::IDENTIFIER, "missing identifier after dot"); // TODO: better error message

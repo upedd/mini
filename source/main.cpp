@@ -1,11 +1,8 @@
 #include <chrono>
 #include <fstream>
 #include <iostream>
-#include <sstream>
-
 #include "Compiler.h"
 #include "VM.h"
-#include "parser/ErrorPrettyPrinter.h"
 #include "shared/SharedContext.h"
 
 int main(int argc, char** argv) {
@@ -14,18 +11,12 @@ int main(int argc, char** argv) {
         std::cerr << "Usage: ./bite [path to bite file]\n";
         return -1;
     }
-    SharedContext context;
-    Compiler compiler(FileInputStream(argv[1]), &context);
-    compiler.compile();
-    auto& func = compiler.get_main();
-    std::vector<CompilationMessage> errors = context.get_compilation_messages();
-    if (!errors.empty()) {
-        ErrorPrettyPrinter printer(argv[1], std::list(errors.begin(), errors.end()));
-        printer.prepare_messages();
-        printer.print_messages();
-        int a;
-        std::cin >> a;
+    SharedContext context { bite::Logger(std::cout, true) };
+    Compiler compiler(bite::file_input_stream(argv[1]), &context);
+    if (!compiler.compile()) {
+        return 1;
     }
+    auto& func = compiler.get_main();
     // Disassembler disassembler(func);
     // disassembler.disassemble("main");
     auto& functions = compiler.get_functions();

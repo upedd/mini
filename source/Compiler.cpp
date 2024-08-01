@@ -3,7 +3,8 @@
 #include <cassert>
 #include <ranges>
 
-#include "debug.h"
+#include "api/enhance_messages.h"
+#include "shared/SharedContext.h"
 
 void Compiler::Scope::mark_temporary(int count) {
     temporaries += count;
@@ -71,12 +72,24 @@ void Compiler::Context::close_upvalue(int index) {
     }
 }
 
-void Compiler::compile() {
+bool Compiler::compile() {
     for (auto& stmt : parser.parse().statements) {
         visit_stmt(stmt);
     }
+    auto messages = parser.get_messages();
+    if (!messages.empty()) {
+        auto enchanced = bite::enchance_messages(messages);
+        for (auto& msg : enchanced) {
+            shared_context->logger.log(bite::Logger::Level::info, msg);
+        }
+    }
+    if (parser.has_errors()) {
+        shared_context->logger.log(bite::Logger::Level::error, "compiliation aborted because of above errors", nullptr); // TODO: workaround
+        return false;
+    }
     // default return at main
     emit_default_return();
+    return true;
 }
 
 Function& Compiler::get_main() {

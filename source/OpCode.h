@@ -1,7 +1,7 @@
 #ifndef OPCODE_H
 #define OPCODE_H
 
-#include "types.h"
+#include "shared/types.h"
 
 enum class OpCode : bite_byte {
     ADD,

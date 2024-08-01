@@ -3,7 +3,7 @@
 #include <expected>
 #include <stdexcept>
 
-#include "types.h"
+#include "../shared/types.h"
 
 class ConversionError : public std::runtime_error {
 public:

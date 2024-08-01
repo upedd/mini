@@ -6,7 +6,7 @@
 #include "../base/perfect_map.h"
 #include "../shared/SharedContext.h"
 
-std::expected<Token, Lexer::Error> Lexer::next_token() {
+std::expected<Token, bite::Message> Lexer::next_token() {
     skip_whitespace();
     start_pos = stream.position();
     switch (const char c = stream.advance(); c) {
@@ -108,22 +108,19 @@ Token Lexer::make_token(const Token::Type type) {
     return { .type = type, .source_start_offset = start_pos, .source_end_offset = stream.position(), .string = string };
 }
 
-std::unexpected<Lexer::Error> Lexer::make_error(const std::string& reason, const std::string& inline_message) const {
-    context->add_compilation_message(
-        {
+std::unexpected<bite::Message> Lexer::make_error(const std::string& reason, const std::string& inline_message) const {
+    return std::unexpected<bite::Message>({
             .level = bite::Logger::Level::error,
             .content = reason,
             .inline_msg = bite::InlineMessage {
                 .location = bite::SourceLocation {
-                    .file_path = "debug.bite",
+                    .file_path = get_filepath(),
                     .start_offset = start_pos,
                     .end_offset = stream.position()
                 },
                 .content = inline_message
             }
-        }
-    );
-    return std::unexpected<Error>({ static_cast<int>(start_pos), reason });
+        });
 }
 
 constexpr static perfect_map<Token::Type, 30> identifiers(
@@ -172,7 +169,7 @@ Token Lexer::keyword_or_identifier() {
     return make_token(Token::Type::IDENTIFIER);
 }
 
-std::expected<Token, Lexer::Error> Lexer::string() {
+std::expected<Token, bite::Message> Lexer::string() {
     while (!stream.ended() && stream.next() != '"') {
         buffer.push_back(stream.advance());
     }

@@ -28,7 +28,7 @@ namespace bite {
             return self.m_next;
         }
 
-        template<class Self>
+        template <class Self>
         bool check(this Self&& self, T c) {
             return self.next() == c;
         }
@@ -43,9 +43,10 @@ namespace bite {
         }
 
         template <class Self>
-        [[nodiscard]] std::size_t position(this Self&& self)  {
+        [[nodiscard]] std::size_t position(this Self&& self) {
             return self.m_position;
         }
+
     protected:
         T m_current;
         T m_next;
@@ -55,12 +56,8 @@ namespace bite {
     // TODO: check errors!
     class file_input_stream : public input_stream_base<char> {
     public:
-        [[nodiscard]] explicit file_input_stream(const std::string& path) :file(path) {
-            advance();
-            m_position = 0;
-        }
-
-        [[nodiscard]] explicit file_input_stream(std::ifstream&& stream) : file(std::move(stream)) {
+        [[nodiscard]] explicit file_input_stream(const std::string& path) : path(path),
+                                                                            file(path) {
             advance();
             m_position = 0;
         }
@@ -77,7 +74,12 @@ namespace bite {
             return '\0';
         }
 
+        [[nodiscard]] const std::string& get_filepath() const {
+            return path;
+        }
+
     private:
+        std::string path;
         std::ifstream file;
     };
 }

@@ -3,8 +3,8 @@
 
 #include <vector>
 
-#include "../Ast.h"
 #include "Lexer.h"
+#include "../Ast.h"
 #include "../shared/Message.h"
 
 /**
@@ -46,12 +46,15 @@ private:
     bool m_has_errors = false;
     std::vector<bite::Message> messages;
 
+    void emit_message(const bite::Message& message);
     void error(const Token& token, const std::string& message, const std::string& inline_message = "");
     void warning(const Token& token, const std::string& message, const std::string& inline_message = "");
+
     void synchronize();
 
     bool match(Token::Type type);
     [[nodiscard]] bool check(Token::Type type) const;
+
     Token advance();
     void consume(Token::Type type, const std::string& message);
 
@@ -124,17 +127,15 @@ private:
     Expr identifier();
     Expr grouping();
     Expr unary(Token::Type op);
-
-    Expr return_expression();
-    Expr if_expression();
     Expr super_();
-
+    Expr if_expression();
     Expr break_expression();
     Expr continue_expression();
-    Expr labeled_expression();
+    Expr return_expression();
     ObjectExpr object_expression();
-    Expr while_expression(const std::optional<Token>& label = {});
+    Expr labeled_expression();
     Expr loop_expression(const std::optional<Token>& label = {});
+    Expr while_expression(const std::optional<Token>& label = {});
     Expr for_expression(const std::optional<Token>& label = {});
     Expr block(const std::optional<Token>& label = {});
 

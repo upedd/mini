@@ -150,14 +150,15 @@ public:
 
 
     explicit Compiler(bite::file_input_stream&& stream, SharedContext* context) : parser(std::move(stream), context),
-                                                                          source(source),
-                                                                          main("", 0) {
+        source(source),
+        main("", 0),
+        shared_context(context) {
         context_stack.emplace_back(&main, FunctionType::FUNCTION);
         current_context().scopes.emplace_back(ScopeType::BLOCK, 0); // TODO: special type?
         functions.push_back(&main);
     }
 
-    void compile();
+    bool compile();
 
     Function& get_main();
 
@@ -177,7 +178,7 @@ public:
     void object_statement(const ObjectStmt& stmt);
 
     void trait_statement(const TraitStmt& stmt);
-    Parser parser;
+
 private:
     void start_context(Function* function, FunctionType type);
     void end_context();
@@ -257,12 +258,13 @@ private:
     void get_property(const GetPropertyExpr& expr);
     void super(const SuperExpr& expr);
 
-
+    Parser parser;
     Function main;
     std::vector<Context> context_stack;
     std::string_view source;
     std::vector<Function*> functions;
     std::vector<std::string> natives;
+    SharedContext* shared_context;
 };
 
 

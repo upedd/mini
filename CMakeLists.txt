@@ -21,9 +21,9 @@ add_executable(bite source/main.cpp
         source/Value.cpp
         source/Object.h
         source/CallFrame.h
-        source/types.h
-        source/conversions.h
-        source/conversions.cpp
+        source/shared/types.h
+        source/parser/conversions.h
+        source/parser/conversions.cpp
         source/Program.cpp
         source/Program.h
         source/Object.cpp

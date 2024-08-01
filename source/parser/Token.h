@@ -95,6 +95,7 @@ struct Token {
     StringTable::Handle string;
 
     static std::string type_to_string(Type type);
+    static std::string type_to_display(Type type);
     /**
      *
      * @return string representation for logging purposes.
@@ -104,7 +105,7 @@ struct Token {
     }
 };
 
-inline std::string Token::type_to_string(Type type) {
+inline std::string Token::type_to_string(const Type type) {
     // maybe do this using some macros magic
     switch (type) {
         case Type::IDENTIFIER: return "IDENTIFIER";
@@ -191,6 +192,94 @@ inline std::string Token::type_to_string(Type type) {
         case Type::EXCLUDE: return "EXCLUDE";
     }
     return "INVALID_TOKEN";
+}
+
+inline std::string Token::type_to_display(const Type type) {
+    switch (type) {
+        case Type::IDENTIFIER: return "identifier";
+        case Type::NUMBER: return "number";
+        case Type::INTEGER: return "integer";
+        case Type::STRING: return "string";
+        case Type::EQUAL: return "=";
+        case Type::EQUAL_EQUAL: return "==";
+        case Type::BANG_EQUAL: return "!=";
+        case Type::LESS_EQUAL: return "<=";
+        case Type::GREATER_EQUAL: return ">=";
+        case Type::PLUS_EQUAL: return "<=";
+        case Type::MINUS_EQUAL: return "-=";
+        case Type::STAR_EQUAL: return "*=";
+        case Type::PERCENT_EQUAL: return "%=";
+        case Type::SLASH_EQUAL: return "/=";
+        case Type::SLASH_SLASH_EQUAL: return "//=";
+        case Type::AND_EQUAL: return "&=";
+        case Type::BAR_EQUAL: return "|=";
+        case Type::CARET_EQUAL: return "^=";
+        case Type::LESS_LESS_EQUAL: return "<<=";
+        case Type::GREATER_GREATER_EQUAL: return ">>=";
+        case Type::LESS: return "<";
+        case Type::GREATER: return ">";
+        case Type::LEFT_PAREN: return "(";
+        case Type::RIGHT_PAREN: return ")";
+        case Type::LEFT_BRACE: return "{";
+        case Type::RIGHT_BRACE: return "}";
+        case Type::LEFT_BRACKET: return "[";
+        case Type::RIGHT_BRACKET: return "]";
+        case Type::PLUS: return "+";
+        case Type::MINUS: return "-";
+        case Type::STAR: return "*";
+        case Type::SLASH: return "/";
+        case Type::SLASH_SLASH: return "//";
+        case Type::PERCENT: return "%";
+        case Type::AND: return "&";
+        case Type::AND_AND: return "&&";
+        case Type::BAR: return "|";
+        case Type::BAR_BAR: return "||";
+        case Type::BANG: return "!";
+        case Type::DOT: return ".";
+        case Type::DOT_DOT: return "..";
+        case Type::DOT_DOT_DOT: return "...";
+        case Type::LESS_LESS: return "<<";
+        case Type::GREATER_GREATER: return ">>";
+        case Type::CARET: return "^";
+        case Type::TRUE: return "true";
+        case Type::FALSE: return "false";
+        case Type::LOOP: return "loop";
+        case Type::IF: return "if";
+        case Type::ELSE: return "else";
+        case Type::IN: return "in";
+        case Type::IS: return "is";
+        case Type::CLASS: return "class";
+        case Type::FUN: return "fun";
+        case Type::GET: return "get";
+        case Type::SET: return "set";
+        case Type::NIL: return "nil";
+        case Type::THIS: return "this";
+        case Type::COMMA: return ",";
+        case Type::SEMICOLON: return ";";
+        case Type::BREAK: return "break";
+        case Type::CONTINUE: return "continue";
+        case Type::NONE: return "none";
+        case Type::MATCH: return "match";
+        case Type::RETURN: return "return";
+        case Type::SUPER: return "super";
+        case Type::LET: return "let";
+        case Type::WHILE: return "while";
+        case Type::TILDE: return "~";
+        case Type::NATIVE: return "native";
+        case Type::FOR: return "for";
+        case Type::LABEL: return "label";
+        case Type::COLON: return ":";
+        case Type::PRIVATE: return "private";
+        case Type::ABSTRACT: return "abstract";
+        case Type::OVERRDIE: return "override";
+        case Type::OBJECT: return "object";
+        case Type::TRAIT: return "trait";
+        case Type::USING: return "using";
+        case Type::AS: return "as";
+        case Type::EXCLUDE: return "exclude";
+        case Type::END: return "end";
+        default: std::unreachable();
+    }
 }
 
 #endif //TOKEN_H

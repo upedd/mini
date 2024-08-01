@@ -4,7 +4,7 @@
 #include <vector>
 
 #include "OpCode.h"
-#include "types.h"
+#include "shared/types.h"
 
 class Program {
 public:
