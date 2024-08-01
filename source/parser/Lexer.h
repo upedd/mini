@@ -3,7 +3,7 @@
 #include <expected>
 #include <vector>
 
-#include "../Token.h"
+#include "Token.h"
 #include "../base/stream.h"
 
 class SharedContext;

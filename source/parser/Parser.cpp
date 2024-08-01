@@ -3,8 +3,8 @@
 #include <cassert>
 #include <iostream>
 
-#include "conversions.h"
-#include "shared/SharedContext.h"
+#include "../conversions.h"
+#include "../shared/SharedContext.h"
 
 void Parser::error(const Token& token, const std::string& message, const std::string& inline_message) {
     if (panic_mode)
@@ -12,9 +12,27 @@ void Parser::error(const Token& token, const std::string& message, const std::st
     panic_mode = true;
     m_has_errors = true;
 
+    // TODO: refactor message system. this stinks a bit
     messages.push_back(
         bite::Message {
             .level = bite::Logger::Level::error,
+            .content = message,
+            .inline_msg = bite::InlineMessage {
+                .location = bite::SourceLocation {
+                    .file_path = "debug.bite",
+                    .start_offset = token.source_start_offset,
+                    .end_offset = token.source_end_offset
+                },
+                .content = inline_message
+            }
+        }
+    );
+}
+
+void Parser::warning(const Token& token, const std::string& message, const std::string& inline_message) {
+    messages.push_back(
+        bite::Message {
+            .level = bite::Logger::Level::warn,
             .content = message,
             .inline_msg = bite::InlineMessage {
                 .location = bite::SourceLocation {
@@ -50,7 +68,45 @@ void Parser::synchronize() {
     }
 }
 
-bool is_expression_start(Token::Type type) {
+Token Parser::advance() {
+    current = next;
+    while (true) {
+        if (auto token = lexer.next_token()) {
+            next = *token;
+            break;
+        } else {
+            error(current, token.error().message);
+        }
+    }
+    return current;
+}
+
+bool Parser::check(const Token::Type type) const {
+    return next.type == type;
+}
+
+void Parser::consume(const Token::Type type, const std::string& message) {
+    if (check(type)) {
+        advance();
+        return;
+    }
+
+    error(next, message, "expected " + Token::type_to_string(type) + " here");
+}
+
+bool Parser::match(Token::Type type) {
+    if (check(type)) {
+        advance();
+        return true;
+    }
+    return false;
+}
+
+StringTable::Handle Parser::context_keyword(const std::string& keyword) const {
+    return context->intern(keyword);
+}
+
+bool is_expression_start(const Token::Type type) {
     switch (type) {
         case Token::Type::INTEGER:
         case Token::Type::NUMBER:
@@ -78,38 +134,9 @@ bool is_expression_start(Token::Type type) {
     }
 }
 
-Token Parser::advance() {
-    current = next;
-    while (true) {
-        if (auto token = lexer.next_token()) {
-            next = *token;
-            break;
-        } else {
-            error(current, token.error().message);
-        }
-    }
-    return current;
-}
-
-bool Parser::check(const Token::Type type) const {
-    return next.type == type;
-}
-
-void Parser::consume(const Token::Type type, const std::string& message) {
-    if (check(type)) {
-        advance();
-        return;
-    }
-
-    error(current, message, "expected " + Token::type_to_string(type) + " here");
-}
-
-bool Parser::match(Token::Type type) {
-    if (check(type)) {
-        advance();
-        return true;
-    }
-    return false;
+bool is_control_flow_start(const Token::Type type) {
+    return type == Token::Type::LABEL || type == Token::Type::LEFT_BRACE || type == Token::Type::LOOP || type ==
+        Token::Type::WHILE || type == Token::Type::FOR || type == Token::Type::IF;
 }
 
 Ast Parser::parse() {
@@ -121,35 +148,6 @@ Ast Parser::parse() {
     return Ast(std::move(stmts));
 }
 
-std::optional<Stmt> Parser::control_flow_expression_statement() {
-    std::optional<Expr> expr;
-    if (match(Token::Type::IF)) {
-        expr = if_expression();
-    } else if (match(Token::Type::LOOP)) {
-        expr = loop_expression();
-    } else if (match(Token::Type::WHILE)) {
-        expr = while_expression();
-    } else if (match(Token::Type::FOR)) {
-        expr = for_expression();
-    } else if (match(Token::Type::LABEL)) {
-        expr = labeled_expression();
-    } else if (match(Token::Type::RETURN)) {
-        expr = return_expression();
-    }
-    // There is an optional semicolon after control flow expressions statements
-    match(Token::Type::SEMICOLON);
-    if (!expr) {
-        return {};
-    }
-    return ExprStmt(std::move(*expr));
-}
-
-Stmt Parser::expression_statement() {
-    Expr expr = expression();
-    consume(Token::Type::SEMICOLON, "Expected ';' after expression.");
-    return ExprStmt(std::move(expr));
-}
-
 Stmt Parser::statement_or_expression() {
     if (auto stmt = statement()) {
         return *stmt;
@@ -157,41 +155,7 @@ Stmt Parser::statement_or_expression() {
     if (auto stmt = control_flow_expression_statement()) {
         return *stmt;
     }
-    return expression_statement();
-}
-
-Stmt Parser::native_declaration() {
-    consume(Token::Type::IDENTIFIER, "invalid native statement");
-    Token name = current;
-    consume(Token::Type::SEMICOLON, "missing semicolon");
-    return NativeStmt(name);
-}
-
-Expr Parser::for_expression(const std::optional<Token>& label) {
-    consume(Token::Type::IDENTIFIER, "invalid 'for' item declaration.");
-    Token name = current;
-    consume(Token::Type::IN, "invalid 'for' loop range expression.");
-    Expr iterable = expression();
-    // refactor maybe?
-    if (current.type != Token::Type::LEFT_BRACE) {
-        error(current, "invalid 'for' loop body", "expected '{' here.");
-    }
-    Expr body = block();
-    return ForExpr { .name = name, .iterable = std::move(iterable), .body = std::move(body), .label = label };
-}
-
-Expr Parser::return_expression() {
-    std::optional<Expr> expr = {};
-    if (is_expression_start(next.type)) {
-        expr = expression();
-    }
-    return ReturnExpr { std::move(expr) };
-}
-
-Stmt Parser::object_declaration() {
-    consume(Token::Type::IDENTIFIER, "missing object name");
-    Token name = current;
-    return ObjectStmt { .name = name, .object = object_expression() };
+    return expr_statement();
 }
 
 std::optional<Stmt> Parser::statement() {
@@ -227,6 +191,50 @@ std::optional<Stmt> Parser::statement() {
     return {};
 }
 
+std::optional<Stmt> Parser::control_flow_expression_statement() {
+    std::optional<Expr> expr;
+    if (match(Token::Type::IF)) {
+        expr = if_expression();
+    } else if (match(Token::Type::LOOP)) {
+        expr = loop_expression();
+    } else if (match(Token::Type::WHILE)) {
+        expr = while_expression();
+    } else if (match(Token::Type::FOR)) {
+        expr = for_expression();
+    } else if (match(Token::Type::LABEL)) {
+        expr = labeled_expression();
+    } else if (match(Token::Type::RETURN)) {
+        expr = return_expression();
+    } else if (match(Token::Type::LEFT_BRACE)) {
+        expr = block();
+    }
+    // There is an optional semicolon after control flow expressions statements
+    match(Token::Type::SEMICOLON);
+    if (!expr) {
+        return {};
+    }
+    return ExprStmt(std::move(*expr));
+}
+
+Stmt Parser::expr_statement() {
+    Stmt stmt = ExprStmt { expression() };
+    consume(Token::Type::SEMICOLON, "missing semicolon after expression");
+    return stmt;
+}
+
+Stmt Parser::native_declaration() {
+    consume(Token::Type::IDENTIFIER, "invalid native statement");
+    Token name = current;
+    consume(Token::Type::SEMICOLON, "missing semicolon");
+    return NativeStmt(name);
+}
+
+Stmt Parser::object_declaration() {
+    consume(Token::Type::IDENTIFIER, "missing object name");
+    Token name = current;
+    return ObjectStmt { .name = name, .object = object_expression() };
+}
+
 Stmt Parser::var_declaration() {
     consume(Token::Type::IDENTIFIER, "missing variable name");
     Token name = current;
@@ -246,7 +254,15 @@ FunctionStmt Parser::function_declaration() {
     return function_declaration_body(name);
 }
 
-std::vector<Token> Parser::consume_functions_parameters() {
+// The part after name
+FunctionStmt Parser::function_declaration_body(const Token& name, const bool skip_params) {
+    std::vector<Token> parameters = skip_params ? std::vector<Token>() : functions_parameters();
+    consume(Token::Type::LEFT_BRACE, "Expected '{' before function body");
+    auto body = block();
+    return FunctionStmt { .name = name, .params = std::move(parameters), .body = std::move(body) };
+}
+
+std::vector<Token> Parser::functions_parameters() {
     consume(Token::Type::LEFT_PAREN, "missing fuction parameters");
     std::vector<Token> parameters;
     if (!check(Token::Type::RIGHT_PAREN)) {
@@ -255,117 +271,38 @@ std::vector<Token> Parser::consume_functions_parameters() {
             parameters.push_back(current);
         } while (match(Token::Type::COMMA));
     }
-    consume(Token::Type::RIGHT_PAREN, "unmatched paren"); // TODO: better error message
+    consume(Token::Type::RIGHT_PAREN, "unmatched ')'");
     return parameters;
 }
 
-// The part after name
-FunctionStmt Parser::function_declaration_body(const Token& name, const bool skip_params) {
-    std::vector<Token> parameters = skip_params ? std::vector<Token>() : consume_functions_parameters();
-    consume(Token::Type::LEFT_BRACE, "Expected '{' before function body");
-    auto body = block();
-    return FunctionStmt { .name = name, .params = std::move(parameters), .body = std::move(body) };
-}
-
-std::vector<Expr> Parser::consume_call_arguments() {
+std::vector<Expr> Parser::call_arguments() {
     std::vector<Expr> arguments;
     if (!check(Token::Type::RIGHT_PAREN)) {
         do {
             arguments.emplace_back(expression());
         } while (match(Token::Type::COMMA));
     }
-    consume(Token::Type::RIGHT_PAREN, "unmatched paren"); // TODO: better error message
+    consume(Token::Type::RIGHT_PAREN, "unmatched ')'");
     return arguments;
 }
 
-ConstructorStmt Parser::constructor_statement() {
-    std::vector<Token> parameters = consume_functions_parameters();
-    std::vector<Expr> super_arguments;
-    bool has_super = false;
-    // init(parameters*) : super(arguments*) [block]
+Stmt Parser::class_declaration(const bool is_abstract) {
+    consume(Token::Type::IDENTIFIER, "missing class name");
+    Token class_name = current;
+
+    std::optional<Token> superclass;
     if (match(Token::Type::COLON)) {
-        has_super = true;
-        consume(Token::Type::SUPER, "missing superclass constructor call");
-        if (match(Token::Type::LEFT_PAREN)) {
-            super_arguments = consume_call_arguments();
-        }
+        consume(Token::Type::IDENTIFIER, "missing superclass name");
+        superclass = current;
     }
+    StructureBody body = structure_body();
 
-    consume(Token::Type::LEFT_BRACE, "missing constructor body");
-    return ConstructorStmt {
-            .parameters = parameters,
-            .has_super = has_super,
-            .super_arguments = std::move(super_arguments),
-            .body = block()
-        };
-}
-
-FunctionStmt Parser::abstract_method(const Token& name, const bool skip_params) {
-    std::vector<Token> parameters = skip_params ? std::vector<Token>() : consume_functions_parameters();
-    consume(Token::Type::SEMICOLON, "missing semicolon after declaration");
-    return FunctionStmt { .name = name, .params = std::move(parameters), .body = {} };
-}
-
-VarStmt Parser::abstract_field(const Token& name) {
-    consume(Token::Type::SEMICOLON, "missing semicolon after declaration");
-    return VarStmt { .name = name, .value = {} };
-}
-
-bitflags<ClassAttributes> Parser::member_attributes(StructureType outer_type) {
-    // TODO: order independant!
-    bitflags<ClassAttributes> attributes;
-    if (match(Token::Type::PRIVATE)) {
-        attributes += ClassAttributes::PRIVATE;
-    }
-    if (match(Token::Type::OVERRDIE)) {
-        attributes += ClassAttributes::OVERRIDE;
-    }
-    if (match(Token::Type::ABSTRACT)) {
-        attributes += ClassAttributes::ABSTRACT;
-    }
-    if (match(Token::Type::GET)) {
-        attributes += ClassAttributes::GETTER;
-    }
-    if (match(Token::Type::SET)) {
-        attributes += ClassAttributes::SETTER;
-    }
-    return std::move(attributes);
-}
-
-
-UsingStmt Parser::using_statement() {
-    // TODO: do this better!
-    // TODO: validate errors!
-    std::vector<UsingStmtItem> items;
-    do {
-        consume(Token::Type::IDENTIFIER, "Identifier expected");
-        Token trait_name = current;
-        std::vector<Token> exclusions;
-        std::vector<std::pair<Token, Token>> aliases;
-        if (match(Token::Type::LEFT_PAREN)) {
-            do {
-                if (match(Token::Type::EXCLUDE)) {
-                    consume(Token::Type::IDENTIFIER, "Expected identifer after 'exclude'.");
-                    exclusions.push_back(current);
-                } else { // rename
-                    consume(Token::Type::IDENTIFIER, "Expected identifer or 'exclude'.");
-                    Token before = current;
-                    consume(Token::Type::AS, "Expected 'as' after identifier.");
-                    consume(Token::Type::IDENTIFIER, "Expected identifer after 'as'.");
-                    Token after = current;
-                    aliases.emplace_back(before, after);
-                }
-            } while (match(Token::Type::COMMA));
-            consume(Token::Type::RIGHT_PAREN, "Expected ')' after using trait parameters.");
-        }
-        items.emplace_back(trait_name, std::move(exclusions), std::move(aliases));
-    } while (match(Token::Type::COMMA));
-    consume(Token::Type::SEMICOLON, "Expected ';' after using statement.");
-    return UsingStmt(std::move(items));
-}
-
-StringTable::Handle Parser::context_keyword(const std::string& keyword) const {
-    return context->intern(keyword);
+    return ClassStmt {
+        .name = class_name,
+        .super_class = superclass,
+        .body = std::move(body),
+        .is_abstract = is_abstract
+    };
 }
 
 StructureBody Parser::structure_body() {
@@ -385,7 +322,7 @@ StructureBody Parser::structure_body() {
         }
 
         // Member
-        auto attributes = member_attributes(StructureType::CLASS);
+        auto attributes = member_attributes();
         consume(Token::Type::IDENTIFIER, "invalid member");
         Token member_name = current;
 
@@ -415,57 +352,106 @@ StructureBody Parser::structure_body() {
     return body;
 }
 
-Stmt Parser::class_declaration(bool is_abstract) {
-    consume(Token::Type::IDENTIFIER, "missing class name");
-    Token class_name = current;
-
-    std::optional<Token> superclass;
-    if (match(Token::Type::COLON)) {
-        consume(Token::Type::IDENTIFIER, "missing superclass name");
-        superclass = current;
-    }
-    StructureBody body = structure_body();
-
-    return ClassStmt {
-            .name = class_name,
-            .super_class = superclass,
-            .body = std::move(body),
-            .is_abstract = is_abstract
-        };
+UsingStmt Parser::using_statement() {
+    std::vector<UsingStmtItem> items;
+    do {
+        items.push_back(using_stmt_item());
+    } while (match(Token::Type::COMMA));
+    consume(Token::Type::SEMICOLON, "missing semicolon after statement");
+    return UsingStmt(std::move(items));
 }
 
-ObjectExpr Parser::object_expression() {
-    std::optional<Token> superclass;
-    std::vector<Expr> superclass_arguments;
-    if (match(Token::Type::COLON)) {
-        consume(Token::Type::IDENTIFIER, "missing superclass name");
-        superclass = current;
+UsingStmtItem Parser::using_stmt_item() {
+    consume(Token::Type::IDENTIFIER, "Identifier expected");
+    Token item_name = current;
+    if (match(Token::Type::LEFT_PAREN)) {
+        return using_stmt_item_with_params(item_name);
+    }
+    return { .name = item_name };
+}
 
-        if (match(Token::Type::LEFT_PAREN)) {
-            superclass_arguments = consume_call_arguments();
+
+UsingStmtItem Parser::using_stmt_item_with_params(const Token& name) {
+    UsingStmtItem item { .name = name };
+    do {
+        if (match(Token::Type::EXCLUDE)) {
+            consume(Token::Type::IDENTIFIER, "invalid exclusion item");
+            item.exclusions.push_back(current);
+        } else {
+            consume(Token::Type::IDENTIFIER, "invalid trait composition argument");
+            Token before = current;
+            consume(Token::Type::AS, "invalid trait composition argument");
+            consume(Token::Type::IDENTIFIER, "invalid alias");
+            Token after = current;
+            item.aliases.emplace_back(before, after);
+        }
+    } while (match(Token::Type::COMMA));
+    consume(Token::Type::RIGHT_PAREN, "unmatched ')'");
+    return item;
+}
+
+bitflags<ClassAttributes> Parser::member_attributes() {
+    bitflags<ClassAttributes> attributes;
+
+    auto process_attribute = [&](const ClassAttributes attribute) {
+        advance();
+        if (attributes[attribute]) {
+            warning(current, "attribute already defined", "redefinied here");
+        }
+        attributes += attribute;
+    };
+
+    bool consume_arguments = true;
+    while (consume_arguments) {
+        switch (next.type) {
+            case Token::Type::PRIVATE: process_attribute(ClassAttributes::PRIVATE);
+            break;
+            case Token::Type::OVERRDIE: process_attribute(ClassAttributes::OVERRIDE);
+            break;
+            case Token::Type::ABSTRACT: process_attribute(ClassAttributes::ABSTRACT);
+            break;
+            case Token::Type::GET: process_attribute(ClassAttributes::GETTER);
+            break;
+            case Token::Type::SET: process_attribute(ClassAttributes::SETTER);
+            break;
+            default: consume_arguments = false;
         }
     }
 
-    StructureBody body = structure_body();
-
-    return ObjectExpr {
-            .body = std::move(body),
-            .super_class = superclass,
-            .superclass_arguments = std::move(superclass_arguments)
-        };
+    return std::move(attributes);
 }
 
-FunctionStmt Parser::in_trait_function(const Token& name, bitflags<ClassAttributes>& attributes, bool skip_params) {
-    std::vector<Token> parameters = skip_params ? std::vector<Token>() : consume_functions_parameters();
-    std::optional<Expr> body;
-    if (match(Token::Type::LEFT_BRACE)) {
-        body = block();
-    } else {
-        // TODO: this probably should not be here but must wait for compiler refactor!
-        attributes += ClassAttributes::ABSTRACT;
-        consume(Token::Type::SEMICOLON, "missing semicolon after declaration");
+ConstructorStmt Parser::constructor_statement() {
+    std::vector<Token> parameters = functions_parameters();
+    std::vector<Expr> super_arguments;
+    bool has_super = false;
+    // init(parameters*) : super(arguments*) [block]
+    if (match(Token::Type::COLON)) {
+        has_super = true;
+        consume(Token::Type::SUPER, "missing superclass constructor call");
+        if (match(Token::Type::LEFT_PAREN)) {
+            super_arguments = call_arguments();
+        }
     }
-    return FunctionStmt { .name = name, .params = std::move(parameters), .body = std::move(body) };
+
+    consume(Token::Type::LEFT_BRACE, "missing constructor body");
+    return ConstructorStmt {
+        .parameters = parameters,
+        .has_super = has_super,
+        .super_arguments = std::move(super_arguments),
+        .body = block()
+    };
+}
+
+FunctionStmt Parser::abstract_method(const Token& name, const bool skip_params) {
+    std::vector<Token> parameters = skip_params ? std::vector<Token>() : functions_parameters();
+    consume(Token::Type::SEMICOLON, "missing semicolon after declaration");
+    return FunctionStmt { .name = name, .params = std::move(parameters), .body = {} };
+}
+
+VarStmt Parser::abstract_field(const Token& name) {
+    consume(Token::Type::SEMICOLON, "missing semicolon after declaration");
+    return VarStmt { .name = name, .value = {} };
 }
 
 Stmt Parser::trait_declaration() {
@@ -481,7 +467,7 @@ Stmt Parser::trait_declaration() {
             continue;
         }
 
-        auto attributes = member_attributes(StructureType::TRAIT);
+        auto attributes = member_attributes();
         consume(Token::Type::IDENTIFIER, "invalid trait member.");
         Token member_name = current;
 
@@ -502,42 +488,27 @@ Stmt Parser::trait_declaration() {
     consume(Token::Type::RIGHT_BRACE, "missing '}' after trait body");
 
     return TraitStmt {
-            .name = trait_name,
-            .methods = std::move(methods),
-            .fields = std::move(fields),
-            .using_stmts = std::move(using_statements)
-        };
+        .name = trait_name,
+        .methods = std::move(methods),
+        .fields = std::move(fields),
+        .using_stmts = std::move(using_statements)
+    };
 }
 
-Stmt Parser::expr_statement() {
-    Stmt stmt = ExprStmt { expression() };
-    consume(Token::Type::SEMICOLON, "missing semicolon after expression");
-    return stmt;
-}
-
-Expr Parser::if_expression() {
-    auto condition = expression();
-    if (current.type != Token::Type::LEFT_BRACE) {
-        error(current, "missing 'if' expression body");
+FunctionStmt Parser::in_trait_function(const Token& name, bitflags<ClassAttributes>& attributes, bool skip_params) {
+    std::vector<Token> parameters = skip_params ? std::vector<Token>() : functions_parameters();
+    std::optional<Expr> body;
+    if (match(Token::Type::LEFT_BRACE)) {
+        body = block();
+    } else {
+        // TODO: this probably should not be here but must wait for compiler refactor!
+        attributes += ClassAttributes::ABSTRACT;
+        consume(Token::Type::SEMICOLON, "missing semicolon after declaration");
     }
-    auto then_stmt = block();
-    std::optional<Expr> else_stmt = {};
-    if (match(Token::Type::ELSE)) {
-        if (match(Token::Type::IF)) {
-            else_stmt = if_expression();
-        } else {
-            consume(Token::Type::LEFT_BRACE, "missing 'else' expression body.");
-            else_stmt = block();
-        }
-    }
-    return IfExpr {
-            .condition = std::move(condition),
-            .then_expr = std::move(then_stmt),
-            .else_expr = std::move(else_stmt)
-        };
+    return FunctionStmt { .name = name, .params = std::move(parameters), .body = std::move(body) };
 }
 
-Parser::Precedence Parser::get_precendece(Token::Type token) {
+Parser::Precedence Parser::get_precendece(const Token::Type token) {
     switch (token) {
         case Token::Type::PLUS:
         case Token::Type::MINUS: return Precedence::TERM;
@@ -597,38 +568,163 @@ Expr Parser::expression(const Precedence precedence) {
     return std::move(*left);
 }
 
+std::optional<Expr> Parser::prefix() {
+    switch (current.type) {
+        case Token::Type::INTEGER: return integer();
+        case Token::Type::NUMBER: return number();
+        case Token::Type::STRING: return string();
+        case Token::Type::TRUE:
+        case Token::Type::FALSE:
+        case Token::Type::THIS:
+        case Token::Type::NIL: return keyword();
+        case Token::Type::IDENTIFIER: return identifier();
+        case Token::Type::LEFT_PAREN: return grouping();
+        case Token::Type::LEFT_BRACE: return block();
+        case Token::Type::BANG:
+        case Token::Type::MINUS:
+        case Token::Type::TILDE: return unary(current.type);
+        case Token::Type::SUPER: return super_();
+        case Token::Type::IF: return if_expression();
+        case Token::Type::LOOP: return loop_expression();
+        case Token::Type::BREAK: return break_expression();
+        case Token::Type::CONTINUE: return continue_expression();
+        case Token::Type::WHILE: return while_expression();
+        case Token::Type::FOR: return for_expression();
+        case Token::Type::LABEL: return labeled_expression();
+        case Token::Type::RETURN: return return_expression();
+        case Token::Type::OBJECT: return object_expression();
+        default: return {};
+    }
+}
+
+
+
+
+Expr Parser::for_expression(const std::optional<Token>& label) {
+    consume(Token::Type::IDENTIFIER, "invalid 'for' item declaration.");
+    Token name = current;
+    consume(Token::Type::IN, "invalid 'for' loop range expression.");
+    Expr iterable = expression();
+    if (current.type != Token::Type::LEFT_BRACE) {
+        error(current, "invalid 'for' loop body", "expected '{' here.");
+    }
+    Expr body = block();
+    return ForExpr { .name = name, .iterable = std::move(iterable), .body = std::move(body), .label = label };
+}
+
+Expr Parser::return_expression() {
+    std::optional<Expr> expr = {};
+    if (is_expression_start(next.type)) {
+        expr = expression();
+    }
+    return ReturnExpr { std::move(expr) };
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ObjectExpr Parser::object_expression() {
+    std::optional<Token> superclass;
+    std::vector<Expr> superclass_arguments;
+    if (match(Token::Type::COLON)) {
+        consume(Token::Type::IDENTIFIER, "missing superclass name");
+        superclass = current;
+
+        if (match(Token::Type::LEFT_PAREN)) {
+            superclass_arguments = call_arguments();
+        }
+    }
+
+    StructureBody body = structure_body();
+
+    return ObjectExpr {
+            .body = std::move(body),
+            .super_class = superclass,
+            .superclass_arguments = std::move(superclass_arguments)
+        };
+}
+
+
+
+
+
+
+
+Expr Parser::if_expression() {
+    auto condition = expression();
+    if (current.type != Token::Type::LEFT_BRACE) {
+        error(current, "missing 'if' expression body");
+    }
+    auto then_stmt = block();
+    std::optional<Expr> else_stmt = {};
+    if (match(Token::Type::ELSE)) {
+        if (match(Token::Type::IF)) {
+            else_stmt = if_expression();
+        } else {
+            consume(Token::Type::LEFT_BRACE, "missing 'else' expression body.");
+            else_stmt = block();
+        }
+    }
+    return IfExpr {
+            .condition = std::move(condition),
+            .then_expr = std::move(then_stmt),
+            .else_expr = std::move(else_stmt)
+        };
+}
+
+
+
+
+
 Expr Parser::super_() {
     consume(Token::Type::DOT, "missing '.' after 'super'");
     consume(Token::Type::IDENTIFIER, "missing superclass member identifier after 'super'");
     return SuperExpr { current };
 }
 
-// TODO: missing refactor
-bool starts_block_expression(Token::Type type) {
-    return type == Token::Type::LABEL || type == Token::Type::LEFT_BRACE || type == Token::Type::LOOP || type ==
-        Token::Type::WHILE || type == Token::Type::FOR || type == Token::Type::IF;
-}
-
-// TODO: missing refactor
-Expr Parser::block(std::optional<Token> label) {
+Expr Parser::block(const std::optional<Token>& label) {
+    // In Bite every block is an expression which can return a value
+    // the value that will be returned is the last expression without succeding semicolon.
+    // we track that expression here in 'expr_at_end'
     std::vector<Stmt> stmts;
     std::optional<Expr> expr_at_end = {};
     while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
         if (auto stmt = statement()) {
             stmts.push_back(std::move(*stmt));
         } else {
-            bool is_block_expression = starts_block_expression(next.type);
+            bool is_cntrl_flow = is_control_flow_start(next.type);
+            // Note that there is a special case as control flow expressions are not required to have an succeding semicolon
+            // and still are treated as statements. We detect here if this expression is in fact the last expression that
+            // should return an value or that the user explicitly put the semicolon after to force it to be treated as a statement.
+            bool expression_is_statement = is_cntrl_flow && (!check(Token::Type::RIGHT_BRACE) || current.type ==
+                Token::Type::SEMICOLON);
             auto expr = expression();
-            if (match(Token::Type::SEMICOLON) || (is_block_expression && (!check(Token::Type::RIGHT_BRACE) || current.
-                type == Token::Type::SEMICOLON))) {
-                stmts.push_back(ExprStmt(std::move(expr)));
+            if (match(Token::Type::SEMICOLON) || expression_is_statement) {
+                stmts.emplace_back(ExprStmt(std::move(expr)));
             } else {
                 expr_at_end = std::move(expr);
                 break;
             }
         }
     }
-    consume(Token::Type::RIGHT_BRACE, "Expected '}' after block.");
+    consume(Token::Type::RIGHT_BRACE, "unmatched '}'");
     return BlockExpr { .stmts = std::move(stmts), .expr = std::move(expr_at_end), .label = label };
 }
 
@@ -658,7 +754,7 @@ Expr Parser::continue_expression() {
 Expr Parser::while_expression(const std::optional<Token>& label) {
     auto condition = expression();
     if (current.type != Token::Type::LEFT_BRACE) {
-        error(current, "missing 'while' loop body", "Expected '{' here");
+        error(current, "missing 'while' loop body", "expected '{' here");
     }
     auto body = block();
     return WhileExpr(std::move(condition), std::move(body), label);
@@ -666,8 +762,7 @@ Expr Parser::while_expression(const std::optional<Token>& label) {
 
 Expr Parser::labeled_expression() {
     Token label = current;
-    consume(Token::Type::COLON, "missing colon after label");
-    // all expressions we can break out of
+    consume(Token::Type::COLON, "missing colon after the label");
     if (match(Token::Type::LOOP)) {
         return loop_expression(label);
     }
@@ -688,35 +783,6 @@ Expr Parser::grouping() {
     auto expr = expression();
     consume(Token::Type::RIGHT_PAREN, "unmatched ')'");
     return expr;
-}
-
-std::optional<Expr> Parser::prefix() {
-    switch (current.type) {
-        case Token::Type::INTEGER: return integer();
-        case Token::Type::NUMBER: return number();
-        case Token::Type::STRING: return string();
-        case Token::Type::TRUE:
-        case Token::Type::FALSE:
-        case Token::Type::THIS:
-        case Token::Type::NIL: return keyword();
-        case Token::Type::IDENTIFIER: return identifier();
-        case Token::Type::LEFT_PAREN: return grouping();
-        case Token::Type::LEFT_BRACE: return block();
-        case Token::Type::BANG:
-        case Token::Type::MINUS:
-        case Token::Type::TILDE: return unary(current.type);
-        case Token::Type::SUPER: return super_();
-        case Token::Type::IF: return if_expression();
-        case Token::Type::LOOP: return loop_expression();
-        case Token::Type::BREAK: return break_expression();
-        case Token::Type::CONTINUE: return continue_expression();
-        case Token::Type::WHILE: return while_expression();
-        case Token::Type::FOR: return for_expression();
-        case Token::Type::LABEL: return labeled_expression();
-        case Token::Type::RETURN: return return_expression();
-        case Token::Type::OBJECT: return object_expression();
-        default: return {};
-    }
 }
 
 Expr Parser::integer() {
@@ -795,7 +861,7 @@ Expr Parser::infix(Expr left) {
     }
 }
 
-Expr Parser::unary(Token::Type operator_type) {
+Expr Parser::unary(const Token::Type operator_type) {
     return UnaryExpr { .expr = expression(Precedence::UNARY), .op = operator_type };
 }
 
@@ -820,6 +886,6 @@ Expr Parser::assigment(Expr left) {
 }
 
 Expr Parser::call(Expr left) {
-    std::vector<Expr> arguments = consume_call_arguments();
+    std::vector<Expr> arguments = call_arguments();
     return CallExpr { .callee = std::move(left), .arguments = std::move(arguments) };
 }

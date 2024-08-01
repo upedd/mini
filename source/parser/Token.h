@@ -1,6 +1,6 @@
 #ifndef TOKEN_H
 #define TOKEN_H
-#include "shared/StringTable.h"
+#include "../shared/StringTable.h"
 
 struct Token {
     // todo: organize

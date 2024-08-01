@@ -7,10 +7,10 @@ add_executable(bite source/main.cpp
         source/main.cpp
         source/parser/Lexer.cpp
         source/parser/Lexer.h
-        source/Token.h
+        source/parser/Token.h
         source/common.h
-        source/Parser.cpp
-        source/Parser.h
+        source/parser/Parser.cpp
+        source/parser/Parser.h
         source/Ast.h
         source/Compiler.cpp
         source/Compiler.h

@@ -5,7 +5,7 @@
 #include "Ast.h"
 #include "debug.h"
 #include "Object.h"
-#include "Parser.h"
+#include "parser/Parser.h"
 
 
 class Compiler {

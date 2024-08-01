@@ -5,7 +5,7 @@
 #include <variant>
 #include <vector>
 
-#include "Token.h"
+#include "parser/Token.h"
 #include "Value.h"
 #include "base/box.h"
 
