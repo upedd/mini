@@ -98,7 +98,13 @@ namespace bite {
             } else {
                 bite::print(logger->raw_ostream(), "--> ");
             }
-            bite::println(logger->raw_ostream(), "{}", enchanced.message.inline_msg->location.file_path);
+            bite::println(
+                logger->raw_ostream(),
+                "{}:{}:{}",
+                enchanced.message.inline_msg->location.file_path,
+                enchanced.info->line_number,
+                enchanced.info->in_line_start + 1
+            );
             // spacer
             bite::print(logger->raw_ostream(), "{}", repeated(" ", padding));
             if (logger->is_terminal_output()) {
