@@ -162,16 +162,22 @@ public:
     };
 
     // perfomance?
-    void with_expression_scope(auto fn) {
+    void with_expression_scope(const auto& fn) {
         begin_expression_scope();
         fn(current_expression_scope());
         end_expression_scope();
     }
 
-    void with_expression_scope(std::optional<StringTable::Handle> label, auto fn) {
+    void with_expression_scope(std::optional<StringTable::Handle> label, const auto& fn) {
         begin_expression_scope(label);
         fn(current_expression_scope());
         end_expression_scope();
+    }
+
+    void with_context(Function* function, FunctionType& type, const auto& fn) {
+        start_context(function, type);
+        fn();
+        end_context();
     }
 
     void begin_expression_scope(std::optional<StringTable::Handle> label = {}) {
@@ -297,8 +303,9 @@ private:
     void unary(const AstNode<UnaryExpr>& expr);
 
     void binary(const AstNode<BinaryExpr>& expr);
+    void emit_set_variable(const bite::Analyzer::Binding& binding);
 
-    void update_lvalue(const Expr& lvalue);
+    void set_variable(const Expr& lvalue);
     void emit_get_variable(const bite::Analyzer::Binding& binding);
 
     void logical(const AstNode<BinaryExpr>& expr);

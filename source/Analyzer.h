@@ -218,26 +218,26 @@ namespace bite {
             return NoBinding();
         }
 
-        void with_enviroment(const Enviroment& scope, auto fn) {
-            enviroment_stack.push_back(scope);
+        void with_enviroment(const Enviroment& enviroment, const auto& fn) {
+            enviroment_stack.push_back(enviroment);
             fn();
             enviroment_stack.pop_back();
         }
 
-        void with_scope(auto fn) {
+        void with_scope(const auto& fn) {
             // assert env stack non-empty
-
             std::visit(
                 overloaded {
-                    [&fn](GlobalEnviroment& env) {
-                        env.scopes.emplace_back();
+                    [&fn, this](GlobalEnviroment&) {
+                        // workaround reference pointing to wrong address after context stack resized, maybe use deque for context_stack?
+                        std::get<GlobalEnviroment>(enviroment_stack.back()).scopes.emplace_back();
                         fn();
-                        env.scopes.pop_back();
+                        std::get<GlobalEnviroment>(enviroment_stack.back()).scopes.pop_back();
                     },
-                    [&fn](FunctionEnviroment& env) {
-                        env.scopes.emplace_back();
+                    [&fn, this](FunctionEnviroment&) {
+                        std::get<FunctionEnviroment>(enviroment_stack.back()).scopes.emplace_back();
                         fn();
-                        env.scopes.pop_back();
+                        std::get<FunctionEnviroment>(enviroment_stack.back()).scopes.pop_back();
                     },
                     [](ClassEnviroment&) {
                         // panic!

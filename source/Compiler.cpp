@@ -4,6 +4,7 @@
 #include <ranges>
 
 #include "Analyzer.h"
+#include "debug.h"
 #include "api/enhance_messages.h"
 #include "base/overloaded.h"
 #include "shared/SharedContext.h"
@@ -127,10 +128,10 @@ void Compiler::this_expr() {
 
 void Compiler::start_context(Function* function, FunctionType type) {
     context_stack.emplace_back(function, type);
-    //current_context().scopes.emplace_back(ScopeType::BLOCK, 0); // TODO: should be function?
+    current_context().on_stack = function->get_arity() + 1; // plus one for reserved receiver slot!
 }
 
-//#define COMPILER_PRINT_BYTECODE
+#define COMPILER_PRINT_BYTECODE
 
 void Compiler::end_context() {
     #ifdef COMPILER_PRINT_BYTECODE
@@ -177,6 +178,7 @@ void Compiler::emit_default_return() {
     } else {
         emit(OpCode::NIL);
     }
+    current_context().on_stack++; // shouldn't matter?
     emit(OpCode::RETURN);
 }
 
@@ -321,6 +323,7 @@ void Compiler::variable_declaration(const AstNode<VarStmt>& expr) {
 
 void Compiler::function_declaration(const AstNode<FunctionStmt>& stmt) {
     function(stmt, FunctionType::FUNCTION);
+    current_context().on_stack++;
     define_variable(analyzer.bindings[stmt.id]);
 }
 
@@ -537,9 +540,21 @@ void Compiler::continue_expr(const AstNode<ContinueExpr>& expr) {
 
 
 void Compiler::function(const AstNode<FunctionStmt>& stmt, FunctionType type) {
-    // auto function_name = *stmt.name.string;
-    // auto* function = new Function(function_name, stmt.params.size());
-    // functions.push_back(function);
+
+
+    // TODO: integrate into new strings
+    auto function_name = *stmt->name.string;
+    auto* function = new Function(function_name, stmt->params.size());
+    functions.push_back(function);
+
+    with_context(function, type, [&stmt, this] {
+        visit_expr(*stmt->body); // TODO: assert has body?
+        emit_default_return();
+    });
+    // TODO: upvalues
+    int constant = current_function()->add_constant(function);
+    emit(OpCode::CLOSURE, constant);
+
     //
     // start_context(function, type);
     // begin_scope(ScopeType::BLOCK);
@@ -1213,6 +1228,25 @@ void Compiler::retrun_expression(const AstNode<ReturnExpr>& stmt) {
 }
 
 void Compiler::if_expression(const AstNode<IfExpr>& stmt) {
+    visit_expr(stmt->condition);
+    // TODO: better control flow constructs this is kinda confusing
+    int jump_to_else = current_function()->add_empty_jump_destination();
+    emit(OpCode::JUMP_IF_FALSE, jump_to_else);
+    // maybe combine these into utility some bytecode writer which tracks stack
+    emit(OpCode::POP);
+    current_context().on_stack--;
+    visit_expr(stmt->then_expr);
+    auto jump_to_end = current_function()->add_empty_jump_destination();
+    emit(OpCode::JUMP, jump_to_end);
+    current_function()->patch_jump_destination(jump_to_else, current_program().size());
+    emit(OpCode::POP); // confusing thing is we don't need to pop this off our stack counter (proof left as a exercise)
+    if (stmt->else_expr) {
+        current_context().on_stack--; // current result does not exist!
+        visit_expr(*stmt->else_expr);
+    } else {
+        emit(OpCode::NIL); // default return value!
+    }
+    current_function()->patch_jump_destination(jump_to_end, current_program().size());
     // visit_expr(stmt.condition);
     // int jump_to_else = current_function()->add_empty_jump_destination();
     // emit(OpCode::JUMP_IF_FALSE, jump_to_else);
@@ -1285,98 +1319,123 @@ void Compiler::unary(const AstNode<UnaryExpr>& expr) {
 }
 
 void Compiler::binary(const AstNode<BinaryExpr>& expr) {
-    // // we don't need to actually visit lhs for plain assigment
-    // if (expr.op == Token::Type::EQUAL) {
-    //     visit_expr(expr.right);
-    //     update_lvalue(expr.left);
-    //     current_scope().pop_temporary();
-    //     return;
-    // }
-    //
-    // visit_expr(expr.left);
-    // // we need handle logical expressions before we execute right side as they can short circut
-    // if (expr.op == Token::Type::AND_AND || expr.op == Token::Type::BAR_BAR) {
-    //     logical(expr);
-    //     current_scope().pop_temporary();
-    //     return;
-    // }
-    //
-    // visit_expr(expr.right);
-    // switch (expr.op) {
-    //     case Token::Type::PLUS: emit(OpCode::ADD);
-    //         break;
-    //     case Token::Type::MINUS: emit(OpCode::SUBTRACT);
-    //         break;
-    //     case Token::Type::STAR: emit(OpCode::MULTIPLY);
-    //         break;
-    //     case Token::Type::SLASH: emit(OpCode::DIVIDE);
-    //         break;
-    //     case Token::Type::EQUAL_EQUAL: emit(OpCode::EQUAL);
-    //         break;
-    //     case Token::Type::BANG_EQUAL: emit(OpCode::NOT_EQUAL);
-    //         break;
-    //     case Token::Type::LESS: emit(OpCode::LESS);
-    //         break;
-    //     case Token::Type::LESS_EQUAL: emit(OpCode::LESS_EQUAL);
-    //         break;
-    //     case Token::Type::GREATER: emit(OpCode::GREATER);
-    //         break;
-    //     case Token::Type::GREATER_EQUAL: emit(OpCode::GREATER_EQUAL);
-    //         break;
-    //     case Token::Type::GREATER_GREATER: emit(OpCode::RIGHT_SHIFT);
-    //         break;
-    //     case Token::Type::LESS_LESS: emit(OpCode::LEFT_SHIFT);
-    //         break;
-    //     case Token::Type::AND: emit(OpCode::BITWISE_AND);
-    //         break;
-    //     case Token::Type::BAR: emit(OpCode::BITWISE_OR);
-    //         break;
-    //     case Token::Type::CARET: emit(OpCode::BITWISE_XOR);
-    //         break;
-    //     case Token::Type::PERCENT: emit(OpCode::MODULO);
-    //         break;
-    //     case Token::Type::SLASH_SLASH: emit(OpCode::FLOOR_DIVISON);
-    //         break;
-    //     case Token::Type::PLUS_EQUAL: emit(OpCode::ADD);
-    //         update_lvalue(expr.left);
-    //         break;
-    //     case Token::Type::MINUS_EQUAL: emit(OpCode::SUBTRACT);
-    //         update_lvalue(expr.left);
-    //         break;
-    //     case Token::Type::STAR_EQUAL: emit(OpCode::MULTIPLY);
-    //         update_lvalue(expr.left);
-    //         break;
-    //     case Token::Type::SLASH_EQUAL: emit(OpCode::DIVIDE);
-    //         update_lvalue(expr.left);
-    //         break;
-    //     case Token::Type::SLASH_SLASH_EQUAL: emit(OpCode::FLOOR_DIVISON);
-    //         update_lvalue(expr.left);
-    //         break;
-    //     case Token::Type::PERCENT_EQUAL: emit(OpCode::MODULO);
-    //         update_lvalue(expr.left);
-    //         break;
-    //     case Token::Type::LESS_LESS_EQUAL: emit(OpCode::LEFT_SHIFT);
-    //         update_lvalue(expr.left);
-    //         break;
-    //     case Token::Type::GREATER_GREATER_EQUAL: emit(OpCode::RIGHT_SHIFT);
-    //         update_lvalue(expr.left);
-    //         break;
-    //     case Token::Type::AND_EQUAL: emit(OpCode::BITWISE_AND);
-    //         update_lvalue(expr.left);
-    //         break;
-    //     case Token::Type::CARET_EQUAL: emit(OpCode::BITWISE_XOR);
-    //         update_lvalue(expr.left);
-    //         break;
-    //     case Token::Type::BAR_EQUAL: emit(OpCode::BITWISE_OR);
-    //         update_lvalue(expr.left);
-    //         break;
-    //     default: assert("unreachable");
-    // }
-    // current_scope().pop_temporary();
+    // we don't need to actually visit lhs for plain assigment
+    // TODO don't we?
+    if (expr->op == Token::Type::EQUAL) {
+        visit_expr(expr->right);
+        emit_set_variable(analyzer.bindings[expr.id]);
+        current_context().on_stack--;
+        return;
+    }
+    visit_expr(expr->left);
+    // we need handle logical expressions before we execute right side as they can short circut
+    if (expr->op == Token::Type::AND_AND || expr->op == Token::Type::BAR_BAR) {
+        logical(expr);
+        current_context().on_stack--;
+        return;
+    }
+
+    visit_expr(expr->right);
+    switch (expr->op) {
+        case Token::Type::PLUS: emit(OpCode::ADD);
+            break;
+        case Token::Type::MINUS: emit(OpCode::SUBTRACT);
+            break;
+        case Token::Type::STAR: emit(OpCode::MULTIPLY);
+            break;
+        case Token::Type::SLASH: emit(OpCode::DIVIDE);
+            break;
+        case Token::Type::EQUAL_EQUAL: emit(OpCode::EQUAL);
+            break;
+        case Token::Type::BANG_EQUAL: emit(OpCode::NOT_EQUAL);
+            break;
+        case Token::Type::LESS: emit(OpCode::LESS);
+            break;
+        case Token::Type::LESS_EQUAL: emit(OpCode::LESS_EQUAL);
+            break;
+        case Token::Type::GREATER: emit(OpCode::GREATER);
+            break;
+        case Token::Type::GREATER_EQUAL: emit(OpCode::GREATER_EQUAL);
+            break;
+        case Token::Type::GREATER_GREATER: emit(OpCode::RIGHT_SHIFT);
+            break;
+        case Token::Type::LESS_LESS: emit(OpCode::LEFT_SHIFT);
+            break;
+        case Token::Type::AND: emit(OpCode::BITWISE_AND);
+            break;
+        case Token::Type::BAR: emit(OpCode::BITWISE_OR);
+            break;
+        case Token::Type::CARET: emit(OpCode::BITWISE_XOR);
+            break;
+        case Token::Type::PERCENT: emit(OpCode::MODULO);
+            break;
+        case Token::Type::SLASH_SLASH: emit(OpCode::FLOOR_DIVISON);
+            break;
+        case Token::Type::PLUS_EQUAL: emit(OpCode::ADD);
+            emit_set_variable(analyzer.bindings[expr.id]);
+            break;
+        case Token::Type::MINUS_EQUAL: emit(OpCode::SUBTRACT);
+            emit_set_variable(analyzer.bindings[expr.id]);
+            break;
+        case Token::Type::STAR_EQUAL: emit(OpCode::MULTIPLY);
+            emit_set_variable(analyzer.bindings[expr.id]);
+            break;
+        case Token::Type::SLASH_EQUAL: emit(OpCode::DIVIDE);
+            emit_set_variable(analyzer.bindings[expr.id]);
+            break;
+        case Token::Type::SLASH_SLASH_EQUAL: emit(OpCode::FLOOR_DIVISON);
+            emit_set_variable(analyzer.bindings[expr.id]);
+            break;
+        case Token::Type::PERCENT_EQUAL: emit(OpCode::MODULO);
+            emit_set_variable(analyzer.bindings[expr.id]);
+            break;
+        case Token::Type::LESS_LESS_EQUAL: emit(OpCode::LEFT_SHIFT);
+            emit_set_variable(analyzer.bindings[expr.id]);
+            break;
+        case Token::Type::GREATER_GREATER_EQUAL: emit(OpCode::RIGHT_SHIFT);
+            emit_set_variable(analyzer.bindings[expr.id]);
+            break;
+        case Token::Type::AND_EQUAL: emit(OpCode::BITWISE_AND);
+            emit_set_variable(analyzer.bindings[expr.id]);
+            break;
+        case Token::Type::CARET_EQUAL: emit(OpCode::BITWISE_XOR);
+            emit_set_variable(analyzer.bindings[expr.id]);
+            break;
+        case Token::Type::BAR_EQUAL: emit(OpCode::BITWISE_OR);
+            emit_set_variable(analyzer.bindings[expr.id]);
+            break;
+        default: std::unreachable(); // panic
+    }
+    current_context().on_stack--;
 }
 
 // TODO: total mess and loads of overlap with Compiler::resolve_variable
-void Compiler::update_lvalue(const Expr& lvalue) {
+void Compiler::emit_set_variable(const bite::Analyzer::Binding& binding) {
+    std::visit(overloaded {
+        [this](const bite::Analyzer::LocalBinding& bind) {
+            emit(OpCode::SET, current_context().slots[bind.enviroment_offset]); // assert exists?
+        },
+        [this](const bite::Analyzer::GlobalBinding& bind) {
+            int constant = current_function()->add_constant(*bind.name); // TODO: rework constant system
+            emit(OpCode::SET_GLOBAL, constant);
+        },
+        [this](const bite::Analyzer::CapturedBinding) {
+            // TODO
+        },
+        [this](const bite::Analyzer::MemberBinding) {
+            // TODO
+        },
+        [this](const bite::Analyzer::ParameterBinding& bind) {
+            emit(OpCode::SET, bind.param_idx + 1); // + 1 for the reserved receiver object
+        },
+        [this](const bite::Analyzer::ClassObjectBinding) {
+            // TODO
+        },
+        [this](const bite::Analyzer::NoBinding) {
+            std::unreachable(); // panic!
+        }
+    }, binding);
+
     // if (std::holds_alternative<bite::box<VariableExpr>>(lvalue)) {
     //     std::string name = *std::get<bite::box<VariableExpr>>(lvalue)->identifier.string;
     //     auto resolution = current_context().resolve_variable(name);
@@ -1428,8 +1487,8 @@ void Compiler::emit_get_variable(const bite::Analyzer::Binding& binding) {
         [this](const bite::Analyzer::MemberBinding) {
             // TODO
         },
-        [this](const bite::Analyzer::ParameterBinding) {
-            // TODO
+        [this](const bite::Analyzer::ParameterBinding& bind) {
+            emit(OpCode::GET, bind.param_idx + 1); // + 1 for the reserved receiver object
         },
         [this](const bite::Analyzer::ClassObjectBinding) {
             // TODO
