@@ -39,7 +39,6 @@ namespace bite {
         void variable_declarataion(const AstNode<VarStmt>& stmt);
         void variable_expression(const AstNode<VariableExpr>& expr);
 
-        void bind(const Expr& expr, StringTable::Handle name);
         void expression_statement(const AstNode<ExprStmt>& stmt);
         void function_declaration(const AstNode<FunctionStmt>& box);
         void native_declaration(const AstNode<NativeStmt>& box);
@@ -72,7 +71,9 @@ namespace bite {
             StringTable::Handle name;
         };
 
-        struct ClassObjectBinding {};
+        struct ClassObjectBinding {
+
+        };
 
         struct GlobalBinding {
             StringTable::Handle name;

@@ -52,6 +52,7 @@ void bite::Analyzer::expression_statement(const AstNode<ExprStmt>& stmt) {
 void bite::Analyzer::function_declaration(const AstNode<FunctionStmt>& stmt) {
     // TODO: handle captures
     declare(stmt->name.string);
+    bindings[stmt.id] = get_binding(stmt->name.string);
     with_enviroment(
         FunctionEnviroment(),
         [&stmt, this] {

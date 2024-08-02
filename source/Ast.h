@@ -11,10 +11,6 @@
 
 // Reference: https://lesleylai.info/en/ast-in-cpp-part-1-variant/
 // https://www.foonathan.net/2022/05/recursive-variant-box/
-
-// TODO: more safety
-
-
 /**
 * Container to attach additional metadata to ast nodes
 */
@@ -59,7 +55,7 @@ using Stmt = std::variant<AstNode<struct VarStmt>, AstNode<struct ExprStmt>, Ast
 struct Ast {
     std::vector<Stmt> statements;
 
-    std::size_t current_id;
+    std::size_t current_id = 0;
 
     template <typename T, typename... Args>
     AstNode<T> make_node(Args&&... args) {

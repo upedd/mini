@@ -121,6 +121,15 @@ public:
         int constructor_argument_count = 0;
     };
 
+    struct ExpressionScope {
+        std::int64_t on_stack_before;
+        std::int64_t return_slot;
+        std::optional<StringTable::Handle> label;
+        // Maybe break into different
+        int break_idx = -1;
+        int continue_idx = -1;
+    };
+
     struct Context {
         Function* function = nullptr;
         FunctionType function_type;
@@ -130,6 +139,7 @@ public:
         int on_stack = 0;
         // enviroment offset to slot
         bite::unordered_dense::map<std::uint64_t, int> slots;
+        std::vector<ExpressionScope> expression_scopes;
 
         // Scope& current_scope() {
         //     return scopes.back();
@@ -150,6 +160,41 @@ public:
         //
         // void close_upvalue(int index);
     };
+
+    // perfomance?
+    void with_expression_scope(auto fn) {
+        begin_expression_scope();
+        fn(current_expression_scope());
+        end_expression_scope();
+    }
+
+    void with_expression_scope(std::optional<StringTable::Handle> label, auto fn) {
+        begin_expression_scope(label);
+        fn(current_expression_scope());
+        end_expression_scope();
+    }
+
+    void begin_expression_scope(std::optional<StringTable::Handle> label = {}) {
+        emit(OpCode::NIL); // sensible default i guess?
+        current_context().on_stack++;
+        current_context().expression_scopes.emplace_back(current_context().on_stack, current_context().on_stack - 1, label);
+    }
+
+    void end_expression_scope() {
+        std::int64_t on_stack_before = current_context().expression_scopes.back().on_stack_before;
+
+        // Note we actually produce one value
+        for (std::int64_t i = 0; i < current_context().on_stack - on_stack_before - 1; ++i) {
+            emit(OpCode::POP); // TODO: upvalues!
+        }
+
+        current_context().expression_scopes.pop_back();
+    }
+
+    // TODO: do this better
+    ExpressionScope& current_expression_scope() {
+        return current_context().expression_scopes.back();
+    }
 
 
     explicit Compiler(bite::file_input_stream&& stream, SharedContext* context) : parser(std::move(stream), context), main("", 0),
@@ -204,6 +249,7 @@ private:
     // Compiler::Context::Resolution resolve_upvalue(const std::string& name);
 
     void visit_stmt(const Stmt& stmt);
+    void define_variable(const bite::Analyzer::Binding& binding);
     bite::Analyzer::Binding get_binding(const Expr& expr);
 
     void variable_declaration(const AstNode<VarStmt>& expr);
@@ -253,6 +299,7 @@ private:
     void binary(const AstNode<BinaryExpr>& expr);
 
     void update_lvalue(const Expr& lvalue);
+    void emit_get_variable(const bite::Analyzer::Binding& binding);
 
     void logical(const AstNode<BinaryExpr>& expr);
 

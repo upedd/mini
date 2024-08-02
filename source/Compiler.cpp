@@ -84,12 +84,20 @@ bool Compiler::compile() {
         }
     }
     if (parser.has_errors()) {
-        shared_context->logger.log(bite::Logger::Level::error, "compiliation aborted because of above errors", nullptr); // TODO: workaround
+        shared_context->logger.log(
+            bite::Logger::Level::error,
+            "compiliation aborted because of above errors",
+            nullptr
+        ); // TODO: workaround
         return false;
     }
     analyzer.analyze(ast);
     if (analyzer.has_errors()) {
-        shared_context->logger.log(bite::Logger::Level::error, "compiliation aborted because of above errors", nullptr); // TODO: workaround
+        shared_context->logger.log(
+            bite::Logger::Level::error,
+            "compiliation aborted because of above errors",
+            nullptr
+        ); // TODO: workaround
         return false;
     }
     for (auto& stmt : ast.statements) {
@@ -290,18 +298,30 @@ void Compiler::visit_stmt(const Stmt& statement) {
     );
 }
 
+void Compiler::define_variable(const bite::Analyzer::Binding& binding) {
+    if (std::holds_alternative<bite::Analyzer::LocalBinding>(binding)) {
+        current_context().slots[std::get<bite::Analyzer::LocalBinding>(binding).enviroment_offset] = current_context().
+            on_stack - 1;
+    } else if (std::holds_alternative<bite::Analyzer::GlobalBinding>(binding)) {
+        auto name_constant = current_function()->add_constant(*std::get<bite::Analyzer::GlobalBinding>(binding).name);
+        // TODO: refactor handling system
+        emit(OpCode::SET_GLOBAL, name_constant);
+    } else {
+        // panic!
+        std::unreachable();
+    }
+}
+
 void Compiler::variable_declaration(const AstNode<VarStmt>& expr) {
     if (expr->value) {
         visit_expr(*expr->value);
     }
-    // TODO: only locals work now:
-    auto binding = std::get<bite::Analyzer::LocalBinding>(analyzer.bindings[expr.id]);
-    current_context().slots[binding.enviroment_offset] = current_context().on_stack - 1;
+    define_variable(analyzer.bindings[expr.id]);
 }
 
 void Compiler::function_declaration(const AstNode<FunctionStmt>& stmt) {
-    // define_variable(*stmt.name.string);
-    // function(stmt, FunctionType::FUNCTION);
+    function(stmt, FunctionType::FUNCTION);
+    define_variable(analyzer.bindings[stmt.id]);
 }
 
 void Compiler::native_declaration(const AstNode<NativeStmt>& stmt) {
@@ -310,15 +330,14 @@ void Compiler::native_declaration(const AstNode<NativeStmt>& stmt) {
     int idx = current_function()->add_constant(name);
     emit(OpCode::GET_NATIVE, idx);
     current_context().on_stack++;
-    // TODO: only locals work now:
-    auto binding = std::get<bite::Analyzer::LocalBinding>(analyzer.bindings[stmt.id]);
-    current_context().slots[binding.enviroment_offset] = current_context().on_stack - 1;
+    // TODO: better way to get those bindings
+    define_variable(analyzer.bindings[stmt.id]);
 }
 
 void Compiler::block(const AstNode<BlockExpr>& expr) {
-    for (const auto& stmt : expr->stmts) {
-        visit_stmt(stmt);
-    }
+    // for (const auto& stmt : expr->stmts) {
+    //     visit_stmt(stmt);
+    // }
     // int break_idx = current_function()->add_empty_jump_destination();
     // begin_scope(ScopeType::BLOCK, expr.label ? *expr.label->string : "");
     // current_scope().break_idx = break_idx;
@@ -336,6 +355,20 @@ void Compiler::block(const AstNode<BlockExpr>& expr) {
     // }
     // end_scope();
     // current_function()->patch_jump_destination(break_idx, current_program().size());
+    int break_idx = current_function()->add_empty_jump_destination();
+    std::optional<StringTable::Handle> label = expr->label ? expr->label->string : std::optional<StringTable::Handle> {};
+    with_expression_scope(label, [&expr, this](const ExpressionScope& expr_scope) {
+        for (const auto& stmt : expr->stmts) {
+            visit_stmt(stmt);
+        }
+        if (expr->expr) {
+            visit_expr(*expr->expr);
+            emit(OpCode::SET, expr_scope.return_slot);
+            emit(OpCode::POP);
+            current_context().on_stack--;
+        }
+    });
+    current_function()->patch_jump_destination(break_idx, current_program().size());
 }
 
 void Compiler::loop_expression(const AstNode<LoopExpr>& expr) {
@@ -531,6 +564,8 @@ void Compiler::function(const AstNode<FunctionStmt>& stmt, FunctionType type) {
     //     emit(upvalue.is_local);
     //     emit(upvalue.index);
     // }
+
+
 }
 
 void Compiler::constructor(
@@ -1160,21 +1195,21 @@ void Compiler::class_declaration(const AstNode<ClassStmt>& stmt) {
 
 void Compiler::expr_statement(const AstNode<ExprStmt>& stmt) {
     visit_expr(stmt->expr);
-
     emit(OpCode::POP);
     current_context().on_stack--;
 }
 
 void Compiler::retrun_expression(const AstNode<ReturnExpr>& stmt) {
-    // if (stmt.value) {
-    //     visit_expr(*stmt.value);
-    // } else {
-    //     emit(OpCode::NIL);
-    //     current_scope().mark_temporary();
-    // }
-    // emit(OpCode::RETURN);
-    // emit(OpCode::NIL);
-    // current_scope().mark_temporary();
+    if (stmt->value) {
+        visit_expr(*stmt->value);
+    } else {
+        emit(OpCode::NIL);
+        current_context().on_stack++;
+    }
+    emit(OpCode::RETURN);
+    // Expression must return value
+    emit(OpCode::NIL);
+    current_context().on_stack++;
 }
 
 void Compiler::if_expression(const AstNode<IfExpr>& stmt) {
@@ -1225,18 +1260,15 @@ void Compiler::visit_expr(const Expr& expression) {
 }
 
 void Compiler::literal(const AstNode<LiteralExpr>& expr) {
-    // current_scope().mark_temporary();
     int index = current_function()->add_constant(expr->literal);
-    emit(OpCode::CONSTANT);
-    emit(index); // handle overflow!!!
+    emit(OpCode::CONSTANT, index);
     current_context().on_stack++;
 }
 
 void Compiler::string_literal(const AstNode<StringLiteral>& expr) {
-    // current_scope().mark_temporary();
-    // std::string s = expr.string;
-    // int index = current_function()->add_constant(s); // memory!
-    // emit(OpCode::CONSTANT, index); // handle overflow!!!
+    int index = current_function()->add_constant(expr->string);
+    emit(OpCode::CONSTANT, index); // handle overflow!!!
+    current_context().on_stack++;
 }
 
 void Compiler::unary(const AstNode<UnaryExpr>& expr) {
@@ -1381,21 +1413,45 @@ void Compiler::update_lvalue(const Expr& lvalue) {
     // }
 }
 
+void Compiler::emit_get_variable(const bite::Analyzer::Binding& binding) {
+    std::visit(overloaded {
+        [this](const bite::Analyzer::LocalBinding& bind) {
+            emit(OpCode::GET, current_context().slots[bind.enviroment_offset]); // assert exists?
+        },
+        [this](const bite::Analyzer::GlobalBinding& bind) {
+            int constant = current_function()->add_constant(*bind.name); // TODO: rework constant system
+            emit(OpCode::GET_GLOBAL, constant);
+        },
+        [this](const bite::Analyzer::CapturedBinding) {
+            // TODO
+        },
+        [this](const bite::Analyzer::MemberBinding) {
+            // TODO
+        },
+        [this](const bite::Analyzer::ParameterBinding) {
+            // TODO
+        },
+        [this](const bite::Analyzer::ClassObjectBinding) {
+            // TODO
+        },
+        [this](const bite::Analyzer::NoBinding) {
+            std::unreachable(); // panic!
+        }
+    }, binding);
+}
+
 void Compiler::variable(const AstNode<VariableExpr>& expr) {
-    //std::string name = *expr.identifier.string;
-    //resolve_variable(name);
-    // TODO: only local work now!
-    auto binding = std::get<bite::Analyzer::LocalBinding>(analyzer.bindings[expr.id]);
-    emit(OpCode::GET, current_context().slots[binding.enviroment_offset]);
+    emit_get_variable(analyzer.bindings[expr.id]);
     current_context().on_stack++;
 }
 
 void Compiler::logical(const AstNode<BinaryExpr>& expr) {
-    // int jump = current_function()->add_empty_jump_destination();
-    // emit(expr.op == Token::Type::AND_AND ? OpCode::JUMP_IF_FALSE : OpCode::JUMP_IF_TRUE, jump);
-    // emit(OpCode::POP);
-    // visit_expr(expr.right);
-    // current_function()->patch_jump_destination(jump, current_program().size());
+    int jump = current_function()->add_empty_jump_destination();
+    emit(expr->op == Token::Type::AND_AND ? OpCode::JUMP_IF_FALSE : OpCode::JUMP_IF_TRUE, jump);
+    emit(OpCode::POP);
+    current_context().on_stack--;
+    visit_expr(expr->right);
+    current_function()->patch_jump_destination(jump, current_program().size());
 }
 
 void Compiler::call(const AstNode<CallExpr>& expr) {
@@ -1403,16 +1459,15 @@ void Compiler::call(const AstNode<CallExpr>& expr) {
     for (const Expr& argument : expr->arguments) {
         visit_expr(argument);
     }
-    //current_scope().pop_temporary(expr.arguments.size());
     emit(OpCode::CALL, expr->arguments.size()); // TODO: check
     current_context().on_stack -= expr->arguments.size();
 }
 
 void Compiler::get_property(const AstNode<GetPropertyExpr>& expr) {
-    // visit_expr(expr.left);
-    // std::string name = *expr.property.string;
-    // int constant = current_function()->add_constant(name);
-    // emit(OpCode::GET_PROPERTY, constant);
+    visit_expr(expr->left);
+    std::string name = *expr->property.string;
+    int constant = current_function()->add_constant(name);
+    emit(OpCode::GET_PROPERTY, constant);
 }
 
 void Compiler::super(const AstNode<SuperExpr>& expr) {

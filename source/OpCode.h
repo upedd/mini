@@ -56,6 +56,8 @@ enum class OpCode : bite_byte {
     TRAIT,
     TRAIT_METHOD,
     GET_TRAIT,
+    SET_GLOBAL,
+    GET_GLOBAL,
 };
 
 #endif //OPCODE_H
