@@ -35,25 +35,25 @@ namespace bite {
 
 
         void analyze(const Ast& ast);
-        void block(const box<BlockExpr>& expr);
-        void variable_declarataion(const box<VarStmt>& stmt);
-        void variable_expression(const box<VariableExpr>& expr);
+        void block(const AstNode<BlockExpr>& expr);
+        void variable_declarataion(const AstNode<VarStmt>& stmt);
+        void variable_expression(const AstNode<VariableExpr>& expr);
 
         void bind(const Expr& expr, StringTable::Handle name);
-        void expression_statement(const box<ExprStmt>& stmt);
-        void function_declaration(const box<FunctionStmt>& box);
-        void native_declaration(const box<NativeStmt>& box);
-        void class_declaration(const box<ClassStmt>& box);
-        void unary(const box<UnaryExpr>& expr);
-        void binary(const box<BinaryExpr>& expr);
-        void call(const box<CallExpr>& expr);
-        void get_property(const box<GetPropertyExpr>& expr);
-        void if_expression(const box<IfExpr>& expr);
-        void loop_expression(const box<LoopExpr>& expr);
-        void break_expr(const box<BreakExpr>& expr);
-        void while_expr(const box<WhileExpr>& expr);
-        void for_expr(const box<ForExpr>& expr);
-        void return_expr(const box<ReturnExpr>& expr);
+        void expression_statement(const AstNode<ExprStmt>& stmt);
+        void function_declaration(const AstNode<FunctionStmt>& box);
+        void native_declaration(const AstNode<NativeStmt>& box);
+        void class_declaration(const AstNode<ClassStmt>& box);
+        void unary(const AstNode<UnaryExpr>& expr);
+        void binary(const AstNode<BinaryExpr>& expr);
+        void call(const AstNode<CallExpr>& expr);
+        void get_property(const AstNode<GetPropertyExpr>& expr);
+        void if_expression(const AstNode<IfExpr>& expr);
+        void loop_expression(const AstNode<LoopExpr>& expr);
+        void break_expr(const AstNode<BreakExpr>& expr);
+        void while_expr(const AstNode<WhileExpr>& expr);
+        void for_expr(const AstNode<ForExpr>& expr);
+        void return_expr(const AstNode<ReturnExpr>& expr);
 
         struct LocalBinding {
             std::int64_t scope_offset;
@@ -248,7 +248,7 @@ namespace bite {
         }
 
 
-        unordered_dense::map<Expr const*, Binding> bindings;
+        unordered_dense::map<std::size_t, Binding> bindings;
 
     private:
         std::vector<Enviroment> enviroment_stack { GlobalEnviroment() };

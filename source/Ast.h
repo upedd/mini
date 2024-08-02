@@ -11,20 +11,44 @@
 
 // Reference: https://lesleylai.info/en/ast-in-cpp-part-1-variant/
 // https://www.foonathan.net/2022/05/recursive-variant-box/
-using Expr = std::variant<bite::box<struct LiteralExpr>, bite::box<struct StringLiteral>, bite::box<struct UnaryExpr>,
-                          bite::box<struct BinaryExpr>, bite::box<struct VariableExpr>, bite::box<struct CallExpr>,
-                          bite::box<struct GetPropertyExpr>, bite::box<struct SuperExpr>, bite::box<struct BlockExpr>,
-                          bite::box<struct IfExpr>, bite::box<struct LoopExpr>, bite::box<struct BreakExpr>, bite::box<
-                              struct ContinueExpr>, bite::box<struct WhileExpr>, bite::box<struct ForExpr>, bite::box<
-                              struct ReturnExpr>, bite::box<struct ThisExpr>, bite::box<struct ObjectExpr>, bite::box<struct InvalidExpr>>;
 
-using Stmt = std::variant<bite::box<struct VarStmt>, bite::box<struct ExprStmt>, bite::box<struct FunctionStmt>,
-                          bite::box<struct ClassStmt>, bite::box<struct NativeStmt>, bite::box<struct FieldStmt>,
-                          bite::box<struct MethodStmt>, bite::box<struct ConstructorStmt>, bite::box<struct ObjectStmt>,
-                          bite::box<struct TraitStmt>, bite::box<struct UsingStmt>, bite::box<struct InvalidStmt>>;
+// TODO: more safety
+
+
+/**
+* Container to attach additional metadata to ast nodes
+*/
+template <typename T>
+class AstNode : public bite::box<T> {
+public:
+    using bite::box<T>::box;
+    std::size_t id;
+};
+
+using Expr = std::variant<AstNode<struct LiteralExpr>, AstNode<struct StringLiteral>, AstNode<struct
+                                     UnaryExpr>, AstNode<struct BinaryExpr>, AstNode<struct VariableExpr>, AstNode
+                                 <struct CallExpr>, AstNode<struct GetPropertyExpr>, AstNode<struct SuperExpr>,
+                                 AstNode<struct BlockExpr>, AstNode<struct IfExpr>, AstNode<struct LoopExpr>,
+                                 AstNode<struct BreakExpr>, AstNode<struct ContinueExpr>, AstNode<struct
+                                     WhileExpr>, AstNode<struct ForExpr>, AstNode<struct ReturnExpr>, AstNode<
+                                     struct ThisExpr>, AstNode<struct ObjectExpr>, AstNode<struct InvalidExpr>>;
+
+using Stmt = std::variant<AstNode<struct VarStmt>, AstNode<struct ExprStmt>, AstNode<struct FunctionStmt>,
+                                 AstNode<struct ClassStmt>, AstNode<struct NativeStmt>, AstNode<struct FieldStmt>,
+                                 AstNode<struct MethodStmt>, AstNode<struct ConstructorStmt>, AstNode<struct
+                                     ObjectStmt>, AstNode<struct TraitStmt>, AstNode<struct UsingStmt>, AstNode<
+                                     struct InvalidStmt>>;
+
 
 struct Ast {
     std::vector<Stmt> statements;
+
+    std::size_t current_id;
+
+    template <typename T, typename... Args>
+    AstNode<T> make_node(Args&&... args) {
+        return AstNode<T>(T(std::forward<Args>(args)...));
+    }
 };
 
 struct UnaryExpr {
@@ -111,7 +135,6 @@ struct ReturnExpr {
 struct ThisExpr {};
 
 
-
 struct FunctionStmt {
     Token name;
     std::vector<Token> params;
@@ -138,12 +161,12 @@ enum class ClassAttributes: std::uint8_t {
 };
 
 struct FieldStmt {
-    VarStmt variable;
+    AstNode<VarStmt> variable;
     bitflags<ClassAttributes> attributes;
 };
 
 struct MethodStmt {
-    FunctionStmt function;
+    AstNode<FunctionStmt> function;
     bitflags<ClassAttributes> attributes;
 };
 
@@ -158,11 +181,11 @@ struct ConstructorStmt {
  * Shared fields between ObjectExpr and ClassStmt
  */
 struct StructureBody {
-    std::vector<MethodStmt> methods;
-    std::vector<FieldStmt> fields;
-    std::optional<Expr> class_object;
-    std::vector<UsingStmt> using_statements;
-    std::optional<ConstructorStmt> constructor;
+    std::vector<AstNode<MethodStmt>> methods;
+    std::vector<AstNode<FieldStmt>> fields;
+    std::optional<AstNode<ObjectExpr>> class_object;
+    std::vector<AstNode<UsingStmt>> using_statements;
+    std::optional<AstNode<ConstructorStmt>> constructor;
 };
 
 struct ObjectExpr {
@@ -189,9 +212,9 @@ struct ObjectStmt {
 
 struct TraitStmt {
     Token name;
-    std::vector<MethodStmt> methods;
-    std::vector<FieldStmt> fields;
-    std::vector<UsingStmt> using_stmts;
+    std::vector<AstNode<MethodStmt>> methods;
+    std::vector<AstNode<FieldStmt>> fields;
+    std::vector<AstNode<UsingStmt>> using_stmts;
 };
 
 struct UsingStmtItem {
@@ -206,6 +229,7 @@ struct UsingStmt {
 
 // markers for invalid ast nodes
 struct InvalidExpr {};
+
 struct InvalidStmt {};
 
 // inline std::string expr_to_string(const Expr& expr, std::string_view source);

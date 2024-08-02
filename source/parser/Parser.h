@@ -69,28 +69,28 @@ private:
     Stmt object_declaration();
 
     Stmt var_declaration();
-    VarStmt var_declaration_body(const Token& name);
+    AstNode<VarStmt> var_declaration_body(const Token& name);
 
-    FunctionStmt function_declaration();
-    FunctionStmt function_declaration_body(const Token& name, bool skip_params = false);
+    AstNode<FunctionStmt> function_declaration();
+    AstNode<FunctionStmt> function_declaration_body(const Token& name, bool skip_params = false);
     std::vector<Token> functions_parameters();
     std::vector<Expr> call_arguments();
 
     Stmt class_declaration(bool is_abstract = false);
     StructureBody structure_body();
 
-    UsingStmt using_statement();
+    AstNode<UsingStmt> using_statement();
     UsingStmtItem using_stmt_item();
     UsingStmtItem using_stmt_item_with_params(const Token& name);
 
     bitflags<ClassAttributes> member_attributes();
 
-    ConstructorStmt constructor_statement();
-    FunctionStmt abstract_method(const Token& name, bool skip_params);
+    AstNode<ConstructorStmt> constructor_statement();
+    AstNode<FunctionStmt> abstract_method(const Token& name, bool skip_params);
     VarStmt abstract_field(const Token& name);
 
     Stmt trait_declaration();
-    FunctionStmt in_trait_function(const Token& name, bitflags<ClassAttributes>& attributes, bool skip_params);
+    AstNode<FunctionStmt> in_trait_function(const Token& name, bitflags<ClassAttributes>& attributes, bool skip_params);
 
     /* C like precedence
      * References:
@@ -122,8 +122,8 @@ private:
 
     Expr integer();
     Expr number();
-    Expr keyword() const;
-    Expr string() const;
+    Expr keyword();
+    Expr string();
     Expr identifier();
     Expr grouping();
     Expr unary(Token::Type op);
@@ -132,7 +132,7 @@ private:
     Expr break_expression();
     Expr continue_expression();
     Expr return_expression();
-    ObjectExpr object_expression();
+    AstNode<ObjectExpr> object_expression();
     Expr labeled_expression();
     Expr loop_expression(const std::optional<Token>& label = {});
     Expr while_expression(const std::optional<Token>& label = {});
@@ -149,6 +149,7 @@ private:
     Token next;
     Lexer lexer;
     SharedContext* context;
+    Ast ast;
 };
 
 

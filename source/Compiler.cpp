@@ -298,7 +298,7 @@ bite::Analyzer::Binding Compiler::get_binding(const Expr& expr) {
 };
 
 void Compiler::variable_declaration(const bite::box<VarStmt>& expr) {
-    analyzer.bindings[&expr]; // assert
+    //analyzer.bindings[&expr]; // assert
 
     // std::string name = *expr.name.string;
     // visit_expr(*expr.value);

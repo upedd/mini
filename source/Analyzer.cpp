@@ -19,7 +19,7 @@ void bite::Analyzer::analyze(const Ast& ast) {
     }
 }
 
-void bite::Analyzer::block(const box<BlockExpr>& expr) {
+void bite::Analyzer::block(const AstNode<BlockExpr>& expr) {
     // investigate performance
     with_scope(
         [&expr, this] {
@@ -33,27 +33,23 @@ void bite::Analyzer::block(const box<BlockExpr>& expr) {
     );
 }
 
-void bite::Analyzer::variable_declarataion(const box<VarStmt>& stmt) {
+void bite::Analyzer::variable_declarataion(const AstNode<VarStmt>& stmt) {
     declare(stmt->name.string);
     if (stmt->value) {
         visit_expr(*stmt->value);
     }
-    bind(stmt, stmt->name.string);
+    bindings[stmt.id] = get_binding(stmt->name.string);
 }
 
-void bite::Analyzer::variable_expression(const box<VariableExpr>& expr) {
-    bind(expr, expr->identifier.string);
+void bite::Analyzer::variable_expression(const AstNode<VariableExpr>& expr) {
+    bindings[expr.id] = get_binding(expr->identifier.string);
 }
 
-void bite::Analyzer::bind(const Expr& expr, StringTable::Handle name) {
-    bindings[&expr] = get_binding(name);
-}
-
-void bite::Analyzer::expression_statement(const box<ExprStmt>& stmt) {
+void bite::Analyzer::expression_statement(const AstNode<ExprStmt>& stmt) {
     visit_expr(stmt->expr);
 }
 
-void bite::Analyzer::function_declaration(const box<FunctionStmt>& stmt) {
+void bite::Analyzer::function_declaration(const AstNode<FunctionStmt>& stmt) {
     // TODO: handle captures
     declare(stmt->name.string);
     with_enviroment(
@@ -69,11 +65,11 @@ void bite::Analyzer::function_declaration(const box<FunctionStmt>& stmt) {
     );
 }
 
-void bite::Analyzer::native_declaration(const box<NativeStmt>& box) {
+void bite::Analyzer::native_declaration(const AstNode<NativeStmt>& box) {
     declare(box->name.string);
 }
 
-void bite::Analyzer::class_declaration(const box<ClassStmt>& stmt) {
+void bite::Analyzer::class_declaration(const AstNode<ClassStmt>& stmt) {
     declare(stmt->name.string);
     // TODO: superclasses
     // TODO: class validation!
@@ -85,43 +81,43 @@ void bite::Analyzer::class_declaration(const box<ClassStmt>& stmt) {
             // TODO: getters and setters
             // TODO: constuctor
             for (const auto& field : stmt->body.fields) {
-                declare(field.variable.name.string);
-                if (field.variable.value) {
-                    visit_expr(*field.variable.value);
+                declare(field->variable->name.string);
+                if (field->variable->value) {
+                    visit_expr(*field->variable->value);
                 }
             }
             // hoist methods
             for (const auto& method : stmt->body.methods) {
-                declare(method.function.name.string);
+                declare(method->function->name.string);
             }
             for (const auto& method : stmt->body.methods) {
-                visit_stmt(method.function);
+                visit_stmt(method->function);
             }
         }
     );
 }
 
-void bite::Analyzer::unary(const box<UnaryExpr>& expr) {
+void bite::Analyzer::unary(const AstNode<UnaryExpr>& expr) {
     visit_expr(expr->expr);
 }
 
-void bite::Analyzer::binary(const box<BinaryExpr>& expr) {
+void bite::Analyzer::binary(const AstNode<BinaryExpr>& expr) {
     visit_expr(expr->left);
     visit_expr(expr->right);
 }
 
-void bite::Analyzer::call(const box<CallExpr>& expr) {
+void bite::Analyzer::call(const AstNode<CallExpr>& expr) {
     visit_expr(expr->callee);
     for (const auto& argument : expr->arguments) {
         visit_expr(argument);
     }
 }
 
-void bite::Analyzer::get_property(const box<GetPropertyExpr>& expr) {
+void bite::Analyzer::get_property(const AstNode<GetPropertyExpr>& expr) {
     visit_expr(expr->left);
 }
 
-void bite::Analyzer::if_expression(const box<IfExpr>& expr) {
+void bite::Analyzer::if_expression(const AstNode<IfExpr>& expr) {
     visit_expr(expr->condition);
     visit_expr(expr->then_expr);
     if (expr->else_expr) {
@@ -129,27 +125,27 @@ void bite::Analyzer::if_expression(const box<IfExpr>& expr) {
     }
 }
 
-void bite::Analyzer::loop_expression(const box<LoopExpr>& expr) {
+void bite::Analyzer::loop_expression(const AstNode<LoopExpr>& expr) {
     visit_expr(expr->body);
 }
 
-void bite::Analyzer::break_expr(const box<BreakExpr>& expr) {
+void bite::Analyzer::break_expr(const AstNode<BreakExpr>& expr) {
     if (expr->expr) {
         visit_expr(*expr->expr);
     }
 }
 
-void bite::Analyzer::while_expr(const box<WhileExpr>& expr) {
+void bite::Analyzer::while_expr(const AstNode<WhileExpr>& expr) {
     visit_expr(expr->condition);
     visit_expr(expr->body);
 }
 
-void bite::Analyzer::for_expr(const box<ForExpr>& expr) {
+void bite::Analyzer::for_expr(const AstNode<ForExpr>& expr) {
     // TODO: implement
     std::unreachable();
 }
 
-void bite::Analyzer::return_expr(const box<ReturnExpr>& expr) {
+void bite::Analyzer::return_expr(const AstNode<ReturnExpr>& expr) {
     if (expr->value) {
         visit_expr(*expr->value);
     }
@@ -158,18 +154,18 @@ void bite::Analyzer::return_expr(const box<ReturnExpr>& expr) {
 void bite::Analyzer::visit_stmt(const Stmt& statement) {
     std::visit(
         overloaded {
-            [this](const box<VarStmt>& stmt) { variable_declarataion(stmt); },
-            [this](const box<FunctionStmt>& stmt) { function_declaration(stmt); },
-            [this](const box<ExprStmt>& stmt) { expression_statement(stmt); },
-            [this](const box<ClassStmt>& stmt) { class_declaration(stmt); },
-            [this](const box<NativeStmt>& stmt) { native_declaration(stmt); },
-            [this](const box<ObjectStmt>& stmt) {}, // TODO: implement
-            [this](const box<TraitStmt>& stmt) {}, // TODO: implement
-            [this](const box<MethodStmt>&) {}, // TODO: should not exist
-            [this](const box<FieldStmt>&) {}, // TODO: should not exist
-            [this](const box<ConstructorStmt>&) {}, // TODO: should not exist
-            [this](const box<UsingStmt>&) {}, // TODO: implement
-            [](const box<InvalidStmt>&) {},
+            [this](const AstNode<VarStmt>& stmt) { variable_declarataion(stmt); },
+            [this](const AstNode<FunctionStmt>& stmt) { function_declaration(stmt); },
+            [this](const AstNode<ExprStmt>& stmt) { expression_statement(stmt); },
+            [this](const AstNode<ClassStmt>& stmt) { class_declaration(stmt); },
+            [this](const AstNode<NativeStmt>& stmt) { native_declaration(stmt); },
+            [this](const AstNode<ObjectStmt>& stmt) {}, // TODO: implement
+            [this](const AstNode<TraitStmt>& stmt) {}, // TODO: implement
+            [this](const AstNode<MethodStmt>&) {}, // TODO: should not exist
+            [this](const AstNode<FieldStmt>&) {}, // TODO: should not exist
+            [this](const AstNode<ConstructorStmt>&) {}, // TODO: should not exist
+            [this](const AstNode<UsingStmt>&) {}, // TODO: implement
+            [](const AstNode<InvalidStmt>&) {},
         },
         statement
     );
@@ -178,25 +174,25 @@ void bite::Analyzer::visit_stmt(const Stmt& statement) {
 void bite::Analyzer::visit_expr(const Expr& expression) {
     std::visit(
         overloaded {
-            [this](const box<LiteralExpr>&) {},
-            [this](const box<UnaryExpr>& expr) {unary(expr);},
-            [this](const box<BinaryExpr>& expr) {binary(expr);},
-            [this](const box<StringLiteral>&) {},
-            [this](const box<VariableExpr>& expr) { variable_expression(expr); },
-            [this](const box<CallExpr>& expr) { call(expr); },
-            [this](const box<GetPropertyExpr>& expr) { get_property(expr); },
-            [this](const box<SuperExpr>& expr) {}, // TODO: implement
-            [this](const box<BlockExpr>& expr) { block(expr); },
-            [this](const box<IfExpr>& expr) { if_expression(expr);},
-            [this](const box<LoopExpr>& expr) { loop_expression(expr); },
-            [this](const box<BreakExpr>& expr) { break_expr(expr); },
-            [this](const box<ContinueExpr>&) {}, // TODO: validate label
-            [this](const box<WhileExpr>& expr) {while_expr(expr);},
-            [this](const box<ForExpr>& expr) {for_expr(expr);}, // TODO: implement
-            [this](const box<ReturnExpr>& expr) {return_expr(expr);},
-            [this](const box<ThisExpr>&) {}, // TODO validate in class scope
-            [this](const box<ObjectExpr>& expr) {}, // TODO: implement
-            [](const box<InvalidExpr>&) {}
+            [this](const AstNode<LiteralExpr>&) {},
+            [this](const AstNode<UnaryExpr>& expr) {unary(expr);},
+            [this](const AstNode<BinaryExpr>& expr) {binary(expr);},
+            [this](const AstNode<StringLiteral>&) {},
+            [this](const AstNode<VariableExpr>& expr) { variable_expression(expr); },
+            [this](const AstNode<CallExpr>& expr) { call(expr); },
+            [this](const AstNode<GetPropertyExpr>& expr) { get_property(expr); },
+            [this](const AstNode<SuperExpr>& expr) {}, // TODO: implement
+            [this](const AstNode<BlockExpr>& expr) { block(expr); },
+            [this](const AstNode<IfExpr>& expr) { if_expression(expr);},
+            [this](const AstNode<LoopExpr>& expr) { loop_expression(expr); },
+            [this](const AstNode<BreakExpr>& expr) { break_expr(expr); },
+            [this](const AstNode<ContinueExpr>&) {}, // TODO: validate label
+            [this](const AstNode<WhileExpr>& expr) {while_expr(expr);},
+            [this](const AstNode<ForExpr>& expr) {for_expr(expr);}, // TODO: implement
+            [this](const AstNode<ReturnExpr>& expr) {return_expr(expr);},
+            [this](const AstNode<ThisExpr>&) {}, // TODO validate in class scope
+            [this](const AstNode<ObjectExpr>& expr) {}, // TODO: implement
+            [](const AstNode<InvalidExpr>&) {}
         },
         expression
     );
