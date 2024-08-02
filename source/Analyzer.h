@@ -22,6 +22,7 @@ namespace bite {
         // TODO: first variable binding
         // refactor: overlap with parser
         // TODO: traits
+        // TODO: circular variables
         void emit_message(Logger::Level level, const std::string& content, const std::string& inline_content);
 
         [[nodiscard]] bool has_errors() const {
@@ -54,151 +55,203 @@ namespace bite {
         void for_expr(const box<ForExpr>& expr);
         void return_expr(const box<ReturnExpr>& expr);
 
-        struct LocalResolution {
-            std::int64_t local_idx;
+        struct LocalBinding {
+            std::int64_t scope_offset;
+            std::int64_t enviroment_offset;
         };
 
-        struct ParameterResolution {
+        struct ParameterBinding {
             std::int64_t param_idx;
         };
 
-        struct CapturedResolution {
+        struct CapturedBinding {
             std::int64_t param_idx;
         };
 
-        struct MemberResolution {
+        struct MemberBinding {
             StringTable::Handle name;
         };
 
-        struct ClassObjectResolution {};
+        struct ClassObjectBinding {};
 
-        struct GlobalResolution {
+        struct GlobalBinding {
             StringTable::Handle name;
         };
-        struct NoResolution {};
 
-        using Resolution = std::variant<LocalResolution, ParameterResolution, CapturedResolution, MemberResolution,
-                                        ClassObjectResolution, GlobalResolution, NoResolution>;
+        struct NoBinding {};
+
+        using Binding = std::variant<LocalBinding, ParameterBinding, CapturedBinding, MemberBinding, ClassObjectBinding,
+                                     GlobalBinding, NoBinding>;
 
         struct Local {
             StringTable::Handle name;
             bool is_captured; // whetever is caputred in a closure
         };
 
-        struct BlockScope {
+        struct Scope {
             std::vector<Local> locals;
         };
 
-        struct FunctionScope {
+        struct FunctionEnviroment {
             std::vector<StringTable::Handle> captured;
             std::vector<StringTable::Handle> parameters;
+            std::vector<Scope> scopes;
         };
 
         // TODO: missing class object resolution
         // TODO: missing getters and setters handling
-        struct ClassScope {
+        struct ClassEnviroment {
             unordered_dense::set<StringTable::Handle> members;
         };
 
-        struct GlobalScope {
+        struct GlobalEnviroment {
             unordered_dense::set<StringTable::Handle> globals;
+            std::vector<Scope> scopes;
         };
 
-        using Scope = std::variant<BlockScope, FunctionScope, ClassScope, GlobalScope>;
+        using Enviroment = std::variant<FunctionEnviroment, ClassEnviroment, GlobalEnviroment>;
 
-        static std::optional<Resolution> resolve_in_scope(const Scope& scope, StringTable::Handle name) {
+        static std::optional<LocalBinding> get_local_binding(
+            const std::vector<Scope>& scopes,
+            StringTable::Handle name,
+            std::int64_t initial_enviroment_offset = 0
+        ) {
+            std::optional<LocalBinding> binding;
+            std::int64_t enviroment_offset = initial_enviroment_offset;
+            for (const auto& scope : scopes) {
+                std::int64_t scope_offset = 0;
+                for (const auto& local : scope.locals) {
+                    if (local.name == name) {
+                        binding = { .scope_offset = scope_offset, .enviroment_offset = enviroment_offset };
+                    }
+                    ++scope_offset;
+                    ++enviroment_offset;
+                }
+            }
+            return binding;
+        }
+
+        static std::optional<Binding> get_binding_in_enviroment(
+            const Enviroment& enviroment,
+            StringTable::Handle name
+        ) {
             return std::visit(
                 overloaded {
-                    [name](const BlockScope& sc) -> std::optional<Resolution> {
-                        for (const auto& [idx, local] : sc.locals | std::views::enumerate) {
-                            if (local.name == name) {
-                                return LocalResolution { idx };
-                            }
-                        }
-                        return {};
-                    },
-                    [name](const FunctionScope& sc) -> std::optional<Resolution> {
-                        for (const auto& [idx, param] : sc.parameters | std::views::enumerate) {
+                    [name](const FunctionEnviroment& env) -> std::optional<Binding> {
+                        for (const auto& [idx, param] : env.parameters | std::views::enumerate) {
                             if (param == name) {
-                                return ParameterResolution { idx };
+                                return ParameterBinding { idx };
                             }
                         }
-                        for (const auto& [idx, captured] : sc.captured | std::views::enumerate) {
+                        for (const auto& [idx, captured] : env.captured | std::views::enumerate) {
                             if (captured == name) {
-                                return CapturedResolution { idx };
+                                return CapturedBinding { idx };
                             }
                         }
-                        return {};
+                        return get_local_binding(
+                            env.scopes,
+                            name,
+                            static_cast<std::int64_t>(env.parameters.size() + env.captured.size())
+                        );
                     },
-                    [name](const ClassScope& sc) -> std::optional<Resolution> {
-                        for (const auto& member : sc.members) {
+                    [name](const ClassEnviroment& env) -> std::optional<Binding> {
+                        for (const auto& member : env.members) {
                             if (member == name) {
-                                return MemberResolution { member };
+                                return MemberBinding { member };
                             }
                         }
                         return {};
                     },
-                    [name](const GlobalScope& sc) -> std::optional<Resolution> {
-                        for (const auto& global : sc.globals) {
+                    [name](const GlobalEnviroment& env) -> std::optional<Binding> {
+                        for (const auto& global : env.globals) {
                             if (global == name) {
-                                return GlobalResolution { global };
+                                return GlobalBinding { global };
                             }
                         }
-                        return {};
+                        return get_local_binding(env.scopes, name);
                     }
                 },
-                scope
+                enviroment
             );
         }
 
-        static void define_in_scope(Scope& scope, StringTable::Handle name) {
+        static void declare_in_enviroment(Enviroment& enviroment, StringTable::Handle name) {
             // TODO: error handling
-            std::visit(overloaded {
-                [name](BlockScope& sc) {
-                    sc.locals.push_back({.name = name});
+            std::visit(
+                overloaded {
+                    [name](FunctionEnviroment& env) {
+                        if (env.scopes.empty()) {
+                            env.parameters.push_back(name);
+                        } else {
+                            env.scopes.back().locals.push_back({ .name = name });
+                        }
+                    },
+                    [name](ClassEnviroment& env) {
+                        env.members.insert(name);
+                    },
+                    [name](GlobalEnviroment& env) {
+                        if (env.scopes.empty()) {
+                            env.globals.insert(name);
+                        } else {
+                            env.scopes.back().locals.push_back({ .name = name });
+                        }
+                    }
                 },
-                [name](FunctionScope& sc) {
-                    sc.parameters.push_back(name);
-                },
-                [name](ClassScope& sc) {
-                    sc.members.insert(name);
-                },
-                [name](GlobalScope& sc) {
-                    sc.globals.insert(name);
-                }
-            }, scope);
+                enviroment
+            );
         }
 
-        void define(StringTable::Handle name) {
-            define_in_scope(scopes.back(), name);
+        void declare(StringTable::Handle name) {
+            declare_in_enviroment(enviroment_stack.back(), name);
         }
+
         // TODO: missing captures
-        Resolution resolve(StringTable::Handle name) {
-            for (const auto& scope : scopes | std::views::reverse) {
-                if (std::optional<Resolution> res = resolve_in_scope(scope, name)) {
+        Binding get_binding(StringTable::Handle name) {
+            for (const auto& enviroment : enviroment_stack | std::views::reverse) {
+                if (std::optional<Binding> res = get_binding_in_enviroment(enviroment, name)) {
                     return *res;
                 }
             }
             emit_message(Logger::Level::error, "cannot resolve variable: " + std::string(*name), "");
 
-            return NoResolution();
+            return NoBinding();
         }
 
-        void with_scope(const Scope& scope, auto fn) {
-            scopes.push_back(scope);
+        void with_enviroment(const Enviroment& scope, auto fn) {
+            enviroment_stack.push_back(scope);
             fn();
-            scopes.pop_back();
+            enviroment_stack.pop_back();
         }
 
-        std::vector<Scope> scopes{ GlobalScope() };
+        void with_scope(auto fn) {
+            // assert env stack non-empty
 
-        struct Binding {
-            int local_index = 0;
-        };
+            std::visit(
+                overloaded {
+                    [&fn](GlobalEnviroment& env) {
+                        env.scopes.emplace_back();
+                        fn();
+                        env.scopes.pop_back();
+                    },
+                    [&fn](FunctionEnviroment& env) {
+                        env.scopes.emplace_back();
+                        fn();
+                        env.scopes.pop_back();
+                    },
+                    [](ClassEnviroment&) {
+                        // panic!
+                        std::unreachable();
+                    }
+                },
+                enviroment_stack.back()
+            );
+        }
 
-        unordered_dense::map<Expr const*, Resolution> bindings;
+
+        unordered_dense::map<Expr const*, Binding> bindings;
 
     private:
+        std::vector<Enviroment> enviroment_stack { GlobalEnviroment() };
         void visit_stmt(const Stmt& statement);
         void visit_expr(const Expr& expression);
 

@@ -2,6 +2,7 @@
 #define COMPILER_H
 #include <unordered_set>
 
+#include "Analyzer.h"
 #include "Ast.h"
 #include "Object.h"
 #include "parser/Parser.h"
@@ -126,6 +127,9 @@ public:
         std::vector<Upvalue> upvalues;
         //std::vector<Scope> scopes;
         std::unordered_map<std::string, ResolvedClass> resolved_classes;
+        int on_stack = 0;
+        // enviroment offset to slot
+        bite::unordered_dense::map<std::int64_t, int> slots;
 
         // Scope& current_scope() {
         //     return scopes.back();
@@ -148,9 +152,9 @@ public:
     };
 
 
-    explicit Compiler(bite::file_input_stream&& stream, SharedContext* context) : parser(std::move(stream), context),
-        main("", 0),
-        shared_context(context) {
+    explicit Compiler(bite::file_input_stream&& stream, SharedContext* context) : parser(std::move(stream), context), main("", 0),
+        shared_context(context),
+        analyzer(context) {
         context_stack.emplace_back(&main, FunctionType::FUNCTION);
         //current_context().scopes.emplace_back(ScopeType::BLOCK, 0); // TODO: special type?
         functions.push_back(&main);
@@ -200,8 +204,9 @@ private:
     // Compiler::Context::Resolution resolve_upvalue(const std::string& name);
 
     void visit_stmt(const Stmt& stmt);
+    bite::Analyzer::Binding get_binding(const Expr& expr);
 
-    void variable_declaration(const VarStmt& expr);
+    void variable_declaration(const bite::box<VarStmt>& expr);
     void function_declaration(const FunctionStmt& stmt);
     void function(const FunctionStmt& stmt, FunctionType type);
 
@@ -262,6 +267,7 @@ private:
     std::vector<Function*> functions;
     std::vector<std::string> natives;
     SharedContext* shared_context;
+    bite::Analyzer analyzer;
 };
 
 

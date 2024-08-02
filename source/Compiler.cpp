@@ -76,9 +76,6 @@
 
 bool Compiler::compile() {
     Ast ast = parser.parse();
-    for (auto& stmt : ast.statements) {
-        visit_stmt(stmt);
-    }
     auto messages = parser.get_messages();
     if (!messages.empty()) {
         auto enchanced = bite::enchance_messages(messages);
@@ -90,14 +87,14 @@ bool Compiler::compile() {
         shared_context->logger.log(bite::Logger::Level::error, "compiliation aborted because of above errors", nullptr); // TODO: workaround
         return false;
     }
-
-    bite::Analyzer analyzer(shared_context);
     analyzer.analyze(ast);
     if (analyzer.has_errors()) {
         shared_context->logger.log(bite::Logger::Level::error, "compiliation aborted because of above errors", nullptr); // TODO: workaround
         return false;
     }
-
+    for (auto& stmt : ast.statements) {
+        visit_stmt(stmt);
+    }
     // default return at main
     emit_default_return();
     return true;
@@ -279,7 +276,7 @@ void Compiler::emit_default_return() {
 void Compiler::visit_stmt(const Stmt& statement) {
     std::visit(
         overloaded {
-            [this](const bite::box<VarStmt>& stmt) { variable_declaration(*stmt); },
+            [this](const bite::box<VarStmt>& stmt) { variable_declaration(stmt); },
             [this](const bite::box<FunctionStmt>& stmt) { function_declaration(*stmt); },
             [this](const bite::box<ExprStmt>& stmt) { expr_statement(*stmt); },
             [this](const bite::box<ClassStmt>& stmt) { class_declaration(*stmt); },
@@ -296,7 +293,13 @@ void Compiler::visit_stmt(const Stmt& statement) {
     );
 }
 
-void Compiler::variable_declaration(const VarStmt& expr) {
+bite::Analyzer::Binding Compiler::get_binding(const Expr& expr) {
+    return analyzer.bindings[&expr];
+};
+
+void Compiler::variable_declaration(const bite::box<VarStmt>& expr) {
+    analyzer.bindings[&expr]; // assert
+
     // std::string name = *expr.name.string;
     // visit_expr(*expr.value);
     // current_scope().pop_temporary();

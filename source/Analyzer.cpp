@@ -22,7 +22,6 @@ void bite::Analyzer::analyze(const Ast& ast) {
 void bite::Analyzer::block(const box<BlockExpr>& expr) {
     // investigate performance
     with_scope(
-        BlockScope(),
         [&expr, this] {
             for (const auto& stmt : expr->stmts) {
                 visit_stmt(stmt);
@@ -35,10 +34,11 @@ void bite::Analyzer::block(const box<BlockExpr>& expr) {
 }
 
 void bite::Analyzer::variable_declarataion(const box<VarStmt>& stmt) {
-    define(stmt->name.string);
+    declare(stmt->name.string);
     if (stmt->value) {
         visit_expr(*stmt->value);
     }
+    bind(stmt, stmt->name.string);
 }
 
 void bite::Analyzer::variable_expression(const box<VariableExpr>& expr) {
@@ -46,7 +46,7 @@ void bite::Analyzer::variable_expression(const box<VariableExpr>& expr) {
 }
 
 void bite::Analyzer::bind(const Expr& expr, StringTable::Handle name) {
-    bindings[&expr] = resolve(name);
+    bindings[&expr] = get_binding(name);
 }
 
 void bite::Analyzer::expression_statement(const box<ExprStmt>& stmt) {
@@ -55,12 +55,12 @@ void bite::Analyzer::expression_statement(const box<ExprStmt>& stmt) {
 
 void bite::Analyzer::function_declaration(const box<FunctionStmt>& stmt) {
     // TODO: handle captures
-    define(stmt->name.string);
-    with_scope(
-        FunctionScope(),
+    declare(stmt->name.string);
+    with_enviroment(
+        FunctionEnviroment(),
         [&stmt, this] {
             for (const auto& param : stmt->params) {
-                define(param.string);
+                declare(param.string);
             }
             if (stmt->body) {
                 visit_expr(*stmt->body);
@@ -70,29 +70,29 @@ void bite::Analyzer::function_declaration(const box<FunctionStmt>& stmt) {
 }
 
 void bite::Analyzer::native_declaration(const box<NativeStmt>& box) {
-    define(box->name.string);
+    declare(box->name.string);
 }
 
 void bite::Analyzer::class_declaration(const box<ClassStmt>& stmt) {
-    define(stmt->name.string);
+    declare(stmt->name.string);
     // TODO: superclasses
     // TODO: class validation!
-    with_scope(
-        ClassScope(),
+    with_enviroment(
+        ClassEnviroment(),
         [&stmt, this] {
             // TODO: using statement
             // TODO: class object
             // TODO: getters and setters
             // TODO: constuctor
             for (const auto& field : stmt->body.fields) {
-                define(field.variable.name.string);
+                declare(field.variable.name.string);
                 if (field.variable.value) {
                     visit_expr(*field.variable.value);
                 }
             }
             // hoist methods
             for (const auto& method : stmt->body.methods) {
-                define(method.function.name.string);
+                declare(method.function.name.string);
             }
             for (const auto& method : stmt->body.methods) {
                 visit_stmt(method.function);
