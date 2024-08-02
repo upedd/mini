@@ -18,7 +18,7 @@ namespace bite {
     public:
         explicit Analyzer(SharedContext* context) : context(context) {}
 
-        // TODOs: core, variable binding, upvalues?, class analysis, tratis analysis, lvalue analysis, useless break and continue
+        // TODOs: core, variable binding, upvalues?, class analysis, tratis analysis, lvalue analysis, useless break and continue, label validation
         // TODO: first variable binding
         // refactor: overlap with parser
         // TODO: traits
@@ -43,6 +43,16 @@ namespace bite {
         void function_declaration(const box<FunctionStmt>& box);
         void native_declaration(const box<NativeStmt>& box);
         void class_declaration(const box<ClassStmt>& box);
+        void unary(const box<UnaryExpr>& expr);
+        void binary(const box<BinaryExpr>& expr);
+        void call(const box<CallExpr>& expr);
+        void get_property(const box<GetPropertyExpr>& expr);
+        void if_expression(const box<IfExpr>& expr);
+        void loop_expression(const box<LoopExpr>& expr);
+        void break_expr(const box<BreakExpr>& expr);
+        void while_expr(const box<WhileExpr>& expr);
+        void for_expr(const box<ForExpr>& expr);
+        void return_expr(const box<ReturnExpr>& expr);
 
         struct LocalResolution {
             std::int64_t local_idx;
@@ -65,9 +75,10 @@ namespace bite {
         struct GlobalResolution {
             StringTable::Handle name;
         };
+        struct NoResolution {};
 
         using Resolution = std::variant<LocalResolution, ParameterResolution, CapturedResolution, MemberResolution,
-                                        ClassObjectResolution, GlobalResolution>;
+                                        ClassObjectResolution, GlobalResolution, NoResolution>;
 
         struct Local {
             StringTable::Handle name;
@@ -168,7 +179,9 @@ namespace bite {
                     return *res;
                 }
             }
-            // TODO: handle error!
+            emit_message(Logger::Level::error, "cannot resolve variable: " + std::string(*name), "");
+
+            return NoResolution();
         }
 
         void with_scope(const Scope& scope, auto fn) {

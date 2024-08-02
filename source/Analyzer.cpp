@@ -7,7 +7,10 @@ void bite::Analyzer::emit_message(
     const std::string& content,
     const std::string& /*unused*/
 ) {
-    //context->logger.log(level, content, nullptr); // STUB
+    if (level == Logger::Level::error) {
+        m_has_errors = true;
+    }
+    context->logger.log(level, content);
 }
 
 void bite::Analyzer::analyze(const Ast& ast) {
@@ -23,6 +26,9 @@ void bite::Analyzer::block(const box<BlockExpr>& expr) {
         [&expr, this] {
             for (const auto& stmt : expr->stmts) {
                 visit_stmt(stmt);
+            }
+            if (expr->expr) {
+                visit_expr(*expr->expr);
             }
         }
     );
@@ -57,12 +63,7 @@ void bite::Analyzer::function_declaration(const box<FunctionStmt>& stmt) {
                 define(param.string);
             }
             if (stmt->body) {
-                with_scope(
-                    BlockScope(),
-                    [&stmt, this] {
-                        visit_expr(stmt->body.value());
-                    }
-                );
+                visit_expr(*stmt->body);
             }
         }
     );
@@ -79,9 +80,79 @@ void bite::Analyzer::class_declaration(const box<ClassStmt>& stmt) {
     with_scope(
         ClassScope(),
         [&stmt, this] {
-            for (auto& field : stmt->body.fields) {}
+            // TODO: using statement
+            // TODO: class object
+            // TODO: getters and setters
+            // TODO: constuctor
+            for (const auto& field : stmt->body.fields) {
+                define(field.variable.name.string);
+                if (field.variable.value) {
+                    visit_expr(*field.variable.value);
+                }
+            }
+            // hoist methods
+            for (const auto& method : stmt->body.methods) {
+                define(method.function.name.string);
+            }
+            for (const auto& method : stmt->body.methods) {
+                visit_stmt(method.function);
+            }
         }
     );
+}
+
+void bite::Analyzer::unary(const box<UnaryExpr>& expr) {
+    visit_expr(expr->expr);
+}
+
+void bite::Analyzer::binary(const box<BinaryExpr>& expr) {
+    visit_expr(expr->left);
+    visit_expr(expr->right);
+}
+
+void bite::Analyzer::call(const box<CallExpr>& expr) {
+    visit_expr(expr->callee);
+    for (const auto& argument : expr->arguments) {
+        visit_expr(argument);
+    }
+}
+
+void bite::Analyzer::get_property(const box<GetPropertyExpr>& expr) {
+    visit_expr(expr->left);
+}
+
+void bite::Analyzer::if_expression(const box<IfExpr>& expr) {
+    visit_expr(expr->condition);
+    visit_expr(expr->then_expr);
+    if (expr->else_expr) {
+        visit_expr(*expr->else_expr);
+    }
+}
+
+void bite::Analyzer::loop_expression(const box<LoopExpr>& expr) {
+    visit_expr(expr->body);
+}
+
+void bite::Analyzer::break_expr(const box<BreakExpr>& expr) {
+    if (expr->expr) {
+        visit_expr(*expr->expr);
+    }
+}
+
+void bite::Analyzer::while_expr(const box<WhileExpr>& expr) {
+    visit_expr(expr->condition);
+    visit_expr(expr->body);
+}
+
+void bite::Analyzer::for_expr(const box<ForExpr>& expr) {
+    // TODO: implement
+    std::unreachable();
+}
+
+void bite::Analyzer::return_expr(const box<ReturnExpr>& expr) {
+    if (expr->value) {
+        visit_expr(*expr->value);
+    }
 }
 
 void bite::Analyzer::visit_stmt(const Stmt& statement) {
@@ -92,12 +163,12 @@ void bite::Analyzer::visit_stmt(const Stmt& statement) {
             [this](const box<ExprStmt>& stmt) { expression_statement(stmt); },
             [this](const box<ClassStmt>& stmt) { class_declaration(stmt); },
             [this](const box<NativeStmt>& stmt) { native_declaration(stmt); },
-            [this](const box<ObjectStmt>& stmt) {},
-            [this](const box<TraitStmt>& stmt) {},
-            [this](const box<MethodStmt>&) {},
-            [this](const box<FieldStmt>&) {},
-            [this](const box<ConstructorStmt>&) {},
-            [this](const box<UsingStmt>&) {},
+            [this](const box<ObjectStmt>& stmt) {}, // TODO: implement
+            [this](const box<TraitStmt>& stmt) {}, // TODO: implement
+            [this](const box<MethodStmt>&) {}, // TODO: should not exist
+            [this](const box<FieldStmt>&) {}, // TODO: should not exist
+            [this](const box<ConstructorStmt>&) {}, // TODO: should not exist
+            [this](const box<UsingStmt>&) {}, // TODO: implement
             [](const box<InvalidStmt>&) {},
         },
         statement
@@ -107,24 +178,24 @@ void bite::Analyzer::visit_stmt(const Stmt& statement) {
 void bite::Analyzer::visit_expr(const Expr& expression) {
     std::visit(
         overloaded {
-            [this](const box<LiteralExpr>& expr) {},
-            [this](const box<UnaryExpr>& expr) {},
-            [this](const box<BinaryExpr>& expr) {},
-            [this](const box<StringLiteral>& expr) {},
+            [this](const box<LiteralExpr>&) {},
+            [this](const box<UnaryExpr>& expr) {unary(expr);},
+            [this](const box<BinaryExpr>& expr) {binary(expr);},
+            [this](const box<StringLiteral>&) {},
             [this](const box<VariableExpr>& expr) { variable_expression(expr); },
-            [this](const box<CallExpr>& expr) {},
-            [this](const box<GetPropertyExpr>& expr) {},
-            [this](const box<SuperExpr>& expr) {},
+            [this](const box<CallExpr>& expr) { call(expr); },
+            [this](const box<GetPropertyExpr>& expr) { get_property(expr); },
+            [this](const box<SuperExpr>& expr) {}, // TODO: implement
             [this](const box<BlockExpr>& expr) { block(expr); },
-            [this](const box<IfExpr>& expr) {},
-            [this](const box<LoopExpr>& expr) {},
-            [this](const box<BreakExpr>& expr) {},
-            [this](const box<ContinueExpr>& expr) {},
-            [this](const box<WhileExpr>& expr) {},
-            [this](const box<ForExpr>& expr) {},
-            [this](const box<ReturnExpr>& expr) {},
-            [this](const box<ThisExpr>&) {},
-            [this](const box<ObjectExpr>& expr) {},
+            [this](const box<IfExpr>& expr) { if_expression(expr);},
+            [this](const box<LoopExpr>& expr) { loop_expression(expr); },
+            [this](const box<BreakExpr>& expr) { break_expr(expr); },
+            [this](const box<ContinueExpr>&) {}, // TODO: validate label
+            [this](const box<WhileExpr>& expr) {while_expr(expr);},
+            [this](const box<ForExpr>& expr) {for_expr(expr);}, // TODO: implement
+            [this](const box<ReturnExpr>& expr) {return_expr(expr);},
+            [this](const box<ThisExpr>&) {}, // TODO validate in class scope
+            [this](const box<ObjectExpr>& expr) {}, // TODO: implement
             [](const box<InvalidExpr>&) {}
         },
         expression
