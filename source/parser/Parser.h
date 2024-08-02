@@ -85,9 +85,9 @@ private:
 
     bitflags<ClassAttributes> member_attributes();
 
-    AstNode<ConstructorStmt> constructor_statement();
+    Constructor constructor_statement();
     AstNode<FunctionStmt> abstract_method(const Token& name, bool skip_params);
-    VarStmt abstract_field(const Token& name);
+    AstNode<VarStmt> abstract_field(const Token& name);
 
     Stmt trait_declaration();
     AstNode<FunctionStmt> in_trait_function(const Token& name, bitflags<ClassAttributes>& attributes, bool skip_params);

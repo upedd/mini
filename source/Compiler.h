@@ -170,7 +170,7 @@ public:
     void this_expr();
 
     void object_constructor(
-        const std::vector<AstNode<FieldStmt>>& fields,
+        const std::vector<Field>& fields,
         bool has_superclass,
         const std::vector<Expr>& superclass_arguments
     );
@@ -211,21 +211,21 @@ private:
     void function(const AstNode<FunctionStmt>& stmt, FunctionType type);
 
     void constructor(
-        const AstNode<ConstructorStmt>& stmt,
-        const std::vector<AstNode<FieldStmt>>& fields,
+        const Constructor& stmt,
+        const std::vector<Field>& fields,
         bool has_superclass,
         int superclass_arguments_count
     );
 
-    void default_constructor(const std::vector<AstNode<FieldStmt>>& fields, bool has_superclass);
+    void default_constructor(const std::vector<Field>& fields, bool has_superclass);
 
     void using_core(const std::vector<AstNode<UsingStmt>>& using_stmts);
 
     void class_core(
         int class_slot,
         std::optional<Token> super_class,
-        const std::vector<AstNode<MethodStmt>>& methods,
-        const std::vector<AstNode<FieldStmt>>& fields,
+        const std::vector<Method>& methods,
+        const std::vector<Field>& fields,
         const std::vector<AstNode<UsingStmt>>& using_stmts,
         bool is_abstract
     );

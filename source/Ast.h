@@ -21,11 +21,24 @@
 template <typename T>
 class AstNode {
 public:
-    explicit AstNode()
+    explicit AstNode(T&& value, const std::int64_t id) : id(id), ptr(new T(std::move(value))) {}
+    AstNode(const AstNode& value) = delete;
+    AstNode& operator=(const AstNode&) = delete;
 
-    std::size_t id;
+    T& operator*() { return *ptr; }
+    const T& operator*() const { return *ptr; }
+
+    T* operator->() { return ptr.get(); }
+    const T* operator->() const { return ptr.get(); }
+
+    AstNode(AstNode&& other) noexcept = default;
+    AstNode& operator=(AstNode&& other) noexcept = default;
+
+    ~AstNode() = default;
+
+    std::int64_t id;
+
 private:
-
     std::unique_ptr<T> ptr;
 };
 
@@ -38,8 +51,7 @@ using Expr = std::variant<AstNode<struct LiteralExpr>, AstNode<struct StringLite
                                      struct ThisExpr>, AstNode<struct ObjectExpr>, AstNode<struct InvalidExpr>>;
 
 using Stmt = std::variant<AstNode<struct VarStmt>, AstNode<struct ExprStmt>, AstNode<struct FunctionStmt>,
-                                 AstNode<struct ClassStmt>, AstNode<struct NativeStmt>, AstNode<struct FieldStmt>,
-                                 AstNode<struct MethodStmt>, AstNode<struct ConstructorStmt>, AstNode<struct
+                                 AstNode<struct ClassStmt>, AstNode<struct NativeStmt>, AstNode<struct
                                      ObjectStmt>, AstNode<struct TraitStmt>, AstNode<struct UsingStmt>, AstNode<
                                      struct InvalidStmt>>;
 
@@ -51,7 +63,7 @@ struct Ast {
 
     template <typename T, typename... Args>
     AstNode<T> make_node(Args&&... args) {
-        return AstNode<T>(T(std::forward<Args>(args)...));
+        return AstNode<T>(T(std::forward<Args>(args)...), current_id++);
     }
 };
 
@@ -164,17 +176,17 @@ enum class ClassAttributes: std::uint8_t {
     size // tracks ClassAttributes size. Must be at end!
 };
 
-struct FieldStmt {
+struct Field {
     AstNode<VarStmt> variable;
     bitflags<ClassAttributes> attributes;
 };
 
-struct MethodStmt {
+struct Method {
     AstNode<FunctionStmt> function;
     bitflags<ClassAttributes> attributes;
 };
 
-struct ConstructorStmt {
+struct Constructor {
     std::vector<Token> parameters;
     bool has_super;
     std::vector<Expr> super_arguments;
@@ -185,11 +197,11 @@ struct ConstructorStmt {
  * Shared fields between ObjectExpr and ClassStmt
  */
 struct StructureBody {
-    std::vector<AstNode<MethodStmt>> methods;
-    std::vector<AstNode<FieldStmt>> fields;
+    std::vector<Method> methods;
+    std::vector<Field> fields;
     std::optional<AstNode<ObjectExpr>> class_object;
     std::vector<AstNode<UsingStmt>> using_statements;
-    std::optional<AstNode<ConstructorStmt>> constructor;
+    std::optional<Constructor> constructor;
 };
 
 struct ObjectExpr {
@@ -216,8 +228,8 @@ struct ObjectStmt {
 
 struct TraitStmt {
     Token name;
-    std::vector<AstNode<MethodStmt>> methods;
-    std::vector<AstNode<FieldStmt>> fields;
+    std::vector<Method> methods;
+    std::vector<Field> fields;
     std::vector<AstNode<UsingStmt>> using_stmts;
 };
 

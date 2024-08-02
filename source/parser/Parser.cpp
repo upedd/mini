@@ -162,10 +162,10 @@ Stmt Parser::statement_or_expression() {
     );
 
     if (auto stmt = statement()) {
-        return *stmt;
+        return std::move(*stmt);
     }
     if (auto stmt = control_flow_expression_statement()) {
-        return *stmt;
+        return std::move(*stmt);
     }
     return expr_statement();
 }
@@ -222,7 +222,7 @@ std::optional<Stmt> Parser::control_flow_expression_statement() {
 }
 
 Stmt Parser::expr_statement() {
-    Stmt stmt = ExprStmt { expression() };
+    Stmt stmt = ast.make_node<ExprStmt>(expression());
     consume(Token::Type::SEMICOLON, "missing semicolon after expression");
     return stmt;
 }
@@ -248,7 +248,7 @@ Stmt Parser::var_declaration() {
 
 // The part after name
 AstNode<VarStmt> Parser::var_declaration_body(const Token& name) {
-    Expr expr = match(Token::Type::EQUAL) ? expression() : LiteralExpr { nil_t };
+    Expr expr = match(Token::Type::EQUAL) ? expression() : ast.make_node<LiteralExpr>(nil_t);
     consume(Token::Type::SEMICOLON, "missing semicolon");
     return ast.make_node<VarStmt>(name, std::move(expr));
 }
@@ -336,13 +336,9 @@ StructureBody Parser::structure_body() {
         bool skip_params = attributes[ClassAttributes::GETTER] && !check(Token::Type::LEFT_PAREN);
         if (check(Token::Type::LEFT_PAREN) || skip_params) {
             if (attributes[ClassAttributes::ABSTRACT]) {
-                body.methods.emplace_back(
-                    ast.make_node<MethodStmt>(abstract_method(member_name, skip_params), attributes)
-                );
+                body.methods.emplace_back(abstract_method(member_name, skip_params), attributes);
             } else {
-                body.methods.emplace_back(
-                    ast.make_node<MethodStmt>(function_declaration_body(member_name, skip_params), attributes)
-                );
+                body.methods.emplace_back(function_declaration_body(member_name, skip_params), attributes);
             }
             continue;
         }
@@ -350,7 +346,7 @@ StructureBody Parser::structure_body() {
         // Field
         attributes += ClassAttributes::GETTER;
         attributes += ClassAttributes::SETTER;
-        body.fields.emplace_back(ast.make_node<FieldStmt>(var_declaration_body(member_name), attributes));
+        body.fields.emplace_back(var_declaration_body(member_name), attributes);
     }
     consume(Token::Type::RIGHT_BRACE, "unmatched }");
     return body;
@@ -425,7 +421,7 @@ bitflags<ClassAttributes> Parser::member_attributes() {
     return attributes;
 }
 
-AstNode<ConstructorStmt> Parser::constructor_statement() {
+Constructor Parser::constructor_statement() {
     std::vector<Token> parameters = functions_parameters();
     std::vector<Expr> super_arguments;
     bool has_super = false;
@@ -439,7 +435,7 @@ AstNode<ConstructorStmt> Parser::constructor_statement() {
     }
 
     consume(Token::Type::LEFT_BRACE, "missing constructor body");
-    return ast.make_node<ConstructorStmt>(parameters, has_super, std::move(super_arguments), block());
+    return {parameters, has_super, std::move(super_arguments), block()};
 }
 
 AstNode<FunctionStmt> Parser::abstract_method(const Token& name, const bool skip_params) {
@@ -448,17 +444,17 @@ AstNode<FunctionStmt> Parser::abstract_method(const Token& name, const bool skip
     return ast.make_node<FunctionStmt>(name, std::move(parameters)); // CHECK
 }
 
-VarStmt Parser::abstract_field(const Token& name) {
+AstNode<VarStmt> Parser::abstract_field(const Token& name) {
     consume(Token::Type::SEMICOLON, "missing semicolon after declaration");
-    return VarStmt { .name = name, .value = {} };
+    return ast.make_node<VarStmt>(name);
 }
 
 Stmt Parser::trait_declaration() {
     consume(Token::Type::IDENTIFIER, "missing trait name");
     Token trait_name = current;
     consume(Token::Type::LEFT_BRACE, "missing trait body");
-    std::vector<AstNode<FieldStmt>> fields;
-    std::vector<AstNode<MethodStmt>> methods;
+    std::vector<Field> fields;
+    std::vector<Method> methods;
     std::vector<AstNode<UsingStmt>> using_statements;
     while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
         if (match(Token::Type::USING)) {
@@ -472,9 +468,7 @@ Stmt Parser::trait_declaration() {
 
         bool skip_params = attributes[ClassAttributes::GETTER] && !check(Token::Type::LEFT_PAREN);
         if (check(Token::Type::LEFT_PAREN) || skip_params) {
-            methods.emplace_back(
-                ast.make_node<MethodStmt>(in_trait_function(member_name, attributes, skip_params), attributes)
-            );
+            methods.emplace_back(in_trait_function(member_name, attributes, skip_params), attributes);
             continue;
         }
 
@@ -483,7 +477,7 @@ Stmt Parser::trait_declaration() {
         attributes += ClassAttributes::SETTER;
         attributes += ClassAttributes::ABSTRACT;
 
-        fields.emplace_back(ast.make_node<FieldStmt>(abstract_field(member_name), attributes));
+        fields.emplace_back(abstract_field(member_name), attributes);
     }
 
     consume(Token::Type::RIGHT_BRACE, "missing '}' after trait body");
@@ -559,7 +553,7 @@ Expr Parser::expression(const Precedence precedence) {
     auto left = prefix();
     if (!left) {
         error(current, "expression expected", "here");
-        return InvalidExpr();
+        return ast.make_node<InvalidExpr>();
     }
     while (precedence < get_precendece(next.type)) {
         advance();
@@ -773,7 +767,7 @@ Expr Parser::block(const std::optional<Token>& label) {
             bool expression_is_statement = is_cntrl_flow && (!check(Token::Type::RIGHT_BRACE) || current.type ==
                 Token::Type::SEMICOLON);
             if (match(Token::Type::SEMICOLON) || expression_is_statement) {
-                stmts.emplace_back(ExprStmt(std::move(expr)));
+                stmts.emplace_back(ast.make_node<ExprStmt>(std::move(expr)));
             } else {
                 expr_at_end = std::move(expr);
                 break;

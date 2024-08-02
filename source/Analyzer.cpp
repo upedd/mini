@@ -82,17 +82,17 @@ void bite::Analyzer::class_declaration(const AstNode<ClassStmt>& stmt) {
             // TODO: getters and setters
             // TODO: constuctor
             for (const auto& field : stmt->body.fields) {
-                declare(field->variable->name.string);
-                if (field->variable->value) {
-                    visit_expr(*field->variable->value);
+                declare(field.variable->name.string);
+                if (field.variable->value) {
+                    visit_expr(*field.variable->value);
                 }
             }
             // hoist methods
             for (const auto& method : stmt->body.methods) {
-                declare(method->function->name.string);
+                declare(method.function->name.string);
             }
             for (const auto& method : stmt->body.methods) {
-                visit_stmt(method->function);
+                function_declaration(method.function);
             }
         }
     );
@@ -162,9 +162,6 @@ void bite::Analyzer::visit_stmt(const Stmt& statement) {
             [this](const AstNode<NativeStmt>& stmt) { native_declaration(stmt); },
             [this](const AstNode<ObjectStmt>& stmt) {}, // TODO: implement
             [this](const AstNode<TraitStmt>& stmt) {}, // TODO: implement
-            [this](const AstNode<MethodStmt>&) {}, // TODO: should not exist
-            [this](const AstNode<FieldStmt>&) {}, // TODO: should not exist
-            [this](const AstNode<ConstructorStmt>&) {}, // TODO: should not exist
             [this](const AstNode<UsingStmt>&) {}, // TODO: implement
             [](const AstNode<InvalidStmt>&) {},
         },

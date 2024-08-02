@@ -283,9 +283,6 @@ void Compiler::visit_stmt(const Stmt& statement) {
             [this](const AstNode<NativeStmt>& stmt) { native_declaration(stmt); },
             [this](const AstNode<ObjectStmt>& stmt) { object_statement(stmt); },
             [this](const AstNode<TraitStmt>& stmt) { trait_statement(stmt); },
-            [this](const AstNode<MethodStmt>&) { assert("unreachable"); },
-            [this](const AstNode<FieldStmt>&) { assert("unreachable"); },
-            [this](const AstNode<ConstructorStmt>&) { assert("unreachable"); },
             [this](const AstNode<UsingStmt>&) {},
             [](const AstNode<InvalidStmt>&) {},
         },
@@ -537,8 +534,8 @@ void Compiler::function(const AstNode<FunctionStmt>& stmt, FunctionType type) {
 }
 
 void Compiler::constructor(
-    const AstNode<ConstructorStmt>& stmt,
-    const std::vector<AstNode<FieldStmt>>& fields,
+    const Constructor& stmt,
+    const std::vector<Field>& fields,
     bool has_superclass,
     int superclass_arguments_count
 ) {
@@ -606,7 +603,7 @@ void Compiler::constructor(
     // }
 }
 
-void Compiler::default_constructor(const std::vector<AstNode<FieldStmt>>& fields, bool has_superclass) {
+void Compiler::default_constructor(const std::vector<Field>& fields, bool has_superclass) {
     // // TODO: ideally in future default constructor has just default parameters!
     // auto* function = new Function("constructor", 0);
     // functions.push_back(function);
@@ -655,8 +652,8 @@ void Compiler::default_constructor(const std::vector<AstNode<FieldStmt>>& fields
 void Compiler::class_core(
     int class_slot,
     std::optional<Token> super_class,
-    const std::vector<AstNode<MethodStmt>>& methods,
-    const std::vector<AstNode<FieldStmt>>& fields,
+    const std::vector<Method>& methods,
+    const std::vector<Field>& fields,
     const std::vector<AstNode<UsingStmt>>& using_stmts,
     bool is_abstract
 ) {
@@ -881,7 +878,7 @@ void Compiler::class_core(
 
 // overlaps
 void Compiler::object_constructor(
-    const std::vector<AstNode<FieldStmt>>& fields,
+    const std::vector<Field>& fields,
     bool has_superclass,
     const std::vector<Expr>& superclass_arguments
 ) {
@@ -1203,25 +1200,25 @@ void Compiler::if_expression(const AstNode<IfExpr>& stmt) {
 void Compiler::visit_expr(const Expr& expression) {
     std::visit(
         overloaded {
-            [this](const bite::box<LiteralExpr>& expr) { literal(*expr); },
-            [this](const bite::box<UnaryExpr>& expr) { unary(*expr); },
-            [this](const bite::box<BinaryExpr>& expr) { binary(*expr); },
-            [this](const bite::box<StringLiteral>& expr) { string_literal(*expr); },
-            [this](const bite::box<VariableExpr>& expr) { variable(*expr); },
-            [this](const bite::box<CallExpr>& expr) { call(*expr); },
-            [this](const bite::box<GetPropertyExpr>& expr) { get_property(*expr); },
-            [this](const bite::box<SuperExpr>& expr) { super(*expr); },
-            [this](const bite::box<BlockExpr>& expr) { block(*expr); },
-            [this](const bite::box<IfExpr>& expr) { if_expression(*expr); },
-            [this](const bite::box<LoopExpr>& expr) { loop_expression(*expr); },
-            [this](const bite::box<BreakExpr>& expr) { break_expr(*expr); },
-            [this](const bite::box<ContinueExpr>& expr) { continue_expr(*expr); },
-            [this](const bite::box<WhileExpr>& expr) { while_expr(*expr); },
-            [this](const bite::box<ForExpr>& expr) { for_expr(*expr); },
-            [this](const bite::box<ReturnExpr>& expr) { retrun_expression(*expr); },
-            [this](const bite::box<ThisExpr>&) { this_expr(); },
-            [this](const bite::box<ObjectExpr>& expr) { object_expression(*expr); },
-            [](const bite::box<InvalidExpr>&) {}
+            [this](const AstNode<LiteralExpr>& expr) { literal(expr); },
+            [this](const AstNode<UnaryExpr>& expr) { unary(expr); },
+            [this](const AstNode<BinaryExpr>& expr) { binary(expr); },
+            [this](const AstNode<StringLiteral>& expr) { string_literal(expr); },
+            [this](const AstNode<VariableExpr>& expr) { variable(expr); },
+            [this](const AstNode<CallExpr>& expr) { call(expr); },
+            [this](const AstNode<GetPropertyExpr>& expr) { get_property(expr); },
+            [this](const AstNode<SuperExpr>& expr) { super(expr); },
+            [this](const AstNode<BlockExpr>& expr) { block(expr); },
+            [this](const AstNode<IfExpr>& expr) { if_expression(expr); },
+            [this](const AstNode<LoopExpr>& expr) { loop_expression(expr); },
+            [this](const AstNode<BreakExpr>& expr) { break_expr(expr); },
+            [this](const AstNode<ContinueExpr>& expr) { continue_expr(expr); },
+            [this](const AstNode<WhileExpr>& expr) { while_expr(expr); },
+            [this](const AstNode<ForExpr>& expr) { for_expr(expr); },
+            [this](const AstNode<ReturnExpr>& expr) { retrun_expression(expr); },
+            [this](const AstNode<ThisExpr>&) { this_expr(); },
+            [this](const AstNode<ObjectExpr>& expr) { object_expression(expr); },
+            [](const AstNode<InvalidExpr>&) {}
         },
         expression
     );
