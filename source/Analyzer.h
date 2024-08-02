@@ -21,6 +21,7 @@ namespace bite {
         // TODOs: core, variable binding, upvalues?, class analysis, tratis analysis, lvalue analysis, useless break and continue
         // TODO: first variable binding
         // refactor: overlap with parser
+        // TODO: traits
         void emit_message(Logger::Level level, const std::string& content, const std::string& inline_content);
 
         [[nodiscard]] bool has_errors() const {
@@ -39,6 +40,9 @@ namespace bite {
 
         void bind(const Expr& expr, StringTable::Handle name);
         void expression_statement(const box<ExprStmt>& stmt);
+        void function_declaration(const box<FunctionStmt>& box);
+        void native_declaration(const box<NativeStmt>& box);
+        void class_declaration(const box<ClassStmt>& box);
 
         struct LocalResolution {
             std::int64_t local_idx;
@@ -79,17 +83,19 @@ namespace bite {
             std::vector<StringTable::Handle> parameters;
         };
 
+        // TODO: missing class object resolution
+        // TODO: missing getters and setters handling
         struct ClassScope {
-            unordered_dense::set<StringTable::Handle&> members;
+            unordered_dense::set<StringTable::Handle> members;
         };
 
         struct GlobalScope {
-            unordered_dense::set<StringTable::Handle&> globals;
+            unordered_dense::set<StringTable::Handle> globals;
         };
 
         using Scope = std::variant<BlockScope, FunctionScope, ClassScope, GlobalScope>;
 
-        std::optional<Resolution> resolve_in_scope(const Scope& scope, StringTable::Handle name) {
+        static std::optional<Resolution> resolve_in_scope(const Scope& scope, StringTable::Handle name) {
             return std::visit(
                 overloaded {
                     [name](const BlockScope& sc) -> std::optional<Resolution> {
@@ -101,7 +107,7 @@ namespace bite {
                         return {};
                     },
                     [name](const FunctionScope& sc) -> std::optional<Resolution> {
-                        for (const auto& [idx, param] : sc.parameters | std::views::enumerate >) {
+                        for (const auto& [idx, param] : sc.parameters | std::views::enumerate) {
                             if (param == name) {
                                 return ParameterResolution { idx };
                             }
@@ -134,13 +140,50 @@ namespace bite {
             );
         }
 
-        std::vector<Scope> scopes;
+        static void define_in_scope(Scope& scope, StringTable::Handle name) {
+            // TODO: error handling
+            std::visit(overloaded {
+                [name](BlockScope& sc) {
+                    sc.locals.push_back({.name = name});
+                },
+                [name](FunctionScope& sc) {
+                    sc.parameters.push_back(name);
+                },
+                [name](ClassScope& sc) {
+                    sc.members.insert(name);
+                },
+                [name](GlobalScope& sc) {
+                    sc.globals.insert(name);
+                }
+            }, scope);
+        }
+
+        void define(StringTable::Handle name) {
+            define_in_scope(scopes.back(), name);
+        }
+        // TODO: missing captures
+        Resolution resolve(StringTable::Handle name) {
+            for (const auto& scope : scopes | std::views::reverse) {
+                if (std::optional<Resolution> res = resolve_in_scope(scope, name)) {
+                    return *res;
+                }
+            }
+            // TODO: handle error!
+        }
+
+        void with_scope(const Scope& scope, auto fn) {
+            scopes.push_back(scope);
+            fn();
+            scopes.pop_back();
+        }
+
+        std::vector<Scope> scopes{ GlobalScope() };
 
         struct Binding {
             int local_index = 0;
         };
 
-        unordered_dense::map<Expr const*, Binding> bindings;
+        unordered_dense::map<Expr const*, Resolution> bindings;
 
     private:
         void visit_stmt(const Stmt& statement);
