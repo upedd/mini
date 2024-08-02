@@ -302,7 +302,7 @@ void Compiler::visit_stmt(const Stmt& statement) {
 
 void Compiler::define_variable(const bite::Analyzer::Binding& binding) {
     if (std::holds_alternative<bite::Analyzer::LocalBinding>(binding)) {
-        current_context().slots[std::get<bite::Analyzer::LocalBinding>(binding).enviroment_offset] = current_context().
+        current_context().slots[std::get<bite::Analyzer::LocalBinding>(binding).local_idx] = current_context().
             on_stack - 1;
     } else if (std::holds_alternative<bite::Analyzer::GlobalBinding>(binding)) {
         auto name_constant = current_function()->add_constant(*std::get<bite::Analyzer::GlobalBinding>(binding).name);
@@ -360,7 +360,8 @@ void Compiler::block(const AstNode<BlockExpr>& expr) {
     // current_function()->patch_jump_destination(break_idx, current_program().size());
     int break_idx = current_function()->add_empty_jump_destination();
     std::optional<StringTable::Handle> label = expr->label ? expr->label->string : std::optional<StringTable::Handle> {};
-    with_expression_scope(label, [&expr, this](const ExpressionScope& expr_scope) {
+    // TODO: actually use unlabeled block here!
+    with_expression_scope(LabeledBlockScope{ .label = label }, [&expr, this](const LabeledBlockScope& expr_scope) {
         for (const auto& stmt : expr->stmts) {
             visit_stmt(stmt);
         }
@@ -1413,7 +1414,7 @@ void Compiler::binary(const AstNode<BinaryExpr>& expr) {
 void Compiler::emit_set_variable(const bite::Analyzer::Binding& binding) {
     std::visit(overloaded {
         [this](const bite::Analyzer::LocalBinding& bind) {
-            emit(OpCode::SET, current_context().slots[bind.enviroment_offset]); // assert exists?
+            emit(OpCode::SET, current_context().slots[bind.local_idx]); // assert exists?
         },
         [this](const bite::Analyzer::GlobalBinding& bind) {
             int constant = current_function()->add_constant(*bind.name); // TODO: rework constant system
@@ -1475,7 +1476,7 @@ void Compiler::emit_set_variable(const bite::Analyzer::Binding& binding) {
 void Compiler::emit_get_variable(const bite::Analyzer::Binding& binding) {
     std::visit(overloaded {
         [this](const bite::Analyzer::LocalBinding& bind) {
-            emit(OpCode::GET, current_context().slots[bind.enviroment_offset]); // assert exists?
+            emit(OpCode::GET, current_context().slots[bind.local_idx]); // assert exists?
         },
         [this](const bite::Analyzer::GlobalBinding& bind) {
             int constant = current_function()->add_constant(*bind.name); // TODO: rework constant system

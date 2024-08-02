@@ -121,14 +121,31 @@ public:
         int constructor_argument_count = 0;
     };
 
-    struct ExpressionScope {
-        std::int64_t on_stack_before;
-        std::int64_t return_slot;
+    // struct ExpressionScope {
+    //     std::int64_t on_stack_before;
+    //     std::int64_t return_slot;
+    //     std::optional<StringTable::Handle> label;
+    //     // Maybe break into different
+    //     int break_idx = -1;
+    //     int continue_idx = -1;
+    // };
+
+    // May not be most efficient memory wise but should be perfomant and simple
+    struct BlockScope {
+        std::int64_t on_stack_before = -1;
+        std::int64_t return_slot = -1;
+    };
+
+    struct LabeledBlockScope : BlockScope {
         std::optional<StringTable::Handle> label;
-        // Maybe break into different
         int break_idx = -1;
+    };
+
+    struct LoopScope : LabeledBlockScope {
         int continue_idx = -1;
     };
+
+    using ExpressionScope = std::variant<BlockScope, LabeledBlockScope, LoopScope>;
 
     struct Context {
         Function* function = nullptr;
@@ -162,15 +179,11 @@ public:
     };
 
     // perfomance?
-    void with_expression_scope(const auto& fn) {
-        begin_expression_scope();
-        fn(current_expression_scope());
-        end_expression_scope();
-    }
-
-    void with_expression_scope(std::optional<StringTable::Handle> label, const auto& fn) {
-        begin_expression_scope(label);
-        fn(current_expression_scope());
+    // concept?
+    template<typename T>
+    void with_expression_scope(T&& scope, const auto& fn) {
+        begin_expression_scope(std::forward<T>(scope));
+        fn(std::get<T>(current_context().expression_scopes.back()));
         end_expression_scope();
     }
 
@@ -180,14 +193,52 @@ public:
         end_context();
     }
 
-    void begin_expression_scope(std::optional<StringTable::Handle> label = {}) {
+    void begin_expression_scope(ExpressionScope&& scope) {
+        // refactor?
         emit(OpCode::NIL); // sensible default i guess?
+        std::visit(overloaded {
+            [this](BlockScope&& sc) {
+                // deduplicate!
+                sc.on_stack_before = current_context().on_stack;
+                sc.return_slot = current_context().on_stack;
+                current_context().expression_scopes.emplace_back(std::move(sc));
+            },
+            [this](LabeledBlockScope&& sc) {
+                // deduplicate!
+                sc.on_stack_before = current_context().on_stack;
+                sc.return_slot = current_context().on_stack;
+                current_context().expression_scopes.emplace_back(std::move(sc));
+            },
+            [this](LoopScope&& sc) {
+                // deduplicate!
+                sc.on_stack_before = current_context().on_stack;
+                sc.return_slot = current_context().on_stack;
+                current_context().expression_scopes.emplace_back(std::move(sc));
+            }
+        }, std::move(scope));
         current_context().on_stack++;
-        current_context().expression_scopes.emplace_back(current_context().on_stack, current_context().on_stack - 1, label);
+    }
+
+    std::int64_t get_on_stack_before(const ExpressionScope& scope) {
+        // refactor?
+        return std::visit(overloaded {
+            [](const BlockScope& sc) {
+                // deduplicate!
+                return sc.on_stack_before;
+            },
+            [](const LabeledBlockScope&& sc) {
+                // deduplicate!
+                return sc.on_stack_before;
+            },
+            [this](const LoopScope&& sc) {
+                // deduplicate!
+                return sc.on_stack_before;
+            }
+        }, scope);
     }
 
     void end_expression_scope() {
-        std::int64_t on_stack_before = current_context().expression_scopes.back().on_stack_before;
+        std::int64_t on_stack_before = get_on_stack_before(current_context().expression_scopes.back());
 
         // Note we actually produce one value
         for (std::int64_t i = 0; i < current_context().on_stack - on_stack_before - 1; ++i) {
@@ -195,6 +246,7 @@ public:
         }
 
         current_context().expression_scopes.pop_back();
+        current_context().on_stack = on_stack_before + 1;
     }
 
     // TODO: do this better

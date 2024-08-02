@@ -55,8 +55,7 @@ namespace bite {
         void return_expr(const AstNode<ReturnExpr>& expr);
 
         struct LocalBinding {
-            std::int64_t scope_offset;
-            std::int64_t enviroment_offset;
+            std::int64_t local_idx;
         };
 
         struct ParameterBinding {
@@ -71,9 +70,7 @@ namespace bite {
             StringTable::Handle name;
         };
 
-        struct ClassObjectBinding {
-
-        };
+        struct ClassObjectBinding {};
 
         struct GlobalBinding {
             StringTable::Handle name;
@@ -85,6 +82,7 @@ namespace bite {
                                      GlobalBinding, NoBinding>;
 
         struct Local {
+            std::int64_t idx;
             StringTable::Handle name;
             bool is_captured; // whetever is caputred in a closure
         };
@@ -94,6 +92,7 @@ namespace bite {
         };
 
         struct FunctionEnviroment {
+            std::int64_t current_local_idx = 0;
             std::vector<StringTable::Handle> captured;
             std::vector<StringTable::Handle> parameters;
             std::vector<Scope> scopes;
@@ -106,6 +105,7 @@ namespace bite {
         };
 
         struct GlobalEnviroment {
+            std::int64_t current_local_idx = 0;
             unordered_dense::set<StringTable::Handle> globals;
             std::vector<Scope> scopes;
         };
@@ -113,32 +113,25 @@ namespace bite {
         using Enviroment = std::variant<FunctionEnviroment, ClassEnviroment, GlobalEnviroment>;
 
         static std::optional<LocalBinding> get_local_binding(
-            const std::vector<Scope>& scopes,
-            StringTable::Handle name,
-            std::int64_t initial_enviroment_offset = 0
+            std::vector<Scope>& scopes,
+            const StringTable::Handle name
         ) {
             std::optional<LocalBinding> binding;
-            std::int64_t enviroment_offset = initial_enviroment_offset;
+            // optim?
             for (const auto& scope : scopes) {
-                std::int64_t scope_offset = 0;
                 for (const auto& local : scope.locals) {
                     if (local.name == name) {
-                        binding = { .scope_offset = scope_offset, .enviroment_offset = enviroment_offset };
+                        binding = { .local_idx = local.idx };
                     }
-                    ++scope_offset;
-                    ++enviroment_offset;
                 }
             }
             return binding;
         }
 
-        static std::optional<Binding> get_binding_in_enviroment(
-            const Enviroment& enviroment,
-            StringTable::Handle name
-        ) {
+        static std::optional<Binding> get_binding_in_enviroment(Enviroment& enviroment, StringTable::Handle name) {
             return std::visit(
                 overloaded {
-                    [name](const FunctionEnviroment& env) -> std::optional<Binding> {
+                    [name](FunctionEnviroment& env) -> std::optional<Binding> {
                         for (const auto& [idx, param] : env.parameters | std::views::enumerate) {
                             if (param == name) {
                                 return ParameterBinding { idx };
@@ -149,11 +142,7 @@ namespace bite {
                                 return CapturedBinding { idx };
                             }
                         }
-                        return get_local_binding(
-                            env.scopes,
-                            name,
-                            static_cast<std::int64_t>(env.parameters.size() + env.captured.size())
-                        );
+                        return get_local_binding(env.scopes, name);
                     },
                     [name](const ClassEnviroment& env) -> std::optional<Binding> {
                         for (const auto& member : env.members) {
@@ -163,7 +152,7 @@ namespace bite {
                         }
                         return {};
                     },
-                    [name](const GlobalEnviroment& env) -> std::optional<Binding> {
+                    [name](GlobalEnviroment& env) -> std::optional<Binding> {
                         for (const auto& global : env.globals) {
                             if (global == name) {
                                 return GlobalBinding { global };
@@ -184,7 +173,7 @@ namespace bite {
                         if (env.scopes.empty()) {
                             env.parameters.push_back(name);
                         } else {
-                            env.scopes.back().locals.push_back({ .name = name });
+                            env.scopes.back().locals.push_back({ .idx = env.current_local_idx++, .name = name });
                         }
                     },
                     [name](ClassEnviroment& env) {
@@ -194,7 +183,7 @@ namespace bite {
                         if (env.scopes.empty()) {
                             env.globals.insert(name);
                         } else {
-                            env.scopes.back().locals.push_back({ .name = name });
+                            env.scopes.back().locals.push_back({ .idx = env.current_local_idx++, .name = name });
                         }
                     }
                 },
@@ -208,7 +197,7 @@ namespace bite {
 
         // TODO: missing captures
         Binding get_binding(StringTable::Handle name) {
-            for (const auto& enviroment : enviroment_stack | std::views::reverse) {
+            for (auto& enviroment : enviroment_stack | std::views::reverse) {
                 if (std::optional<Binding> res = get_binding_in_enviroment(enviroment, name)) {
                     return *res;
                 }

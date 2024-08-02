@@ -107,13 +107,14 @@ void bite::Analyzer::binary(const AstNode<BinaryExpr>& expr) {
     // TODO: handle error
     // TODO: handle other lvalues
     // TODO: maybe isolate all together?
+    // make sure to first visit right side!
+    visit_expr(expr->right);
     visit_expr(expr->left);
     if (std::holds_alternative<AstNode<VariableExpr>>(expr->left)) {
         bindings[expr.id] = bindings[std::get<AstNode<VariableExpr>>(expr->left).id];
     } else {
         bindings[expr.id] = NoBinding();
     }
-    visit_expr(expr->right);
 }
 
 void bite::Analyzer::call(const AstNode<CallExpr>& expr) {
