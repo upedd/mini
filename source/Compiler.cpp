@@ -276,50 +276,52 @@ void Compiler::emit_default_return() {
 void Compiler::visit_stmt(const Stmt& statement) {
     std::visit(
         overloaded {
-            [this](const bite::box<VarStmt>& stmt) { variable_declaration(stmt); },
-            [this](const bite::box<FunctionStmt>& stmt) { function_declaration(*stmt); },
-            [this](const bite::box<ExprStmt>& stmt) { expr_statement(*stmt); },
-            [this](const bite::box<ClassStmt>& stmt) { class_declaration(*stmt); },
-            [this](const bite::box<NativeStmt>& stmt) { native_declaration(*stmt); },
-            [this](const bite::box<ObjectStmt>& stmt) { object_statement(*stmt); },
-            [this](const bite::box<TraitStmt>& stmt) { trait_statement(*stmt); },
-            [this](const bite::box<MethodStmt>&) { assert("unreachable"); },
-            [this](const bite::box<FieldStmt>&) { assert("unreachable"); },
-            [this](const bite::box<ConstructorStmt>&) { assert("unreachable"); },
-            [this](const bite::box<UsingStmt>&) {},
-            [](const bite::box<InvalidStmt>&) {},
+            [this](const AstNode<VarStmt>& stmt) { variable_declaration(stmt); },
+            [this](const AstNode<FunctionStmt>& stmt) { function_declaration(stmt); },
+            [this](const AstNode<ExprStmt>& stmt) { expr_statement(stmt); },
+            [this](const AstNode<ClassStmt>& stmt) { class_declaration(stmt); },
+            [this](const AstNode<NativeStmt>& stmt) { native_declaration(stmt); },
+            [this](const AstNode<ObjectStmt>& stmt) { object_statement(stmt); },
+            [this](const AstNode<TraitStmt>& stmt) { trait_statement(stmt); },
+            [this](const AstNode<MethodStmt>&) { assert("unreachable"); },
+            [this](const AstNode<FieldStmt>&) { assert("unreachable"); },
+            [this](const AstNode<ConstructorStmt>&) { assert("unreachable"); },
+            [this](const AstNode<UsingStmt>&) {},
+            [](const AstNode<InvalidStmt>&) {},
         },
         statement
     );
 }
 
-bite::Analyzer::Binding Compiler::get_binding(const Expr& expr) {
-    return analyzer.bindings[&expr];
-};
-
-void Compiler::variable_declaration(const bite::box<VarStmt>& expr) {
-    //analyzer.bindings[&expr]; // assert
-
-    // std::string name = *expr.name.string;
-    // visit_expr(*expr.value);
-    // current_scope().pop_temporary();
-    // define_variable(name);
+void Compiler::variable_declaration(const AstNode<VarStmt>& expr) {
+    if (expr->value) {
+        visit_expr(*expr->value);
+    }
+    // TODO: only locals work now:
+    auto binding = std::get<bite::Analyzer::LocalBinding>(analyzer.bindings[expr.id]);
+    current_context().slots[binding.enviroment_offset] = current_context().on_stack - 1;
 }
 
-void Compiler::function_declaration(const FunctionStmt& stmt) {
+void Compiler::function_declaration(const AstNode<FunctionStmt>& stmt) {
     // define_variable(*stmt.name.string);
     // function(stmt, FunctionType::FUNCTION);
 }
 
-void Compiler::native_declaration(const NativeStmt& stmt) {
-    // std::string name = *stmt.name.string;
-    // natives.push_back(name);
-    // int idx = current_function()->add_constant(name);
-    // emit(OpCode::GET_NATIVE, idx);
-    // define_variable(name);
+void Compiler::native_declaration(const AstNode<NativeStmt>& stmt) {
+    std::string name = *stmt->name.string;
+    natives.push_back(name);
+    int idx = current_function()->add_constant(name);
+    emit(OpCode::GET_NATIVE, idx);
+    current_context().on_stack++;
+    // TODO: only locals work now:
+    auto binding = std::get<bite::Analyzer::LocalBinding>(analyzer.bindings[stmt.id]);
+    current_context().slots[binding.enviroment_offset] = current_context().on_stack - 1;
 }
 
-void Compiler::block(const BlockExpr& expr) {
+void Compiler::block(const AstNode<BlockExpr>& expr) {
+    for (const auto& stmt : expr->stmts) {
+        visit_stmt(stmt);
+    }
     // int break_idx = current_function()->add_empty_jump_destination();
     // begin_scope(ScopeType::BLOCK, expr.label ? *expr.label->string : "");
     // current_scope().break_idx = break_idx;
@@ -339,7 +341,7 @@ void Compiler::block(const BlockExpr& expr) {
     // current_function()->patch_jump_destination(break_idx, current_program().size());
 }
 
-void Compiler::loop_expression(const LoopExpr& expr) {
+void Compiler::loop_expression(const AstNode<LoopExpr>& expr) {
     // std::string label = expr.label ? *expr.label->string : "";
     // begin_scope(ScopeType::LOOP, label);
     // // to support breaking with values before loop body we create special invisible variable used for returing
@@ -362,7 +364,7 @@ void Compiler::loop_expression(const LoopExpr& expr) {
     // current_function()->patch_jump_destination(break_idx, current_program().size());
 }
 
-void Compiler::while_expr(const WhileExpr& expr) {
+void Compiler::while_expr(const AstNode<WhileExpr>& expr) {
     // // Tons of overlap with normal loop maybe abstract this away?
     // std::string label = expr.label ? *expr.label->string : "";
     // begin_scope(ScopeType::LOOP, label);
@@ -393,7 +395,7 @@ void Compiler::while_expr(const WhileExpr& expr) {
     // current_function()->patch_jump_destination(break_idx, current_program().size());
 }
 
-void Compiler::for_expr(const ForExpr& expr) {
+void Compiler::for_expr(const AstNode<ForExpr>& expr) {
     // // Tons of overlap with while loop maybe abstract this away?
     // // ideally some sort of desugaring step
     // begin_scope(ScopeType::BLOCK);
@@ -457,7 +459,7 @@ void Compiler::for_expr(const ForExpr& expr) {
 }
 
 
-void Compiler::break_expr(const BreakExpr& expr) {
+void Compiler::break_expr(const AstNode<BreakExpr>& expr) {
     // TODO: parser should check if break expressions actually in loop
     // TODO: better way to write this
     // int scope_depth = 0;
@@ -483,7 +485,7 @@ void Compiler::break_expr(const BreakExpr& expr) {
     // emit(OpCode::JUMP, scope.break_idx);
 }
 
-void Compiler::continue_expr(const ContinueExpr& expr) {
+void Compiler::continue_expr(const AstNode<ContinueExpr>& expr) {
     // safety: assert that contains label?
     // int scope_depth = 0;
     // for (auto& scope : std::views::reverse(current_context().scopes)) {
@@ -504,7 +506,7 @@ void Compiler::continue_expr(const ContinueExpr& expr) {
 }
 
 
-void Compiler::function(const FunctionStmt& stmt, FunctionType type) {
+void Compiler::function(const AstNode<FunctionStmt>& stmt, FunctionType type) {
     // auto function_name = *stmt.name.string;
     // auto* function = new Function(function_name, stmt.params.size());
     // functions.push_back(function);
@@ -535,8 +537,8 @@ void Compiler::function(const FunctionStmt& stmt, FunctionType type) {
 }
 
 void Compiler::constructor(
-    const ConstructorStmt& stmt,
-    const std::vector<FieldStmt>& fields,
+    const AstNode<ConstructorStmt>& stmt,
+    const std::vector<AstNode<FieldStmt>>& fields,
     bool has_superclass,
     int superclass_arguments_count
 ) {
@@ -604,7 +606,7 @@ void Compiler::constructor(
     // }
 }
 
-void Compiler::default_constructor(const std::vector<FieldStmt>& fields, bool has_superclass) {
+void Compiler::default_constructor(const std::vector<AstNode<FieldStmt>>& fields, bool has_superclass) {
     // // TODO: ideally in future default constructor has just default parameters!
     // auto* function = new Function("constructor", 0);
     // functions.push_back(function);
@@ -653,9 +655,9 @@ void Compiler::default_constructor(const std::vector<FieldStmt>& fields, bool ha
 void Compiler::class_core(
     int class_slot,
     std::optional<Token> super_class,
-    const std::vector<MethodStmt>& methods,
-    const std::vector<FieldStmt>& fields,
-    const std::vector<UsingStmt>& using_stmts,
+    const std::vector<AstNode<MethodStmt>>& methods,
+    const std::vector<AstNode<FieldStmt>>& fields,
+    const std::vector<AstNode<UsingStmt>>& using_stmts,
     bool is_abstract
 ) {
     // if (super_class) {
@@ -879,7 +881,7 @@ void Compiler::class_core(
 
 // overlaps
 void Compiler::object_constructor(
-    const std::vector<FieldStmt>& fields,
+    const std::vector<AstNode<FieldStmt>>& fields,
     bool has_superclass,
     const std::vector<Expr>& superclass_arguments
 ) {
@@ -926,7 +928,7 @@ void Compiler::object_constructor(
     // }
 }
 
-void Compiler::object_expression(const ObjectExpr& expr) {
+void Compiler::object_expression(const AstNode<ObjectExpr>& expr) {
     // // TODO: refactor!
     // begin_scope(ScopeType::BLOCK);
     // emit(OpCode::NIL);
@@ -967,13 +969,13 @@ void Compiler::object_expression(const ObjectExpr& expr) {
     // end_scope();
 }
 
-void Compiler::object_statement(const ObjectStmt& stmt) {
+void Compiler::object_statement(const AstNode<ObjectStmt>& stmt) {
     // visit_expr(stmt.object);
     // current_scope().pop_temporary();
     // define_variable(*stmt.name.string);
 }
 
-void Compiler::trait_statement(const TraitStmt& stmt) {
+void Compiler::trait_statement(const AstNode<TraitStmt>& stmt) {
     // std::string name = *stmt.name.string;
     // uint8_t name_constanst = current_function()->add_constant(name);
     //
@@ -1097,7 +1099,7 @@ void Compiler::trait_statement(const TraitStmt& stmt) {
     // current_scope().pop_temporary();
 }
 
-void Compiler::class_declaration(const ClassStmt& stmt) {
+void Compiler::class_declaration(const AstNode<ClassStmt>& stmt) {
     // // TODO: refactor!
     // std::string name = *stmt.name.string;
     // uint8_t name_constant = current_function()->add_constant(name);
@@ -1159,14 +1161,14 @@ void Compiler::class_declaration(const ClassStmt& stmt) {
     // current_scope().pop_temporary();
 }
 
-void Compiler::expr_statement(const ExprStmt& stmt) {
-    // visit_expr(stmt.expr);
-    //
-    // emit(OpCode::POP);
-    // current_scope().pop_temporary();
+void Compiler::expr_statement(const AstNode<ExprStmt>& stmt) {
+    visit_expr(stmt->expr);
+
+    emit(OpCode::POP);
+    current_context().on_stack--;
 }
 
-void Compiler::retrun_expression(const ReturnExpr& stmt) {
+void Compiler::retrun_expression(const AstNode<ReturnExpr>& stmt) {
     // if (stmt.value) {
     //     visit_expr(*stmt.value);
     // } else {
@@ -1178,7 +1180,7 @@ void Compiler::retrun_expression(const ReturnExpr& stmt) {
     // current_scope().mark_temporary();
 }
 
-void Compiler::if_expression(const IfExpr& stmt) {
+void Compiler::if_expression(const AstNode<IfExpr>& stmt) {
     // visit_expr(stmt.condition);
     // int jump_to_else = current_function()->add_empty_jump_destination();
     // emit(OpCode::JUMP_IF_FALSE, jump_to_else);
@@ -1225,23 +1227,24 @@ void Compiler::visit_expr(const Expr& expression) {
     );
 }
 
-void Compiler::literal(const LiteralExpr& expr) {
+void Compiler::literal(const AstNode<LiteralExpr>& expr) {
     // current_scope().mark_temporary();
-    // int index = current_function()->add_constant(expr.literal);
-    // emit(OpCode::CONSTANT);
-    // emit(index); // handle overflow!!!
+    int index = current_function()->add_constant(expr->literal);
+    emit(OpCode::CONSTANT);
+    emit(index); // handle overflow!!!
+    current_context().on_stack++;
 }
 
-void Compiler::string_literal(const StringLiteral& expr) {
+void Compiler::string_literal(const AstNode<StringLiteral>& expr) {
     // current_scope().mark_temporary();
     // std::string s = expr.string;
     // int index = current_function()->add_constant(s); // memory!
     // emit(OpCode::CONSTANT, index); // handle overflow!!!
 }
 
-void Compiler::unary(const UnaryExpr& expr) {
-    visit_expr(expr.expr);
-    switch (expr.op) {
+void Compiler::unary(const AstNode<UnaryExpr>& expr) {
+    visit_expr(expr->expr);
+    switch (expr->op) {
         case Token::Type::MINUS: emit(OpCode::NEGATE);
             break;
         case Token::Type::BANG: emit(OpCode::NOT);
@@ -1252,7 +1255,7 @@ void Compiler::unary(const UnaryExpr& expr) {
     }
 }
 
-void Compiler::binary(const BinaryExpr& expr) {
+void Compiler::binary(const AstNode<BinaryExpr>& expr) {
     // // we don't need to actually visit lhs for plain assigment
     // if (expr.op == Token::Type::EQUAL) {
     //     visit_expr(expr.right);
@@ -1381,12 +1384,16 @@ void Compiler::update_lvalue(const Expr& lvalue) {
     // }
 }
 
-void Compiler::variable(const VariableExpr& expr) {
-    // std::string name = *expr.identifier.string;
-    // resolve_variable(name);
+void Compiler::variable(const AstNode<VariableExpr>& expr) {
+    //std::string name = *expr.identifier.string;
+    //resolve_variable(name);
+    // TODO: only local work now!
+    auto binding = std::get<bite::Analyzer::LocalBinding>(analyzer.bindings[expr.id]);
+    emit(OpCode::GET, current_context().slots[binding.enviroment_offset]);
+    current_context().on_stack++;
 }
 
-void Compiler::logical(const BinaryExpr& expr) {
+void Compiler::logical(const AstNode<BinaryExpr>& expr) {
     // int jump = current_function()->add_empty_jump_destination();
     // emit(expr.op == Token::Type::AND_AND ? OpCode::JUMP_IF_FALSE : OpCode::JUMP_IF_TRUE, jump);
     // emit(OpCode::POP);
@@ -1394,23 +1401,24 @@ void Compiler::logical(const BinaryExpr& expr) {
     // current_function()->patch_jump_destination(jump, current_program().size());
 }
 
-void Compiler::call(const CallExpr& expr) {
-    // visit_expr(expr.callee);
-    // for (const Expr& argument : expr.arguments) {
-    //     visit_expr(argument);
-    // }
-    // current_scope().pop_temporary(expr.arguments.size());
-    // emit(OpCode::CALL, expr.arguments.size()); // TODO: check
+void Compiler::call(const AstNode<CallExpr>& expr) {
+    visit_expr(expr->callee);
+    for (const Expr& argument : expr->arguments) {
+        visit_expr(argument);
+    }
+    //current_scope().pop_temporary(expr.arguments.size());
+    emit(OpCode::CALL, expr->arguments.size()); // TODO: check
+    current_context().on_stack -= expr->arguments.size();
 }
 
-void Compiler::get_property(const GetPropertyExpr& expr) {
+void Compiler::get_property(const AstNode<GetPropertyExpr>& expr) {
     // visit_expr(expr.left);
     // std::string name = *expr.property.string;
     // int constant = current_function()->add_constant(name);
     // emit(OpCode::GET_PROPERTY, constant);
 }
 
-void Compiler::super(const SuperExpr& expr) {
+void Compiler::super(const AstNode<SuperExpr>& expr) {
     // int constant = current_function()->add_constant(*expr.method.string);
     // // or just resolve this in vm?
     // emit(OpCode::THIS);

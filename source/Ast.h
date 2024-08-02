@@ -19,10 +19,14 @@
 * Container to attach additional metadata to ast nodes
 */
 template <typename T>
-class AstNode : public bite::box<T> {
+class AstNode {
 public:
-    using bite::box<T>::box;
+    explicit AstNode()
+
     std::size_t id;
+private:
+
+    std::unique_ptr<T> ptr;
 };
 
 using Expr = std::variant<AstNode<struct LiteralExpr>, AstNode<struct StringLiteral>, AstNode<struct

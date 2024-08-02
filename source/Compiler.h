@@ -129,7 +129,7 @@ public:
         std::unordered_map<std::string, ResolvedClass> resolved_classes;
         int on_stack = 0;
         // enviroment offset to slot
-        bite::unordered_dense::map<std::int64_t, int> slots;
+        bite::unordered_dense::map<std::uint64_t, int> slots;
 
         // Scope& current_scope() {
         //     return scopes.back();
@@ -170,16 +170,16 @@ public:
     void this_expr();
 
     void object_constructor(
-        const std::vector<FieldStmt>& fields,
+        const std::vector<AstNode<FieldStmt>>& fields,
         bool has_superclass,
         const std::vector<Expr>& superclass_arguments
     );
 
-    void object_expression(const ObjectExpr& expr);
+    void object_expression(const AstNode<ObjectExpr>& expr);
 
-    void object_statement(const ObjectStmt& stmt);
+    void object_statement(const AstNode<ObjectStmt>& stmt);
 
-    void trait_statement(const TraitStmt& stmt);
+    void trait_statement(const AstNode<TraitStmt>& stmt);
 
 private:
     void start_context(Function* function, FunctionType type);
@@ -206,60 +206,60 @@ private:
     void visit_stmt(const Stmt& stmt);
     bite::Analyzer::Binding get_binding(const Expr& expr);
 
-    void variable_declaration(const bite::box<VarStmt>& expr);
-    void function_declaration(const FunctionStmt& stmt);
-    void function(const FunctionStmt& stmt, FunctionType type);
+    void variable_declaration(const AstNode<VarStmt>& expr);
+    void function_declaration(const AstNode<FunctionStmt>& stmt);
+    void function(const AstNode<FunctionStmt>& stmt, FunctionType type);
 
     void constructor(
-        const ConstructorStmt& stmt,
-        const std::vector<FieldStmt>& fields,
+        const AstNode<ConstructorStmt>& stmt,
+        const std::vector<AstNode<FieldStmt>>& fields,
         bool has_superclass,
         int superclass_arguments_count
     );
 
-    void default_constructor(const std::vector<FieldStmt>& fields, bool has_superclass);
+    void default_constructor(const std::vector<AstNode<FieldStmt>>& fields, bool has_superclass);
 
-    void using_core(const std::vector<std::unique_ptr<UsingStmt>>& using_stmts);
+    void using_core(const std::vector<AstNode<UsingStmt>>& using_stmts);
 
     void class_core(
         int class_slot,
         std::optional<Token> super_class,
-        const std::vector<MethodStmt>& methods,
-        const std::vector<FieldStmt>& fields,
-        const std::vector<UsingStmt>& using_stmts,
+        const std::vector<AstNode<MethodStmt>>& methods,
+        const std::vector<AstNode<FieldStmt>>& fields,
+        const std::vector<AstNode<UsingStmt>>& using_stmts,
         bool is_abstract
     );
 
-    void class_declaration(const ClassStmt& stmt);
-    void expr_statement(const ExprStmt& stmt);
-    void native_declaration(const NativeStmt& stmt);
+    void class_declaration(const AstNode<ClassStmt>& stmt);
+    void expr_statement(const AstNode<ExprStmt>& stmt);
+    void native_declaration(const AstNode<NativeStmt>& stmt);
 
-    void if_expression(const IfExpr& stmt);
+    void if_expression(const AstNode<IfExpr>& stmt);
 
     void visit_expr(const Expr& expr);
 
-    void block(const BlockExpr& expr);
-    void loop_expression(const LoopExpr& expr);
-    void break_expr(const BreakExpr& expr);
-    void continue_expr(const ContinueExpr& expr);
-    void while_expr(const WhileExpr& expr);
-    void for_expr(const ForExpr& expr);
-    void retrun_expression(const ReturnExpr& stmt);
+    void block(const AstNode<BlockExpr>& expr);
+    void loop_expression(const AstNode<LoopExpr>& expr);
+    void break_expr(const AstNode<BreakExpr>& expr);
+    void continue_expr(const AstNode<ContinueExpr>& expr);
+    void while_expr(const AstNode<WhileExpr>& expr);
+    void for_expr(const AstNode<ForExpr>& expr);
+    void retrun_expression(const AstNode<ReturnExpr>& stmt);
 
-    void literal(const LiteralExpr& expr);
-    void string_literal(const StringLiteral& expr);
-    void unary(const UnaryExpr& expr);
+    void literal(const AstNode<LiteralExpr>& expr);
+    void string_literal(const AstNode<StringLiteral>& expr);
+    void unary(const AstNode<UnaryExpr>& expr);
 
-    void binary(const BinaryExpr& expr);
+    void binary(const AstNode<BinaryExpr>& expr);
 
     void update_lvalue(const Expr& lvalue);
 
-    void logical(const BinaryExpr& expr);
+    void logical(const AstNode<BinaryExpr>& expr);
 
-    void variable(const VariableExpr& expr);
-    void call(const CallExpr& expr);
-    void get_property(const GetPropertyExpr& expr);
-    void super(const SuperExpr& expr);
+    void variable(const AstNode<VariableExpr>& expr);
+    void call(const AstNode<CallExpr>& expr);
+    void get_property(const AstNode<GetPropertyExpr>& expr);
+    void super(const AstNode<SuperExpr>& expr);
 
     Parser parser;
     Function main;

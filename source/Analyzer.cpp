@@ -67,6 +67,7 @@ void bite::Analyzer::function_declaration(const AstNode<FunctionStmt>& stmt) {
 
 void bite::Analyzer::native_declaration(const AstNode<NativeStmt>& box) {
     declare(box->name.string);
+    bindings[box.id] = get_binding(box->name.string);
 }
 
 void bite::Analyzer::class_declaration(const AstNode<ClassStmt>& stmt) {

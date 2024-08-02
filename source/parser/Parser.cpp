@@ -336,9 +336,13 @@ StructureBody Parser::structure_body() {
         bool skip_params = attributes[ClassAttributes::GETTER] && !check(Token::Type::LEFT_PAREN);
         if (check(Token::Type::LEFT_PAREN) || skip_params) {
             if (attributes[ClassAttributes::ABSTRACT]) {
-                body.methods.emplace_back(ast.make_node<MethodStmt>(abstract_method(member_name, skip_params), attributes));
+                body.methods.emplace_back(
+                    ast.make_node<MethodStmt>(abstract_method(member_name, skip_params), attributes)
+                );
             } else {
-                body.methods.emplace_back(ast.make_node<MethodStmt>(function_declaration_body(member_name, skip_params), attributes));
+                body.methods.emplace_back(
+                    ast.make_node<MethodStmt>(function_declaration_body(member_name, skip_params), attributes)
+                );
             }
             continue;
         }
@@ -468,7 +472,9 @@ Stmt Parser::trait_declaration() {
 
         bool skip_params = attributes[ClassAttributes::GETTER] && !check(Token::Type::LEFT_PAREN);
         if (check(Token::Type::LEFT_PAREN) || skip_params) {
-            methods.emplace_back(ast.make_node<MethodStmt>(in_trait_function(member_name, attributes, skip_params), attributes));
+            methods.emplace_back(
+                ast.make_node<MethodStmt>(in_trait_function(member_name, attributes, skip_params), attributes)
+            );
             continue;
         }
 
@@ -482,12 +488,7 @@ Stmt Parser::trait_declaration() {
 
     consume(Token::Type::RIGHT_BRACE, "missing '}' after trait body");
 
-    return ast.make_node<TraitStmt>(
-        .name = trait_name,
-        .methods = std::move(methods),
-        .fields = std::move(fields),
-        .using_stmts = std::move(using_statements)
-    );
+    return ast.make_node<TraitStmt>(trait_name, std::move(methods), std::move(fields), std::move(using_statements));
 }
 
 AstNode<FunctionStmt> Parser::in_trait_function(
@@ -679,7 +680,7 @@ Expr Parser::break_expression() {
         label = current;
     }
     if (!is_expression_start(next.type)) {
-        return ast.make_node<BreakExpr>({}, label);
+        return ast.make_node<BreakExpr>(std::optional<Expr> {}, label);
     }
     return ast.make_node<BreakExpr>(expression(), label);
 }

@@ -2,6 +2,7 @@
 #include <fstream>
 #include <iostream>
 #include "Compiler.h"
+#include "debug.h"
 #include "VM.h"
 #include "shared/SharedContext.h"
 
@@ -17,8 +18,8 @@ int main(int argc, char** argv) {
         return 1;
     }
     auto& func = compiler.get_main();
-    // Disassembler disassembler(func);
-    // disassembler.disassemble("main");
+    Disassembler disassembler(func);
+    disassembler.disassemble("main");
     auto& functions = compiler.get_functions();
     GarbageCollector gc;
     for (auto* function : functions) {
