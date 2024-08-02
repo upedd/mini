@@ -52,6 +52,8 @@ add_executable(bite source/main.cpp
         source/base/overloaded.h
         source/base/chars.h
         source/base/bitflags.h
+        source/Analyzer.cpp
+        source/Analyzer.h
 )
 
 # workaround (or not?) to make std::print work on gcc
