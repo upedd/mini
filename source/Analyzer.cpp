@@ -62,6 +62,7 @@ void bite::Analyzer::function_declaration(const AstNode<FunctionStmt>& stmt) {
             if (stmt->body) {
                 visit_expr(*stmt->body);
             }
+            function_upvalues[stmt.id] = std::get<FunctionEnviroment>(enviroment_stack.back()).upvalues;
         }
     );
 }

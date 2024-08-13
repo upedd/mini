@@ -63,7 +63,7 @@ namespace bite {
             std::int64_t param_idx;
         };
 
-        struct CapturedBinding {
+        struct UpvalueBinding {
             std::int64_t param_idx;
         };
 
@@ -79,13 +79,23 @@ namespace bite {
 
         struct NoBinding {};
 
-        using Binding = std::variant<LocalBinding, ParameterBinding, CapturedBinding, MemberBinding, ClassObjectBinding,
+        using Binding = std::variant<LocalBinding, ParameterBinding, UpvalueBinding, MemberBinding, ClassObjectBinding,
                                      GlobalBinding, NoBinding>;
 
         struct Local {
             std::int64_t idx;
             StringTable::Handle name;
-            bool is_captured; // whetever is caputred in a closure
+            bool is_captured; // whetever is captured in a upvalue
+        };
+
+        struct Upvalue {
+            std::int64_t value;
+            StringTable::Handle name;
+            bool is_local; // whetever the upvalue points to a local variable or an another upvalue
+
+            bool operator==(const Upvalue& other) const {
+                return this->value == other.value && this->name == other.name && this->is_local == other.is_local;
+            }
         };
 
         struct Scope {
@@ -94,7 +104,7 @@ namespace bite {
 
         struct FunctionEnviroment {
             std::int64_t current_local_idx = 0;
-            std::vector<StringTable::Handle> captured;
+            std::vector<Upvalue> upvalues;
             std::vector<StringTable::Handle> parameters;
             std::vector<Scope> scopes;
         };
@@ -138,12 +148,16 @@ namespace bite {
                                 return ParameterBinding { idx };
                             }
                         }
-                        for (const auto& [idx, captured] : env.captured | std::views::enumerate) {
-                            if (captured == name) {
-                                return CapturedBinding { idx };
+                        if (auto local = get_local_binding(env.scopes, name)) {
+                            return local;
+                        }
+
+                        for (const auto& upvalue : env.upvalues) {
+                            if (upvalue.name == name) {
+                                return UpvalueBinding { upvalue.value };
                             }
                         }
-                        return get_local_binding(env.scopes, name);
+                        return {};
                     },
                     [name](const ClassEnviroment& env) -> std::optional<Binding> {
                         for (const auto& member : env.members) {
@@ -196,12 +210,34 @@ namespace bite {
             declare_in_enviroment(enviroment_stack.back(), name);
         }
 
-        void handle_closure_binding(const std::vector<std::reference_wrapper<FunctionEnviroment>>& enviroments_visited, StringTable::Handle name) {
-            for (const auto& enviroment : enviroments_visited) {
-                if (!std::ranges::contains(enviroment.get().captured, name)) {
-                    enviroment.get().captured.push_back(name);
+        int64_t add_upvalue(FunctionEnviroment& enviroment, const Upvalue& upvalue) {
+            auto found = std::ranges::find(enviroment.upvalues, upvalue);
+            if (found != enviroment.upvalues.end()) {
+                return std::distance(enviroment.upvalues.begin(), found);
+            }
+            enviroment.upvalues.push_back(upvalue);
+            return enviroment.upvalues.size() - 1;
+        }
+
+        int64_t handle_closure_binding(
+            const std::vector<std::reference_wrapper<FunctionEnviroment>>& enviroments_visited,
+            StringTable::Handle name,
+            int64_t local_index
+        ) {
+            bool is_local = true;
+            int64_t value = local_index;
+            for (const auto& enviroment : enviroments_visited | std::views::reverse) {
+                value = add_upvalue(enviroment, Upvalue { .value = value, .name = name, .is_local = is_local });
+                if (is_local) {
+                    // Only top level can be pointing to an local variable
+                    is_local = false;
                 }
             }
+            return value;
+        }
+
+        void capture_local() {
+            // STUB
         }
 
         // TODO: missing captures
@@ -209,11 +245,18 @@ namespace bite {
             std::vector<std::reference_wrapper<FunctionEnviroment>> function_enviroments_visited;
             for (auto& enviroment : enviroment_stack | std::views::reverse) {
                 if (std::optional<Binding> res = get_binding_in_enviroment(enviroment, name)) {
-
                     if (std::holds_alternative<LocalBinding>(*res) && !function_enviroments_visited.empty()) {
-                        handle_closure_binding(function_enviroments_visited, name);
-                        return CapturedBinding {std::views::function_enviroments_visited.back().get()};
+                        std::enviromentstd::get<LocalBinding>
+
+                        return UpvalueBinding {
+                                handle_closure_binding(
+                                    function_enviroments_visited,
+                                    name,
+                                    std::get<LocalBinding>(*res).local_idx
+                                )
+                            };
                     }
+
 
                     return *res;
                 }
@@ -258,7 +301,7 @@ namespace bite {
 
 
         unordered_dense::map<std::size_t, Binding> bindings;
-
+        unordered_dense::map<std::size_t, std::vector<Upvalue>> function_upvalues;
     private:
         std::vector<Enviroment> enviroment_stack { GlobalEnviroment() };
         void visit_stmt(const Stmt& statement);

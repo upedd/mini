@@ -1510,7 +1510,7 @@ void Compiler::emit_set_variable(const bite::Analyzer::Binding& binding) {
                 int constant = current_function()->add_constant(*bind.name); // TODO: rework constant system
                 emit(OpCode::SET_GLOBAL, constant);
             },
-            [this](const bite::Analyzer::CapturedBinding) {
+            [this](const bite::Analyzer::UpvalueBinding) {
                 // TODO
             },
             [this](const bite::Analyzer::MemberBinding) {
@@ -1575,7 +1575,7 @@ void Compiler::emit_get_variable(const bite::Analyzer::Binding& binding) {
                 int constant = current_function()->add_constant(*bind.name); // TODO: rework constant system
                 emit(OpCode::GET_GLOBAL, constant);
             },
-            [this](const bite::Analyzer::CapturedBinding) {
+            [this](const bite::Analyzer::UpvalueBinding) {
                 // TODO
             },
             [this](const bite::Analyzer::MemberBinding) {
