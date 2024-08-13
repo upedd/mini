@@ -386,19 +386,25 @@ void Compiler::loop_expression(const AstNode<LoopExpr>& expr) {
         expr->label ? expr->label->string : std::optional<StringTable::Handle> {};
     int continue_idx = current_function()->add_empty_jump_destination();
     int break_idx = current_function()->add_empty_jump_destination();
+
     with_expression_scope(
         LoopScope { .label = label, .break_idx = break_idx, .continue_idx = continue_idx },
         [&expr, this, continue_idx](const ExpressionScope& scope) {
             current_function()->patch_jump_destination(continue_idx, current_program().size());
-            for (const auto& stmt : expr->body->stmts) {
-                visit_stmt(stmt);
-            }
-            if (expr->body->expr) {
-                visit_expr(*expr->body->expr);
-            }
-            emit(OpCode::JUMP, continue_idx);
+            with_expression_scope(
+                BlockScope(),
+                [this, &expr](const ExpressionScope&) {
+                    for (const auto& stmt : expr->body->stmts) {
+                        visit_stmt(stmt);
+                    }
+                    if (expr->body->expr) {
+                        visit_expr(*expr->body->expr);
+                    }
+                }
+            );
         }
     );
+    emit(OpCode::JUMP, continue_idx);
     current_function()->patch_jump_destination(break_idx, current_program().size());
 
     // std::string label = expr.label ? *expr.label->string : "";
@@ -431,11 +437,12 @@ void Compiler::pop_out_of_scopes(int64_t depth) {
         // so we actually leave last value on the stack
         // every time we begin scope we have to remeber that (TODO: maybe this system could be rewritten more clearly)
         bool leave_last = i == depth - 1;
-        std::int64_t on_stack_before = get_on_stack_before(current_context().expression_scopes.back());
+        std::int64_t on_stack_before = get_on_stack_before(scope);
         // Note we actually produce one value
         for (std::int64_t i = 0; i < current_context().on_stack - on_stack_before - leave_last; ++i) {
             emit(OpCode::POP); // TODO: upvalues!
         }
+        current_context().on_stack = on_stack_before + leave_last;
     }
 }
 
