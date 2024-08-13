@@ -130,18 +130,24 @@ public:
     //     int continue_idx = -1;
     // };
 
-    // May not be most efficient memory wise but should be perfomant and simple
+    // TODO: refactor?
     struct BlockScope {
         std::int64_t on_stack_before = -1;
         std::int64_t return_slot = -1;
     };
 
-    struct LabeledBlockScope : BlockScope {
-        std::optional<StringTable::Handle> label;
+    struct LabeledBlockScope {
+        std::int64_t on_stack_before = -1;
+        std::int64_t return_slot = -1;
+        StringTable::Handle label;
         int break_idx = -1;
     };
 
-    struct LoopScope : LabeledBlockScope {
+    struct LoopScope {
+        std::int64_t on_stack_before = -1;
+        std::int64_t return_slot = -1;
+        std::optional<StringTable::Handle> label;
+        int break_idx = -1;
         int continue_idx = -1;
     };
 
@@ -183,7 +189,7 @@ public:
     template<typename T>
     void with_expression_scope(T&& scope, const auto& fn) {
         begin_expression_scope(std::forward<T>(scope));
-        fn(std::get<T>(current_context().expression_scopes.back()));
+        fn(current_context().expression_scopes.back());
         end_expression_scope();
     }
 
@@ -226,11 +232,11 @@ public:
                 // deduplicate!
                 return sc.on_stack_before;
             },
-            [](const LabeledBlockScope&& sc) {
+            [](const LabeledBlockScope& sc) {
                 // deduplicate!
                 return sc.on_stack_before;
             },
-            [this](const LoopScope&& sc) {
+            [](const LoopScope& sc) {
                 // deduplicate!
                 return sc.on_stack_before;
             }
@@ -254,10 +260,28 @@ public:
         return current_context().expression_scopes.back();
     }
 
+    bite_byte get_return_slot(const ExpressionScope& scope) {
+        // refactor?
+        return std::visit(overloaded {
+            [](const BlockScope& sc) {
+                // deduplicate!
+                return sc.return_slot;
+            },
+            [](const LabeledBlockScope& sc) {
+                // deduplicate!
+                return sc.return_slot;
+            },
+            [](const LoopScope& sc) {
+                // deduplicate!
+                return sc.return_slot;
+            }
+        }, scope);
+    }
+
 
     explicit Compiler(bite::file_input_stream&& stream, SharedContext* context) : parser(std::move(stream), context), main("", 0),
-        shared_context(context),
-        analyzer(context) {
+                                                                                  shared_context(context),
+                                                                                  analyzer(context) {
         context_stack.emplace_back(&main, FunctionType::FUNCTION);
         //current_context().scopes.emplace_back(ScopeType::BLOCK, 0); // TODO: special type?
         functions.push_back(&main);
@@ -344,6 +368,7 @@ private:
 
     void block(const AstNode<BlockExpr>& expr);
     void loop_expression(const AstNode<LoopExpr>& expr);
+    void pop_out_of_scopes(int64_t depth);
     void break_expr(const AstNode<BreakExpr>& expr);
     void continue_expr(const AstNode<ContinueExpr>& expr);
     void while_expr(const AstNode<WhileExpr>& expr);

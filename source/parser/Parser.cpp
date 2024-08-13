@@ -749,7 +749,7 @@ Expr Parser::for_expression(const std::optional<Token>& label) {
     return ast.make_node<ForExpr>(name, std::move(iterable), std::move(body), label);
 }
 
-Expr Parser::block(const std::optional<Token>& label) {
+AstNode<BlockExpr> Parser::block(const std::optional<Token>& label) {
     // In Bite every block is an expression which can return a value
     // the value that will be returned is the last expression without succeding semicolon.
     // we track that expression here in 'expr_at_end'

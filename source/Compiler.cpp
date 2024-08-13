@@ -302,8 +302,8 @@ void Compiler::visit_stmt(const Stmt& statement) {
 
 void Compiler::define_variable(const bite::Analyzer::Binding& binding) {
     if (std::holds_alternative<bite::Analyzer::LocalBinding>(binding)) {
-        current_context().slots[std::get<bite::Analyzer::LocalBinding>(binding).local_idx] = current_context().
-            on_stack - 1;
+        current_context().slots[std::get<bite::Analyzer::LocalBinding>(binding).local_idx] = current_context().on_stack
+            - 1;
     } else if (std::holds_alternative<bite::Analyzer::GlobalBinding>(binding)) {
         auto name_constant = current_function()->add_constant(*std::get<bite::Analyzer::GlobalBinding>(binding).name);
         // TODO: refactor handling system
@@ -359,23 +359,48 @@ void Compiler::block(const AstNode<BlockExpr>& expr) {
     // end_scope();
     // current_function()->patch_jump_destination(break_idx, current_program().size());
     int break_idx = current_function()->add_empty_jump_destination();
-    std::optional<StringTable::Handle> label = expr->label ? expr->label->string : std::optional<StringTable::Handle> {};
-    // TODO: actually use unlabeled block here!
-    with_expression_scope(LabeledBlockScope{ .label = label }, [&expr, this](const LabeledBlockScope& expr_scope) {
-        for (const auto& stmt : expr->stmts) {
-            visit_stmt(stmt);
+    ExpressionScope scope {
+            expr->label
+                ? ExpressionScope(LabeledBlockScope { .label = expr->label->string, .break_idx = break_idx })
+                : ExpressionScope(BlockScope())
+        };
+    with_expression_scope(
+        std::move(scope),
+        [&expr, this](const ExpressionScope& expr_scope) {
+            for (const auto& stmt : expr->stmts) {
+                visit_stmt(stmt);
+            }
+            if (expr->expr) {
+                visit_expr(*expr->expr);
+                emit(OpCode::SET, get_return_slot(expr_scope));
+                emit(OpCode::POP);
+                current_context().on_stack--;
+            }
         }
-        if (expr->expr) {
-            visit_expr(*expr->expr);
-            emit(OpCode::SET, expr_scope.return_slot);
-            emit(OpCode::POP);
-            current_context().on_stack--;
-        }
-    });
+    );
     current_function()->patch_jump_destination(break_idx, current_program().size());
 }
 
 void Compiler::loop_expression(const AstNode<LoopExpr>& expr) {
+    std::optional<StringTable::Handle> label =
+        expr->label ? expr->label->string : std::optional<StringTable::Handle> {};
+    int continue_idx = current_function()->add_empty_jump_destination();
+    int break_idx = current_function()->add_empty_jump_destination();
+    with_expression_scope(
+        LoopScope { .label = label, .break_idx = break_idx, .continue_idx = continue_idx },
+        [&expr, this, continue_idx](const ExpressionScope& scope) {
+            current_function()->patch_jump_destination(continue_idx, current_program().size());
+            for (const auto& stmt : expr->body->stmts) {
+                visit_stmt(stmt);
+            }
+            if (expr->body->expr) {
+                visit_expr(*expr->body->expr);
+            }
+            emit(OpCode::JUMP, continue_idx);
+        }
+    );
+    current_function()->patch_jump_destination(break_idx, current_program().size());
+
     // std::string label = expr.label ? *expr.label->string : "";
     // begin_scope(ScopeType::LOOP, label);
     // // to support breaking with values before loop body we create special invisible variable used for returing
@@ -396,6 +421,22 @@ void Compiler::loop_expression(const AstNode<LoopExpr>& expr) {
     // emit(OpCode::JUMP, continue_idx);
     // end_scope();
     // current_function()->patch_jump_destination(break_idx, current_program().size());
+}
+
+void Compiler::pop_out_of_scopes(int64_t depth) {
+    for (int64_t i = 0; i < depth; ++i) {
+        ExpressionScope& scope = current_context().expression_scopes[current_context().expression_scopes.size() - i -
+            1];
+        // every scope in bite is an expression which should produce a value
+        // so we actually leave last value on the stack
+        // every time we begin scope we have to remeber that (TODO: maybe this system could be rewritten more clearly)
+        bool leave_last = i == depth - 1;
+        std::int64_t on_stack_before = get_on_stack_before(current_context().expression_scopes.back());
+        // Note we actually produce one value
+        for (std::int64_t i = 0; i < current_context().on_stack - on_stack_before - leave_last; ++i) {
+            emit(OpCode::POP); // TODO: upvalues!
+        }
+    }
 }
 
 void Compiler::while_expr(const AstNode<WhileExpr>& expr) {
@@ -494,6 +535,39 @@ void Compiler::for_expr(const AstNode<ForExpr>& expr) {
 
 
 void Compiler::break_expr(const AstNode<BreakExpr>& expr) {
+    // refactor!
+    int64_t pop_out_depth = 0;
+    for (auto& scope : current_context().expression_scopes | std::views::reverse) {
+        if (expr->label) {
+            if ((std::holds_alternative<LabeledBlockScope>(scope) && std::get<LabeledBlockScope>(scope).label == expr->
+                label->string) || (std::holds_alternative<LoopScope>(scope) && std::get<LoopScope>(scope).label &&
+                std::get<LoopScope>(scope).label == expr->label->string)) {
+                break;
+            }
+        } else if (std::holds_alternative<LoopScope>(scope)) {
+            break;
+        }
+        ++pop_out_depth;
+    }
+    // assert we found scope to pop out!
+    ExpressionScope& scope = current_context().expression_scopes[current_context().expression_scopes.size() -
+        pop_out_depth - 1];
+    if (expr->expr) {
+        visit_expr(*expr->expr);
+        emit(OpCode::SET, get_return_slot(scope));
+        emit(OpCode::POP);
+        current_context().on_stack--;
+    }
+    pop_out_of_scopes(pop_out_depth + 1);
+    // refactor?
+    // assert current scope has break idx!
+    emit(
+        OpCode::JUMP,
+        std::holds_alternative<LoopScope>(scope)
+            ? std::get<LoopScope>(scope).break_idx
+            : std::get<LabeledBlockScope>(scope).break_idx
+    );
+
     // TODO: parser should check if break expressions actually in loop
     // TODO: better way to write this
     // int scope_depth = 0;
@@ -520,6 +594,27 @@ void Compiler::break_expr(const AstNode<BreakExpr>& expr) {
 }
 
 void Compiler::continue_expr(const AstNode<ContinueExpr>& expr) {
+    // overlap with break expr maybe refactor?
+    int64_t pop_out_depth = 0;
+    for (auto& scope : current_context().expression_scopes | std::views::reverse) {
+        if (std::holds_alternative<LoopScope>(scope)) {
+            if (expr->label) {
+                if (std::get<LoopScope>(scope).label && std::get<LoopScope>(scope).label == expr->label->string) {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+        ++pop_out_depth;
+    }
+    // assert we found scope to pop out!
+    ExpressionScope& scope = current_context().expression_scopes[current_context().expression_scopes.size() -
+        pop_out_depth - 1];
+    pop_out_of_scopes(pop_out_depth + 1);
+    // refactor?
+    // assert current scope has continue idx!
+    emit(OpCode::JUMP, std::get<LoopScope>(scope).continue_idx);
     // safety: assert that contains label?
     // int scope_depth = 0;
     // for (auto& scope : std::views::reverse(current_context().scopes)) {
@@ -541,17 +636,19 @@ void Compiler::continue_expr(const AstNode<ContinueExpr>& expr) {
 
 
 void Compiler::function(const AstNode<FunctionStmt>& stmt, FunctionType type) {
-
-
     // TODO: integrate into new strings
     auto function_name = *stmt->name.string;
     auto* function = new Function(function_name, stmt->params.size());
     functions.push_back(function);
 
-    with_context(function, type, [&stmt, this] {
-        visit_expr(*stmt->body); // TODO: assert has body?
-        emit_default_return();
-    });
+    with_context(
+        function,
+        type,
+        [&stmt, this] {
+            visit_expr(*stmt->body); // TODO: assert has body?
+            emit_default_return();
+        }
+    );
     // TODO: upvalues
     int constant = current_function()->add_constant(function);
     emit(OpCode::CLOSURE, constant);
@@ -580,8 +677,6 @@ void Compiler::function(const AstNode<FunctionStmt>& stmt, FunctionType type) {
     //     emit(upvalue.is_local);
     //     emit(upvalue.index);
     // }
-
-
 }
 
 void Compiler::constructor(
@@ -1412,30 +1507,33 @@ void Compiler::binary(const AstNode<BinaryExpr>& expr) {
 
 // TODO: total mess and loads of overlap with Compiler::resolve_variable
 void Compiler::emit_set_variable(const bite::Analyzer::Binding& binding) {
-    std::visit(overloaded {
-        [this](const bite::Analyzer::LocalBinding& bind) {
-            emit(OpCode::SET, current_context().slots[bind.local_idx]); // assert exists?
+    std::visit(
+        overloaded {
+            [this](const bite::Analyzer::LocalBinding& bind) {
+                emit(OpCode::SET, current_context().slots[bind.local_idx]); // assert exists?
+            },
+            [this](const bite::Analyzer::GlobalBinding& bind) {
+                int constant = current_function()->add_constant(*bind.name); // TODO: rework constant system
+                emit(OpCode::SET_GLOBAL, constant);
+            },
+            [this](const bite::Analyzer::CapturedBinding) {
+                // TODO
+            },
+            [this](const bite::Analyzer::MemberBinding) {
+                // TODO
+            },
+            [this](const bite::Analyzer::ParameterBinding& bind) {
+                emit(OpCode::SET, bind.param_idx + 1); // + 1 for the reserved receiver object
+            },
+            [this](const bite::Analyzer::ClassObjectBinding) {
+                // TODO
+            },
+            [this](const bite::Analyzer::NoBinding) {
+                std::unreachable(); // panic!
+            }
         },
-        [this](const bite::Analyzer::GlobalBinding& bind) {
-            int constant = current_function()->add_constant(*bind.name); // TODO: rework constant system
-            emit(OpCode::SET_GLOBAL, constant);
-        },
-        [this](const bite::Analyzer::CapturedBinding) {
-            // TODO
-        },
-        [this](const bite::Analyzer::MemberBinding) {
-            // TODO
-        },
-        [this](const bite::Analyzer::ParameterBinding& bind) {
-            emit(OpCode::SET, bind.param_idx + 1); // + 1 for the reserved receiver object
-        },
-        [this](const bite::Analyzer::ClassObjectBinding) {
-            // TODO
-        },
-        [this](const bite::Analyzer::NoBinding) {
-            std::unreachable(); // panic!
-        }
-    }, binding);
+        binding
+    );
 
     // if (std::holds_alternative<bite::box<VariableExpr>>(lvalue)) {
     //     std::string name = *std::get<bite::box<VariableExpr>>(lvalue)->identifier.string;
@@ -1474,30 +1572,33 @@ void Compiler::emit_set_variable(const bite::Analyzer::Binding& binding) {
 }
 
 void Compiler::emit_get_variable(const bite::Analyzer::Binding& binding) {
-    std::visit(overloaded {
-        [this](const bite::Analyzer::LocalBinding& bind) {
-            emit(OpCode::GET, current_context().slots[bind.local_idx]); // assert exists?
+    std::visit(
+        overloaded {
+            [this](const bite::Analyzer::LocalBinding& bind) {
+                emit(OpCode::GET, current_context().slots[bind.local_idx]); // assert exists?
+            },
+            [this](const bite::Analyzer::GlobalBinding& bind) {
+                int constant = current_function()->add_constant(*bind.name); // TODO: rework constant system
+                emit(OpCode::GET_GLOBAL, constant);
+            },
+            [this](const bite::Analyzer::CapturedBinding) {
+                // TODO
+            },
+            [this](const bite::Analyzer::MemberBinding) {
+                // TODO
+            },
+            [this](const bite::Analyzer::ParameterBinding& bind) {
+                emit(OpCode::GET, bind.param_idx + 1); // + 1 for the reserved receiver object
+            },
+            [this](const bite::Analyzer::ClassObjectBinding) {
+                // TODO
+            },
+            [this](const bite::Analyzer::NoBinding) {
+                std::unreachable(); // panic!
+            }
         },
-        [this](const bite::Analyzer::GlobalBinding& bind) {
-            int constant = current_function()->add_constant(*bind.name); // TODO: rework constant system
-            emit(OpCode::GET_GLOBAL, constant);
-        },
-        [this](const bite::Analyzer::CapturedBinding) {
-            // TODO
-        },
-        [this](const bite::Analyzer::MemberBinding) {
-            // TODO
-        },
-        [this](const bite::Analyzer::ParameterBinding& bind) {
-            emit(OpCode::GET, bind.param_idx + 1); // + 1 for the reserved receiver object
-        },
-        [this](const bite::Analyzer::ClassObjectBinding) {
-            // TODO
-        },
-        [this](const bite::Analyzer::NoBinding) {
-            std::unreachable(); // panic!
-        }
-    }, binding);
+        binding
+    );
 }
 
 void Compiler::variable(const AstNode<VariableExpr>& expr) {

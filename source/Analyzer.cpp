@@ -137,7 +137,7 @@ void bite::Analyzer::if_expression(const AstNode<IfExpr>& expr) {
 }
 
 void bite::Analyzer::loop_expression(const AstNode<LoopExpr>& expr) {
-    visit_expr(expr->body);
+    block(expr->body);
 }
 
 void bite::Analyzer::break_expr(const AstNode<BreakExpr>& expr) {

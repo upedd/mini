@@ -137,7 +137,7 @@ private:
     Expr loop_expression(const std::optional<Token>& label = {});
     Expr while_expression(const std::optional<Token>& label = {});
     Expr for_expression(const std::optional<Token>& label = {});
-    Expr block(const std::optional<Token>& label = {});
+    AstNode<BlockExpr> block(const std::optional<Token>& label = {});
 
     Expr infix(Expr left);
     Expr dot(Expr left);

@@ -113,7 +113,7 @@ struct IfExpr {
 };
 
 struct LoopExpr {
-    Expr body;
+    AstNode<BlockExpr> body;
     std::optional<Token> label;
 };
 
