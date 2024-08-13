@@ -52,7 +52,8 @@ using Stmt = std::variant<AstNode<struct VarStmt>, AstNode<struct ExprStmt>, Ast
                                      struct InvalidStmt>>;
 
 
-struct Ast {
+class Ast {
+public:
     std::vector<Stmt> statements;
 
     std::size_t current_id = 0;
@@ -119,7 +120,7 @@ struct LoopExpr {
 
 struct WhileExpr {
     Expr condition;
-    Expr body;
+    AstNode<BlockExpr> body;
     std::optional<Token> label;
 };
 

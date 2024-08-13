@@ -399,6 +399,7 @@ private:
     std::vector<std::string> natives;
     SharedContext* shared_context;
     bite::Analyzer analyzer;
+    Ast ast;
 };
 
 

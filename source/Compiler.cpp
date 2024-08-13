@@ -76,7 +76,7 @@
 // }
 
 bool Compiler::compile() {
-    Ast ast = parser.parse();
+    ast = parser.parse();
     auto messages = parser.get_messages();
     if (!messages.empty()) {
         auto enchanced = bite::enchance_messages(messages);
@@ -391,6 +391,7 @@ void Compiler::loop_expression(const AstNode<LoopExpr>& expr) {
         LoopScope { .label = label, .break_idx = break_idx, .continue_idx = continue_idx },
         [&expr, this, continue_idx](const ExpressionScope& scope) {
             current_function()->patch_jump_destination(continue_idx, current_program().size());
+            // TODO: remove this expression?
             with_expression_scope(
                 BlockScope(),
                 [this, &expr](const ExpressionScope&) {
@@ -405,28 +406,7 @@ void Compiler::loop_expression(const AstNode<LoopExpr>& expr) {
         }
     );
     emit(OpCode::JUMP, continue_idx);
-    current_function()->patch_jump_destination(break_idx, current_program().size());
-
-    // std::string label = expr.label ? *expr.label->string : "";
-    // begin_scope(ScopeType::LOOP, label);
-    // // to support breaking with values before loop body we create special invisible variable used for returing
-    // emit(OpCode::NIL);
-    // define_variable("$scope_return");
-    // current_scope().return_slot = std::get<Context::LocalResolution>(
-    //     current_context().resolve_variable("$scope_return")
-    // ).slot;
-    // int continue_idx = current_function()->add_jump_destination(current_program().size());
-    // int break_idx = current_function()->add_empty_jump_destination();
-    // current_scope().continue_idx = continue_idx;
-    // current_scope().break_idx = break_idx;
-    // visit_expr(expr.body);
-    // // ignore body expression result
-    // emit(OpCode::POP);
-    // current_scope().pop_temporary();
-    //
-    // emit(OpCode::JUMP, continue_idx);
-    // end_scope();
-    // current_function()->patch_jump_destination(break_idx, current_program().size());
+    current_function()->patch_jump_destination(break_idx, current_program().size());;
 }
 
 void Compiler::pop_out_of_scopes(int64_t depth) {
@@ -447,34 +427,50 @@ void Compiler::pop_out_of_scopes(int64_t depth) {
 }
 
 void Compiler::while_expr(const AstNode<WhileExpr>& expr) {
-    // // Tons of overlap with normal loop maybe abstract this away?
-    // std::string label = expr.label ? *expr.label->string : "";
-    // begin_scope(ScopeType::LOOP, label);
-    // emit(OpCode::NIL);
-    // define_variable("$scope_return");
-    // current_scope().return_slot = std::get<Context::LocalResolution>(
-    //     current_context().resolve_variable("$scope_return")
-    // ).slot;
-    //
-    // int continue_idx = current_function()->add_jump_destination(current_program().size());
-    // int break_idx = current_function()->add_empty_jump_destination();
-    // int end_idx = current_function()->add_empty_jump_destination();
-    // current_scope().continue_idx = continue_idx;
-    // current_scope().break_idx = break_idx;
-    //
-    // visit_expr(expr.condition);
-    // emit(OpCode::JUMP_IF_FALSE, end_idx);
-    // emit(OpCode::POP); // pop evaluation condition result
-    // current_scope().pop_temporary();
-    // visit_expr(expr.body);
-    // // ignore block expression result
-    // emit(OpCode::POP);
-    // current_scope().pop_temporary();
-    // emit(OpCode::JUMP, continue_idx);
-    // end_scope();
-    // current_function()->patch_jump_destination(end_idx, current_program().size());
-    // emit(OpCode::POP); // pop evalutaion condition result
-    // current_function()->patch_jump_destination(break_idx, current_program().size());
+    // TODO: potential desugaring:
+    // auto negated_cond = ast.make_node<UnaryExpr>(ast.make_copy(expr->condition), Token::Type::BANG);
+    // auto break_stmt = ast.make_node<ExprStmt>(
+    //     ast.make_node<IfExpr>(std::move(negated_cond), ast.make_node<ExprStmt>(ast.make_node<BreakExpr>()), std::optional<Expr>())
+    // );
+    // auto desugared_while = ast.make_node<LoopExpr>(
+    //     ast.make_node<BlockExpr>(std::vector<Stmt> { std::move(break_stmt) }, std::move(expr->body)),
+    //     expr->label
+    // );
+    // loop_expression(desugared_while);
+    std::optional<StringTable::Handle> label =
+        expr->label ? expr->label->string : std::optional<StringTable::Handle> {};
+    int continue_idx = current_function()->add_empty_jump_destination();
+    int break_idx = current_function()->add_empty_jump_destination();
+    int end_idx = current_function()->add_empty_jump_destination();
+    with_expression_scope(
+        LoopScope { .label = label, .break_idx = break_idx, .continue_idx = continue_idx },
+        [&expr, this, continue_idx, end_idx](const ExpressionScope&) {
+            current_function()->patch_jump_destination(continue_idx, current_program().size());
+
+            visit_expr(expr->condition);
+            emit(OpCode::JUMP_IF_FALSE, end_idx);
+            // pop condition evaluation
+            emit(OpCode::POP);
+            current_context().on_stack--;
+
+            // TODO: remove this expression?
+            with_expression_scope(
+                BlockScope(),
+                [this, &expr](const ExpressionScope&) {
+                    for (const auto& stmt : expr->body->stmts) {
+                        visit_stmt(stmt);
+                    }
+                    if (expr->body->expr) {
+                        visit_expr(*expr->body->expr);
+                    }
+                }
+            );
+        }
+    );
+    emit(OpCode::JUMP, continue_idx);
+    current_function()->patch_jump_destination(end_idx, current_program().size());
+    emit(OpCode::POP); // pop evalutaion condition result
+    current_function()->patch_jump_destination(break_idx, current_program().size());
 }
 
 void Compiler::for_expr(const AstNode<ForExpr>& expr) {
@@ -574,30 +570,6 @@ void Compiler::break_expr(const AstNode<BreakExpr>& expr) {
             ? std::get<LoopScope>(scope).break_idx
             : std::get<LabeledBlockScope>(scope).break_idx
     );
-
-    // TODO: parser should check if break expressions actually in loop
-    // TODO: better way to write this
-    // int scope_depth = 0;
-    // for (auto& scope : std::views::reverse(current_context().scopes)) {
-    //     if (expr.label) {
-    //         if (scope.get_name() == *expr.label->string) {
-    //             break;
-    //         }
-    //     } else if (scope.get_type() == ScopeType::LOOP) {
-    //         // We want unlabeled breaks to break only from loops
-    //         break;
-    //     }
-    //     ++scope_depth;
-    // }
-    // Scope& scope = current_context().scopes[current_context().scopes.size() - scope_depth - 1];
-    // if (expr.expr) {
-    //     visit_expr(*expr.expr);
-    //     emit(OpCode::SET, scope.return_slot);
-    //     emit(OpCode::POP);
-    //     current_scope().pop_temporary();
-    // }
-    // pop_out_of_scopes(scope_depth + 1);
-    // emit(OpCode::JUMP, scope.break_idx);
 }
 
 void Compiler::continue_expr(const AstNode<ContinueExpr>& expr) {
@@ -622,23 +594,6 @@ void Compiler::continue_expr(const AstNode<ContinueExpr>& expr) {
     // refactor?
     // assert current scope has continue idx!
     emit(OpCode::JUMP, std::get<LoopScope>(scope).continue_idx);
-    // safety: assert that contains label?
-    // int scope_depth = 0;
-    // for (auto& scope : std::views::reverse(current_context().scopes)) {
-    //     if (scope.get_type() == ScopeType::LOOP) {
-    //         // can only continue from loops
-    //         if (expr.label) {
-    //             if (*expr.label->string == scope.get_name()) {
-    //                 break;
-    //             }
-    //         } else
-    //             break;
-    //     }
-    //     ++scope_depth;
-    // }
-    // Scope& scope = current_context().scopes[current_context().scopes.size() - scope_depth - 1];
-    // pop_out_of_scopes(scope_depth + 1);
-    // emit(OpCode::JUMP, scope.continue_idx);
 }
 
 

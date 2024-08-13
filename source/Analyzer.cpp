@@ -148,7 +148,7 @@ void bite::Analyzer::break_expr(const AstNode<BreakExpr>& expr) {
 
 void bite::Analyzer::while_expr(const AstNode<WhileExpr>& expr) {
     visit_expr(expr->condition);
-    visit_expr(expr->body);
+    block(expr->body);
 }
 
 void bite::Analyzer::for_expr(const AstNode<ForExpr>& expr) {
