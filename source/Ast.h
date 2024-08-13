@@ -136,7 +136,7 @@ struct ContinueExpr {
 struct ForExpr {
     Token name;
     Expr iterable;
-    Expr body;
+    AstNode<BlockExpr> body;
     std::optional<Token> label;
 };
 

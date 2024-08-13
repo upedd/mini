@@ -745,7 +745,7 @@ Expr Parser::for_expression(const std::optional<Token>& label) {
     if (current.type != Token::Type::LEFT_BRACE) {
         error(current, "invalid 'for' loop body", "expected '{' here.");
     }
-    Expr body = block();
+    auto body = block();
     return ast.make_node<ForExpr>(name, std::move(iterable), std::move(body), label);
 }
 

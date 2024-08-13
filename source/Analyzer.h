@@ -1,6 +1,7 @@
 #ifndef ANALYZER_H
 #define ANALYZER_H
 #include <string>
+#include <bits/ranges_algo.h>
 
 #include "Ast.h"
 #include "base/logger.h"
@@ -195,14 +196,32 @@ namespace bite {
             declare_in_enviroment(enviroment_stack.back(), name);
         }
 
-        // TODO: missing captures
-        Binding get_binding(StringTable::Handle name) {
-            for (auto& enviroment : enviroment_stack | std::views::reverse) {
-                if (std::optional<Binding> res = get_binding_in_enviroment(enviroment, name)) {
-                    return *res;
+        void handle_closure_binding(const std::vector<std::reference_wrapper<FunctionEnviroment>>& enviroments_visited, StringTable::Handle name) {
+            for (const auto& enviroment : enviroments_visited) {
+                if (!std::ranges::contains(enviroment.get().captured, name)) {
+                    enviroment.get().captured.push_back(name);
                 }
             }
-            emit_message(Logger::Level::error, "cannot resolve variable: " + std::string(*name), "");
+        }
+
+        // TODO: missing captures
+        Binding get_binding(StringTable::Handle name) {
+            std::vector<std::reference_wrapper<FunctionEnviroment>> function_enviroments_visited;
+            for (auto& enviroment : enviroment_stack | std::views::reverse) {
+                if (std::optional<Binding> res = get_binding_in_enviroment(enviroment, name)) {
+
+                    if (std::holds_alternative<LocalBinding>(*res) && !function_enviroments_visited.empty()) {
+                        handle_closure_binding(function_enviroments_visited, name);
+                        return CapturedBinding {std::views::function_enviroments_visited.back().get()};
+                    }
+
+                    return *res;
+                }
+                if (std::holds_alternative<FunctionEnviroment>(enviroment)) {
+                    function_enviroments_visited.emplace_back(std::get<FunctionEnviroment>(enviroment));
+                }
+            }
+            emit_message(Logger::Level::error, "unresolved variable" + std::string(*name), "here");
 
             return NoBinding();
         }

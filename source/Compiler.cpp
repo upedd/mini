@@ -389,7 +389,7 @@ void Compiler::loop_expression(const AstNode<LoopExpr>& expr) {
 
     with_expression_scope(
         LoopScope { .label = label, .break_idx = break_idx, .continue_idx = continue_idx },
-        [&expr, this, continue_idx](const ExpressionScope& scope) {
+        [&expr, this, continue_idx](const ExpressionScope&) {
             current_function()->patch_jump_destination(continue_idx, current_program().size());
             // TODO: remove this expression?
             with_expression_scope(
@@ -474,6 +474,56 @@ void Compiler::while_expr(const AstNode<WhileExpr>& expr) {
 }
 
 void Compiler::for_expr(const AstNode<ForExpr>& expr) {
+    // TODO: desugaring step!
+    with_expression_scope(BlockScope(), [&expr, this](const ExpressionScope&) {
+        visit_expr(expr->iterable);
+        int iterator_constant = current_function()->add_constant("iterator");
+        emit(OpCode::GET_PROPERTY, iterator_constant);
+        emit(OpCode::CALL, 0);
+        define_variable(analyzer.bindings[expr.id]); // iterator
+        std::optional<StringTable::Handle> label = expr->label ? expr->label->string : std::optional<StringTable::Handle>();
+        int continue_idx = current_function()->add_empty_jump_destination();
+        int break_idx = current_function()->add_empty_jump_destination();
+        int end_idx = current_function()->add_empty_jump_destination();
+        with_expression_scope(LoopScope {.label = label, .break_idx = break_idx, .continue_idx = continue_idx}, [this, continue_idx, &expr, end_idx](const ExpressionScope&) {
+            current_function()->patch_jump_destination(continue_idx, current_program().size());
+            // begin condition
+            emit_get_variable(analyzer.bindings[expr.id]);
+            int condition_constant = current_function()->add_constant("has_next");
+            emit(OpCode::GET_PROPERTY, condition_constant);
+            emit(OpCode::CALL, 0);
+            // end condition
+
+            emit(OpCode::JUMP_IF_FALSE, end_idx);
+            emit(OpCode::POP); // pop evaluation condition result
+            current_context().on_stack--;
+
+            // begin item
+            // TODO??
+            define_variable(analyzer.bindings[expr.id]);
+            int item_constant = current_function()->add_constant("next");
+            emit(OpCode::GET_PROPERTY, item_constant);
+            emit(OpCode::CALL, 0);
+            // end item
+
+            with_expression_scope(
+                BlockScope(),
+                [this, &expr](const ExpressionScope&) {
+                    for (const auto& stmt : expr->body->stmts) {
+                        visit_stmt(stmt);
+                    }
+                    if (expr->body->expr) {
+                        visit_expr(*expr->body->expr);
+                    }
+                }
+            );
+        });
+        emit(OpCode::JUMP, continue_idx);
+        current_function()->patch_jump_destination(end_idx, current_program().size());
+        emit(OpCode::POP); // pop evalutaion condition result
+        current_function()->patch_jump_destination(break_idx, current_program().size());
+    });
+
     // // Tons of overlap with while loop maybe abstract this away?
     // // ideally some sort of desugaring step
     // begin_scope(ScopeType::BLOCK);
@@ -1305,23 +1355,6 @@ void Compiler::if_expression(const AstNode<IfExpr>& stmt) {
         emit(OpCode::NIL); // default return value!
     }
     current_function()->patch_jump_destination(jump_to_end, current_program().size());
-    // visit_expr(stmt.condition);
-    // int jump_to_else = current_function()->add_empty_jump_destination();
-    // emit(OpCode::JUMP_IF_FALSE, jump_to_else);
-    // emit(OpCode::POP);
-    // current_scope().pop_temporary();
-    // visit_expr(stmt.then_expr);
-    // auto jump_to_end = current_function()->add_empty_jump_destination();
-    // emit(OpCode::JUMP, jump_to_end);
-    // current_function()->patch_jump_destination(jump_to_else, current_program().size());
-    // emit(OpCode::POP);
-    // if (stmt.else_expr) {
-    //     current_scope().pop_temporary(); // current result does not exist
-    //     visit_expr(*stmt.else_expr); // will mark new
-    // } else {
-    //     emit(OpCode::NIL);
-    // }
-    // current_function()->patch_jump_destination(jump_to_end, current_program().size());
 }
 
 void Compiler::visit_expr(const Expr& expression) {
@@ -1467,7 +1500,6 @@ void Compiler::binary(const AstNode<BinaryExpr>& expr) {
     current_context().on_stack--;
 }
 
-// TODO: total mess and loads of overlap with Compiler::resolve_variable
 void Compiler::emit_set_variable(const bite::Analyzer::Binding& binding) {
     std::visit(
         overloaded {
