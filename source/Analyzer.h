@@ -1,8 +1,6 @@
 #ifndef ANALYZER_H
 #define ANALYZER_H
 #include <string>
-#include <bits/ranges_algo.h>
-
 #include "Ast.h"
 #include "base/logger.h"
 #include "base/overloaded.h"
@@ -57,6 +55,7 @@ namespace bite {
 
         struct LocalBinding {
             std::int64_t local_idx;
+            bool is_captured;
         };
 
         struct ParameterBinding {
@@ -64,7 +63,7 @@ namespace bite {
         };
 
         struct UpvalueBinding {
-            std::int64_t param_idx;
+            std::int64_t idx;
         };
 
         struct MemberBinding {
@@ -132,7 +131,7 @@ namespace bite {
             for (const auto& scope : scopes) {
                 for (const auto& local : scope.locals) {
                     if (local.name == name) {
-                        binding = { .local_idx = local.idx };
+                        binding = { .local_idx = local.idx, .is_captured = local.is_captured };
                     }
                 }
             }
@@ -236,8 +235,37 @@ namespace bite {
             return value;
         }
 
-        void capture_local() {
-            // STUB
+        void capture_local(Enviroment& enviroment, int64_t local_idx) {
+            // This needs to change state of already created binding and shit gets complicated...
+            std::visit(
+                overloaded {
+                    [local_idx](FunctionEnviroment& env) {
+                        for (auto& scope : env.scopes) {
+                            for (auto& local : scope.locals) {
+                                if (local.idx == local_idx) {
+                                    local.is_captured = true;
+                                    return;
+                                }
+                            }
+                        }
+                    },
+                    [local_idx](GlobalEnviroment& env) {
+                        for (auto& scope : env.scopes) {
+                            for (auto& local : scope.locals) {
+                                if (local.idx == local_idx) {
+                                    local.is_captured = true;
+                                    return;
+                                }
+                            }
+                        }
+                    },
+                    [](ClassEnviroment&) {
+                        // class enviroment must never produce local binding
+                        std::unreachable();
+                    }
+                },
+                enviroment
+            );
         }
 
         // TODO: missing captures
@@ -246,8 +274,7 @@ namespace bite {
             for (auto& enviroment : enviroment_stack | std::views::reverse) {
                 if (std::optional<Binding> res = get_binding_in_enviroment(enviroment, name)) {
                     if (std::holds_alternative<LocalBinding>(*res) && !function_enviroments_visited.empty()) {
-                        std::enviromentstd::get<LocalBinding>
-
+                        capture_local(enviroment, std::get<LocalBinding>(*res).local_idx);
                         return UpvalueBinding {
                                 handle_closure_binding(
                                     function_enviroments_visited,
@@ -302,6 +329,7 @@ namespace bite {
 
         unordered_dense::map<std::size_t, Binding> bindings;
         unordered_dense::map<std::size_t, std::vector<Upvalue>> function_upvalues;
+
     private:
         std::vector<Enviroment> enviroment_stack { GlobalEnviroment() };
         void visit_stmt(const Stmt& statement);

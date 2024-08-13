@@ -153,6 +153,11 @@ public:
 
     using ExpressionScope = std::variant<BlockScope, LabeledBlockScope, LoopScope>;
 
+    struct Slot {
+        int index;
+        bool is_captured;
+    };
+
     struct Context {
         Function* function = nullptr;
         FunctionType function_type;
@@ -161,8 +166,9 @@ public:
         std::unordered_map<std::string, ResolvedClass> resolved_classes;
         int on_stack = 0;
         // enviroment offset to slot
-        bite::unordered_dense::map<std::uint64_t, int> slots;
+        bite::unordered_dense::map<std::uint64_t, Slot> slots;
         std::vector<ExpressionScope> expression_scopes;
+        bite::unordered_dense::set<int64_t> open_upvalues_slots;
 
         // Scope& current_scope() {
         //     return scopes.back();
@@ -244,15 +250,7 @@ public:
     }
 
     void end_expression_scope() {
-        std::int64_t on_stack_before = get_on_stack_before(current_context().expression_scopes.back());
-
-        // Note we actually produce one value
-        for (std::int64_t i = 0; i < current_context().on_stack - on_stack_before - 1; ++i) {
-            emit(OpCode::POP); // TODO: upvalues!
-        }
-
-        current_context().expression_scopes.pop_back();
-        current_context().on_stack = on_stack_before + 1;
+        pop_out_of_scopes(1);
     }
 
     // TODO: do this better
@@ -373,7 +371,7 @@ private:
     void continue_expr(const AstNode<ContinueExpr>& expr);
     void while_expr(const AstNode<WhileExpr>& expr);
     void for_expr(const AstNode<ForExpr>& expr);
-    void retrun_expression(const AstNode<ReturnExpr>& stmt);
+    void return_expression(const AstNode<ReturnExpr>& stmt);
 
     void literal(const AstNode<LiteralExpr>& expr);
     void string_literal(const AstNode<StringLiteral>& expr);

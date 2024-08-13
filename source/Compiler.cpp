@@ -301,9 +301,17 @@ void Compiler::visit_stmt(const Stmt& statement) {
 }
 
 void Compiler::define_variable(const bite::Analyzer::Binding& binding) {
+    // TODO: refactor!
     if (std::holds_alternative<bite::Analyzer::LocalBinding>(binding)) {
-        current_context().slots[std::get<bite::Analyzer::LocalBinding>(binding).local_idx] = current_context().on_stack
-            - 1;
+        auto local = std::get<bite::Analyzer::LocalBinding>(binding);
+        bool is_captured = local.is_captured;
+        current_context().slots[local.local_idx] = {
+                current_context().on_stack - 1,
+                is_captured
+            };
+        if (is_captured) {
+            current_context().open_upvalues_slots.insert(current_context().on_stack - 1);
+        }
     } else if (std::holds_alternative<bite::Analyzer::GlobalBinding>(binding)) {
         auto name_constant = current_function()->add_constant(*std::get<bite::Analyzer::GlobalBinding>(binding).name);
         // TODO: refactor handling system
@@ -420,7 +428,13 @@ void Compiler::pop_out_of_scopes(int64_t depth) {
         std::int64_t on_stack_before = get_on_stack_before(scope);
         // Note we actually produce one value
         for (std::int64_t i = 0; i < current_context().on_stack - on_stack_before - leave_last; ++i) {
-            emit(OpCode::POP); // TODO: upvalues!
+            // TODO: bug waiting to happen!
+            if (current_context().open_upvalues_slots.contains(current_context().on_stack - i)) {
+                emit(OpCode::CLOSE_UPVALUE);
+                //current_context().open_upvalues_slots.erase(current_context().on_stack - i - 1);
+            } else {
+                emit(OpCode::POP); // TODO: upvalues!
+            }
         }
         current_context().on_stack = on_stack_before + leave_last;
     }
@@ -475,54 +489,62 @@ void Compiler::while_expr(const AstNode<WhileExpr>& expr) {
 
 void Compiler::for_expr(const AstNode<ForExpr>& expr) {
     // TODO: desugaring step!
-    with_expression_scope(BlockScope(), [&expr, this](const ExpressionScope&) {
-        visit_expr(expr->iterable);
-        int iterator_constant = current_function()->add_constant("iterator");
-        emit(OpCode::GET_PROPERTY, iterator_constant);
-        emit(OpCode::CALL, 0);
-        define_variable(analyzer.bindings[expr.id]); // iterator
-        std::optional<StringTable::Handle> label = expr->label ? expr->label->string : std::optional<StringTable::Handle>();
-        int continue_idx = current_function()->add_empty_jump_destination();
-        int break_idx = current_function()->add_empty_jump_destination();
-        int end_idx = current_function()->add_empty_jump_destination();
-        with_expression_scope(LoopScope {.label = label, .break_idx = break_idx, .continue_idx = continue_idx}, [this, continue_idx, &expr, end_idx](const ExpressionScope&) {
-            current_function()->patch_jump_destination(continue_idx, current_program().size());
-            // begin condition
-            emit_get_variable(analyzer.bindings[expr.id]);
-            int condition_constant = current_function()->add_constant("has_next");
-            emit(OpCode::GET_PROPERTY, condition_constant);
+    with_expression_scope(
+        BlockScope(),
+        [&expr, this](const ExpressionScope&) {
+            visit_expr(expr->iterable);
+            int iterator_constant = current_function()->add_constant("iterator");
+            emit(OpCode::GET_PROPERTY, iterator_constant);
             emit(OpCode::CALL, 0);
-            // end condition
-
-            emit(OpCode::JUMP_IF_FALSE, end_idx);
-            emit(OpCode::POP); // pop evaluation condition result
-            current_context().on_stack--;
-
-            // begin item
-            // TODO??
-            define_variable(analyzer.bindings[expr.id]);
-            int item_constant = current_function()->add_constant("next");
-            emit(OpCode::GET_PROPERTY, item_constant);
-            emit(OpCode::CALL, 0);
-            // end item
-
+            define_variable(analyzer.bindings[expr.id]); // iterator
+            std::optional<StringTable::Handle> label = expr->label
+                                                           ? expr->label->string
+                                                           : std::optional<StringTable::Handle>();
+            int continue_idx = current_function()->add_empty_jump_destination();
+            int break_idx = current_function()->add_empty_jump_destination();
+            int end_idx = current_function()->add_empty_jump_destination();
             with_expression_scope(
-                BlockScope(),
-                [this, &expr](const ExpressionScope&) {
-                    for (const auto& stmt : expr->body->stmts) {
-                        visit_stmt(stmt);
-                    }
-                    if (expr->body->expr) {
-                        visit_expr(*expr->body->expr);
-                    }
+                LoopScope { .label = label, .break_idx = break_idx, .continue_idx = continue_idx },
+                [this, continue_idx, &expr, end_idx](const ExpressionScope&) {
+                    current_function()->patch_jump_destination(continue_idx, current_program().size());
+                    // begin condition
+                    emit_get_variable(analyzer.bindings[expr.id]);
+                    int condition_constant = current_function()->add_constant("has_next");
+                    emit(OpCode::GET_PROPERTY, condition_constant);
+                    emit(OpCode::CALL, 0);
+                    // end condition
+
+                    emit(OpCode::JUMP_IF_FALSE, end_idx);
+                    emit(OpCode::POP); // pop evaluation condition result
+                    current_context().on_stack--;
+
+                    // begin item
+                    // TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                    define_variable(analyzer.bindings[expr.id]);
+                    int item_constant = current_function()->add_constant("next");
+                    emit(OpCode::GET_PROPERTY, item_constant);
+                    emit(OpCode::CALL, 0);
+                    // end item
+
+                    with_expression_scope(
+                        BlockScope(),
+                        [this, &expr](const ExpressionScope&) {
+                            for (const auto& stmt : expr->body->stmts) {
+                                visit_stmt(stmt);
+                            }
+                            if (expr->body->expr) {
+                                visit_expr(*expr->body->expr);
+                            }
+                        }
+                    );
                 }
             );
-        });
-        emit(OpCode::JUMP, continue_idx);
-        current_function()->patch_jump_destination(end_idx, current_program().size());
-        emit(OpCode::POP); // pop evalutaion condition result
-        current_function()->patch_jump_destination(break_idx, current_program().size());
-    });
+            emit(OpCode::JUMP, continue_idx);
+            current_function()->patch_jump_destination(end_idx, current_program().size());
+            emit(OpCode::POP); // pop evalutaion condition result
+            current_function()->patch_jump_destination(break_idx, current_program().size());
+        }
+    );
 
     // // Tons of overlap with while loop maybe abstract this away?
     // // ideally some sort of desugaring step
@@ -657,6 +679,7 @@ void Compiler::function(const AstNode<FunctionStmt>& stmt, FunctionType type) {
         function,
         type,
         [&stmt, this] {
+            current_function()->set_upvalue_count(analyzer.function_upvalues[stmt.id].size());
             visit_expr(*stmt->body); // TODO: assert has body?
             emit_default_return();
         }
@@ -664,6 +687,15 @@ void Compiler::function(const AstNode<FunctionStmt>& stmt, FunctionType type) {
     // TODO: upvalues
     int constant = current_function()->add_constant(function);
     emit(OpCode::CLOSURE, constant);
+    for (const bite::Analyzer::Upvalue& upvalue : analyzer.function_upvalues[stmt.id]) {
+        emit(upvalue.is_local);
+        if (upvalue.is_local) {
+            emit(current_context().slots[upvalue.value].index);
+        } else {
+            emit(upvalue.value);
+        }
+    }
+
 
     //
     // start_context(function, type);
@@ -685,10 +717,6 @@ void Compiler::function(const AstNode<FunctionStmt>& stmt, FunctionType type) {
     // int constant = current_function()->add_constant(function);
     // emit(OpCode::CLOSURE, constant);
     //
-    // for (const Upvalue& upvalue : function_upvalues) {
-    //     emit(upvalue.is_local);
-    //     emit(upvalue.index);
-    // }
 }
 
 void Compiler::constructor(
@@ -1322,7 +1350,7 @@ void Compiler::expr_statement(const AstNode<ExprStmt>& stmt) {
     current_context().on_stack--;
 }
 
-void Compiler::retrun_expression(const AstNode<ReturnExpr>& stmt) {
+void Compiler::return_expression(const AstNode<ReturnExpr>& stmt) {
     if (stmt->value) {
         visit_expr(*stmt->value);
     } else {
@@ -1375,7 +1403,7 @@ void Compiler::visit_expr(const Expr& expression) {
             [this](const AstNode<ContinueExpr>& expr) { continue_expr(expr); },
             [this](const AstNode<WhileExpr>& expr) { while_expr(expr); },
             [this](const AstNode<ForExpr>& expr) { for_expr(expr); },
-            [this](const AstNode<ReturnExpr>& expr) { retrun_expression(expr); },
+            [this](const AstNode<ReturnExpr>& expr) { return_expression(expr); },
             [this](const AstNode<ThisExpr>&) { this_expr(); },
             [this](const AstNode<ObjectExpr>& expr) { object_expression(expr); },
             [](const AstNode<InvalidExpr>&) {}
@@ -1504,14 +1532,14 @@ void Compiler::emit_set_variable(const bite::Analyzer::Binding& binding) {
     std::visit(
         overloaded {
             [this](const bite::Analyzer::LocalBinding& bind) {
-                emit(OpCode::SET, current_context().slots[bind.local_idx]); // assert exists?
+                emit(OpCode::SET, current_context().slots[bind.local_idx].index); // assert exists?
             },
             [this](const bite::Analyzer::GlobalBinding& bind) {
                 int constant = current_function()->add_constant(*bind.name); // TODO: rework constant system
                 emit(OpCode::SET_GLOBAL, constant);
             },
-            [this](const bite::Analyzer::UpvalueBinding) {
-                // TODO
+            [this](const bite::Analyzer::UpvalueBinding& bind) {
+                emit(OpCode::SET_UPVALUE, bind.idx);
             },
             [this](const bite::Analyzer::MemberBinding) {
                 // TODO
@@ -1569,14 +1597,14 @@ void Compiler::emit_get_variable(const bite::Analyzer::Binding& binding) {
     std::visit(
         overloaded {
             [this](const bite::Analyzer::LocalBinding& bind) {
-                emit(OpCode::GET, current_context().slots[bind.local_idx]); // assert exists?
+                emit(OpCode::GET, current_context().slots[bind.local_idx].index); // assert exists?
             },
             [this](const bite::Analyzer::GlobalBinding& bind) {
                 int constant = current_function()->add_constant(*bind.name); // TODO: rework constant system
                 emit(OpCode::GET_GLOBAL, constant);
             },
-            [this](const bite::Analyzer::UpvalueBinding) {
-                // TODO
+            [this](const bite::Analyzer::UpvalueBinding& bind) {
+               emit(OpCode::GET_UPVALUE, bind.idx);
             },
             [this](const bite::Analyzer::MemberBinding) {
                 // TODO
