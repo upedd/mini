@@ -18,15 +18,16 @@ trait A {
 
 Traits _copy and paste_ defined methods inside class body and then check if all requirements are fulfilled.
 
-When including traits defined method names can be aliased or excluded.
-In that case aliased or excluded method goes is _moved_ to requirements section of the trait.
-Methods inside of class must be uniquely named to resolve conflicts one should use aliasing or excluding.
-When including traits superclass overrides must be explicitly stated.
+When including traits, defined method names can be aliased or excluded.
+In that case, aliased or excluded method goes is _moved_ to a requirements section of the trait.
+Methods inside class must be uniquely named to resolve conflicts one should use aliasing or excluding.
+When including trait superclass overrides must be explicitly stated.
 Traits must have flattening property (TODO: explain!).
 ```
 class Foo: Bar {
     # aliasing and excluding 
-    using A { get_hello as a_get_hello, exclude say_hello };
+    using A(get_hello as a_get_hello, exclude say_hello);
+    using A, B, C;
     
     # no implicit trait overrides
     override get_hello() {
