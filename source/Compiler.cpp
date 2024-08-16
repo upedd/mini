@@ -9,72 +9,6 @@
 #include "base/overloaded.h"
 #include "shared/SharedContext.h"
 
-// void Compiler::Scope::mark_temporary(int count) {
-//     temporaries += count;
-// }
-//
-// void Compiler::Scope::pop_temporary(int count) {
-//     temporaries -= count;
-// }
-//
-// int Compiler::Scope::define(const std::string& name) {
-//     locals.emplace_back(name);
-//     //++items_on_stack;
-//     return slot_start + temporaries;
-// }
-//
-// std::optional<int> Compiler::Scope::get(const std::string& name) {
-//     // assumes locals are not mixed with temporaries in scope is that true?
-//     for (int i = 0; i < locals.size(); ++i) {
-//         if (locals[i].name == name) {
-//             return slot_start + i;
-//         }
-//     }
-//     return {};
-// }
-//
-// void Compiler::Scope::close(int index) {
-//     assert(index < locals.size());
-//     locals[index].is_closed = true;
-// }
-//
-// int Compiler::Scope::next_slot() {
-//     return slot_start + locals.size() + temporaries;
-// }
-//
-// Compiler::Context::Resolution Compiler::Context::resolve_variable(const std::string& name) {
-//     for (auto& scope : std::views::reverse(scopes)) {
-//         if (scope.get_type() == ScopeType::CLASS && scope.has_field(name)) {
-//             return FieldResolution();
-//         }
-//         if (auto index = scope.get(name)) {
-//             // resolve local
-//             return LocalResolution(*index);
-//         }
-//     }
-//     return std::monostate();
-// }
-//
-// int Compiler::Context::add_upvalue(int index, bool is_local) {
-//     Upvalue upvalue { .index = index, .is_local = is_local };
-//     // try to reuse existing upvalue (possible optimization replace linear search)
-//     auto found = std::ranges::find(upvalues, upvalue);
-//     if (found != upvalues.end()) {
-//         return std::distance(upvalues.begin(), found);
-//     }
-//     upvalues.push_back(upvalue);
-//     return upvalues.size() - 1;
-// }
-//
-// void Compiler::Context::close_upvalue(int index) {
-//     for (auto& scope : std::views::reverse(scopes)) {
-//         if (scope.get_start_slot() <= index) {
-//             scope.close(index - scope.get_start_slot());
-//             break;
-//         }
-//     }
-// }
-
 bool Compiler::compile() {
     ast = parser.parse();
     auto messages = parser.get_messages();
@@ -146,9 +80,6 @@ Compiler::Context& Compiler::current_context() {
     return context_stack.back();
 }
 
-// Compiler::Scope& Compiler::current_scope() {
-//     return current_context().current_scope();
-// }
 
 
 Function* Compiler::current_function() {
@@ -181,107 +112,6 @@ void Compiler::emit_default_return() {
     current_context().on_stack++; // shouldn't matter?
     emit(OpCode::RETURN);
 }
-
-// void Compiler::begin_scope(ScopeType type, const std::string& label) {
-//     current_context().scopes.emplace_back(type, current_scope().next_slot(), label);
-// }
-//
-// void Compiler::pop_out_of_scopes(int depth) {
-//     for (int i = 0; i < depth; ++i) {
-//         Scope& scope = current_context().scopes[current_context().scopes.size() - i - 1];
-//         // every scope in bite is an expression which should produce a value
-//         // so we actually leave last value on the stack
-//         // every time we begin scope we have to remeber that (TODO: maybe this system could be rewritten more clearly)
-//         for (int j = 0; j < scope.get_temporaries_count(); ++j) {
-//             emit(OpCode::POP);
-//         }
-//         bool leave_last = i == depth - 1;
-//         auto& locals = scope.get_locals();
-//         for (int j = locals.size() - 1; j >= leave_last; --j) {
-//             if (locals[j].is_closed) {
-//                 emit(OpCode::CLOSE_UPVALUE);
-//             } else {
-//                 emit(OpCode::POP);
-//             }
-//         }
-//     }
-// }
-
-// void Compiler::end_scope() {
-//     if (current_scope().get_type() == ScopeType::CLASS) {
-//         current_context().resolved_classes[current_scope().get_name()] = ResolvedClass(
-//             current_scope().get_fields(),
-//             current_scope().constructor_argument_count
-//         );
-//     }
-//     pop_out_of_scopes(1);
-//     current_context().scopes.pop_back();
-//     current_scope().mark_temporary();
-// }
-//
-// void Compiler::define_variable(const std::string& name) {
-//     if (current_scope().get(name)) {
-//         throw Error("Variable redefinition in same scope is disallowed.");
-//     }
-//     current_scope().define(name);
-// }
-//
-// // TODO: total mess!!!!
-// void Compiler::resolve_variable(const std::string& name) {
-//     auto resolution = current_context().resolve_variable(name);
-//     if (std::holds_alternative<Context::LocalResolution>(resolution)) {
-//         emit(OpCode::GET, std::get<Context::LocalResolution>(resolution).slot); // todo: handle overflow
-//     } else if (std::holds_alternative<Context::FieldResolution>(resolution)) {
-//         // TODO: this doesn't work with nested classes i think?
-//         emit(OpCode::THIS);
-//         emit(OpCode::GET_PROPERTY, current_function()->add_constant(name));
-//     } else {
-//         auto up_resolution = resolve_upvalue(name);
-//         if (std::holds_alternative<Context::LocalResolution>(up_resolution)) {
-//             emit(OpCode::GET_UPVALUE, std::get<Context::LocalResolution>(up_resolution).slot); // todo: handle overflow
-//         } else if (std::holds_alternative<Context::FieldResolution>(up_resolution)) {
-//             // TODO: this doesn't work with nested classes i think?
-//             emit(OpCode::THIS);
-//             emit(OpCode::GET_PROPERTY, current_function()->add_constant(name));
-//         } else {
-//             assert("unreachable!");
-//         }
-//     }
-//     current_scope().mark_temporary();
-// }
-//
-// Compiler::Context::Resolution Compiler::resolve_upvalue(const std::string& name) {
-//     std::optional<int> resolved;
-//     // find first context that contains given name as a local variable
-//     // while tracking all contexts that we needed to go through while getting to that local
-//     std::vector<std::reference_wrapper<Context>> resolve_up;
-//     for (Context& context : context_stack | std::views::reverse) {
-//         auto resolution = context.resolve_variable(name);
-//         if (std::holds_alternative<Context::LocalResolution>(resolution)) {
-//             resolved = std::get<Context::LocalResolution>(resolution).slot;
-//             // TODO: fix upvalues!
-//             context.close_upvalue(*resolved);
-//             break;
-//         }
-//         if (std::holds_alternative<Context::FieldResolution>(resolution)) {
-//             return resolution;
-//         }
-//         resolve_up.emplace_back(context);
-//     }
-//     // if we didn't find any local variable with given name return -1;
-//     if (!resolved)
-//         return std::monostate();
-//     // tracks whetever upvalue points to local value or another upvalue
-//     bool is_local = true;
-//     // go from context that contains local variable to context that we are resolving from
-//     for (std::reference_wrapper<Context> context : resolve_up | std::views::reverse) {
-//         resolved = context.get().add_upvalue(*resolved, is_local);
-//         if (is_local)
-//             is_local = false; // only top level context points to local variable
-//     }
-//
-//     return Context::LocalResolution(*resolved);
-// }
 
 void Compiler::visit_stmt(const Stmt& statement) {
     std::visit(
@@ -346,26 +176,6 @@ void Compiler::native_declaration(const AstNode<NativeStmt>& stmt) {
 }
 
 void Compiler::block(const AstNode<BlockExpr>& expr) {
-    // for (const auto& stmt : expr->stmts) {
-    //     visit_stmt(stmt);
-    // }
-    // int break_idx = current_function()->add_empty_jump_destination();
-    // begin_scope(ScopeType::BLOCK, expr.label ? *expr.label->string : "");
-    // current_scope().break_idx = break_idx;
-    // emit(OpCode::NIL);
-    // define_variable("$scope_return");
-    // current_scope().return_slot = *current_scope().get("$scope_return");
-    // for (auto& stmt : expr.stmts) {
-    //     visit_stmt(stmt);
-    // }
-    // if (expr.expr) {
-    //     visit_expr(*expr.expr);
-    //     emit(OpCode::SET, current_scope().return_slot);
-    //     emit(OpCode::POP);
-    //     current_scope().pop_temporary();
-    // }
-    // end_scope();
-    // current_function()->patch_jump_destination(break_idx, current_program().size());
     int break_idx = current_function()->add_empty_jump_destination();
     ExpressionScope scope {
             expr->label
@@ -694,28 +504,6 @@ void Compiler::function(const AstNode<FunctionStmt>& stmt, FunctionType type) {
             emit(upvalue.value);
         }
     }
-
-
-    //
-    // start_context(function, type);
-    // begin_scope(ScopeType::BLOCK);
-    // current_scope().define(""); // reserve slot for receiver
-    // for (const Token& param : stmt.params) {
-    //     define_variable(*param.string);
-    // }
-    //
-    // visit_expr(*stmt.body);
-    // emit_default_return();
-    // end_scope();
-    //
-    // function->set_upvalue_count(current_context().upvalues.size());
-    // // we need to emit those upvalues in enclosing context (context where function is called)
-    // std::vector<Upvalue> function_upvalues = std::move(current_context().upvalues);
-    // end_context();
-    //
-    // int constant = current_function()->add_constant(function);
-    // emit(OpCode::CLOSURE, constant);
-    //
 }
 
 void Compiler::constructor(

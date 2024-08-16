@@ -1,6 +1,5 @@
 #ifndef COMPILER_H
 #define COMPILER_H
-#include <unordered_set>
 
 #include "Analyzer.h"
 #include "Ast.h"
@@ -14,121 +13,20 @@ public:
     public:
         explicit Error(const std::string& message) : runtime_error(message) {}
     };
-
-    // struct Upvalue {
-    //     int index; // should be other type
-    //     bool is_local;
-    //
-    //     bool operator==(const Upvalue& upvalue) const = default;
-    // };
-    //
-    // struct Local {
-    //     std::string name;
-    //     bool is_closed = false;
-    // };
     //
     enum class FunctionType {
         FUNCTION,
         CONSTRUCTOR,
         METHOD
     };
-
-    // enum class ScopeType {
-    //     LOOP,
-    //     LABELED_BLOCK,
-    //     BLOCK,
-    //     CLASS
-    // };
-
     struct FieldInfo {
         bitflags<ClassAttributes> attributes;
     };
-
-    // Break this scope into classes because it is too monolithic
-    // class Scope {
-    // public:
-    //     Scope(ScopeType type, int slot_start, std::string name = "") : type(type),
-    //                                                                    name(std::move(name)),
-    //                                                                    slot_start(slot_start) {}
-    //
-    //     void mark_temporary(int count = 1);
-    //
-    //     void pop_temporary(int count = 1);
-    //
-    //     int define(const std::string& name);
-    //     std::optional<int> get(const std::string& name);
-    //     void close(int index);
-    //     int next_slot();
-    //
-    //     [[nodiscard]] int get_on_stack_count() const {
-    //         return temporaries + locals.size();
-    //     }
-    //
-    //     [[nodiscard]] int get_temporaries_count() const {
-    //         return temporaries;
-    //     }
-    //
-    //     [[nodiscard]] const std::string& get_name() const {
-    //         return name;
-    //     }
-    //
-    //     [[nodiscard]] ScopeType get_type() const {
-    //         return type;
-    //     }
-    //
-    //     [[nodiscard]] int get_start_slot() const {
-    //         return slot_start;
-    //     }
-    //
-    //     [[nodiscard]] const std::vector<Local>& get_locals() const {
-    //         return locals;
-    //     }
-    //
-    //     [[nodiscard]] bool has_field(const std::string& name) const {
-    //         return fields.contains(name);
-    //     }
-    //
-    //     [[nodiscard]] std::unordered_map<std::string, FieldInfo>& get_fields() {
-    //         return fields;
-    //     }
-    //
-    //     void add_field(const std::string& string, FieldInfo field_info) {
-    //         fields[string] = field_info;
-    //     }
-    //
-    //     FieldInfo get_field_info(const std::string& name) {
-    //         return fields[name];
-    //     }
-    //
-    //     int break_idx = -1;
-    //     int continue_idx = -1;
-    //     int return_slot = -1;
-    //
-    //     int constructor_argument_count = 0;
-    //
-    // private:
-    //     ScopeType type;
-    //     std::string name;
-    //     int slot_start;
-    //     int temporaries = 0;
-    //
-    //     std::vector<Local> locals;
-    //     std::unordered_map<std::string, FieldInfo> fields;
-    // };
 
     struct ResolvedClass {
         std::unordered_map<std::string, FieldInfo> fields;
         int constructor_argument_count = 0;
     };
-
-    // struct ExpressionScope {
-    //     std::int64_t on_stack_before;
-    //     std::int64_t return_slot;
-    //     std::optional<StringTable::Handle> label;
-    //     // Maybe break into different
-    //     int break_idx = -1;
-    //     int continue_idx = -1;
-    // };
 
     // TODO: refactor?
     struct BlockScope {
@@ -162,32 +60,12 @@ public:
         Function* function = nullptr;
         FunctionType function_type;
         std::vector<Upvalue> upvalues;
-        //std::vector<Scope> scopes;
         std::unordered_map<std::string, ResolvedClass> resolved_classes;
         int on_stack = 0;
         // enviroment offset to slot
         bite::unordered_dense::map<std::uint64_t, Slot> slots;
         std::vector<ExpressionScope> expression_scopes;
         bite::unordered_dense::set<int64_t> open_upvalues_slots;
-
-        // Scope& current_scope() {
-        //     return scopes.back();
-        // }
-
-        // TODO: does this support nested classes??
-        // struct FieldResolution {};
-        //
-        // struct LocalResolution {
-        //     int slot;
-        // };
-        //
-        // using Resolution = std::variant<std::monostate, FieldResolution, LocalResolution>;
-        //
-        // Resolution resolve_variable(const std::string& name);
-        //
-        // int add_upvalue(int index, bool is_local);
-        //
-        // void close_upvalue(int index);
     };
 
     // perfomance?
@@ -319,15 +197,6 @@ private:
     void emit(OpCode op_code);
     void emit(OpCode op_code, bite_byte value);
     void emit_default_return();
-
-    // void begin_scope(ScopeType type, const std::string& label = "");
-    // void end_scope();
-    // void pop_out_of_scopes(int depth);
-
-    // void define_variable(const std::string& name);
-    // void resolve_variable(const std::string& name);
-    //
-    // Compiler::Context::Resolution resolve_upvalue(const std::string& name);
 
     void visit_stmt(const Stmt& stmt);
     void define_variable(const bite::Analyzer::Binding& binding, int64_t declaration_idx);
