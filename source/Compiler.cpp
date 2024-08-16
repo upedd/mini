@@ -65,7 +65,7 @@ void Compiler::start_context(Function* function, FunctionType type) {
     current_context().on_stack = function->get_arity() + 1; // plus one for reserved receiver slot!
 }
 
-//#define COMPILER_PRINT_BYTECODE
+#define COMPILER_PRINT_BYTECODE
 
 void Compiler::end_context() {
     #ifdef COMPILER_PRINT_BYTECODE
@@ -515,8 +515,43 @@ void Compiler::constructor(
     // refactor: tons of overlap with function generator
 
     // TODO: check name
-    // auto* function = new Function("constructor", stmt.parameters.size());
-    // functions.push_back(function);
+    // TODO: upvalues!!!!
+    auto* function = new Function("constructor", stmt.parameters.size());
+    functions.push_back(function);
+
+    with_context(
+        function,
+        FunctionType::CONSTRUCTOR,
+        [&fields, this, &stmt] {
+            // default initialize
+            for (const auto& field : fields) {
+                // possibly desugar
+                if (field.attributes[ClassAttributes::ABSTRACT]) {
+                    continue;
+                }
+                visit_expr(*field.variable->value);
+                emit(OpCode::THIS);
+                int property_name = current_function()->add_constant(*field.variable->name.string);
+                emit(OpCode::SET_PROPERTY, property_name);
+                emit(OpCode::POP); // pop value;
+            }
+            visit_expr(stmt.body);
+            //current_function()->set_upvalue_count(analyzer.function_upvalues[stmt.id].size());
+            emit_default_return();
+        }
+    );
+
+    int constant = current_function()->add_constant(function);
+    emit(OpCode::CLOSURE, constant);
+    // for (const bite::Analyzer::Upvalue& upvalue : analyzer.function_upvalues[stmt.id]) {
+    //     emit(upvalue.is_local);
+    //     if (upvalue.is_local) {
+    //         emit(current_context().slots[upvalue.value].index);
+    //     } else {
+    //         emit(upvalue.value);
+    //     }
+
+
     // start_context(function, FunctionType::CONSTRUCTOR);
     // begin_scope(ScopeType::BLOCK); // doesn't context already start a new scope therefor it is reduntant
     // current_scope().define(""); // reserve slot for receiver
@@ -1183,13 +1218,21 @@ void Compiler::class_declaration(const AstNode<ClassStmt>& stmt) {
     //     default_constructor(stmt.body.fields, static_cast<bool>(stmt.super_class));
     // }
     if (stmt->body.constructor) {
-        std::unreachable(); // TODO
+        // cur().constructor_argument_count = stmt.body.constructor->parameters.size();
+        //bool has_super_class = static_cast<bool>(stmt.super_class);
+        // TODO: support inheritance
+        constructor(
+            *stmt->body.constructor,
+            stmt->body.fields,
+            false,
+            0
+        );
     } else {
         default_constructor(stmt->body.fields, static_cast<bool>(stmt->super_class));
     }
 
     emit(OpCode::CONSTRUCTOR);
-    emit(OpCode::POP);
+    //emit(OpCode::POP);
 
     // current_scope().pop_temporary();
     // // TODO: non-expression scope?
@@ -1293,9 +1336,13 @@ void Compiler::unary(const AstNode<UnaryExpr>& expr) {
 
 void Compiler::binary(const AstNode<BinaryExpr>& expr) {
     // we don't need to actually visit lhs for plain assigment
-    // TODO don't we?
     if (expr->op == Token::Type::EQUAL) {
         visit_expr(expr->right);
+        // TODO: refactor?
+        if (std::holds_alternative<AstNode<GetPropertyExpr>>(expr->left)) {
+            visit_expr(std::get<AstNode<GetPropertyExpr>>(expr->left)->left);
+        }
+
         emit_set_variable(analyzer.bindings[expr.id]);
         current_context().on_stack--;
         return;
@@ -1309,6 +1356,14 @@ void Compiler::binary(const AstNode<BinaryExpr>& expr) {
     }
 
     visit_expr(expr->right);
+
+    // TODO: refactor!!
+    if (std::holds_alternative<AstNode<GetPropertyExpr>>(expr->left) && (expr->op == Token::Type::EQUAL || expr->op == Token::Type::PLUS_EQUAL || expr->op == Token::Type::MINUS_EQUAL ||
+        expr->op == Token::Type::STAR_EQUAL || expr->op == Token::Type::SLASH_EQUAL || expr->op ==
+        Token::Type::SLASH_SLASH_EQUAL || expr->op == Token::Type::AND_EQUAL || expr->op == Token::Type::CARET_EQUAL ||
+        expr->op == Token::Type::BAR_EQUAL)) {
+        visit_expr(std::get<AstNode<GetPropertyExpr>>(expr->left)->left);
+    }
     switch (expr->op) {
         case Token::Type::PLUS: emit(OpCode::ADD);
             break;
@@ -1395,8 +1450,9 @@ void Compiler::emit_set_variable(const bite::Analyzer::Binding& binding) {
             [this](const bite::Analyzer::UpvalueBinding& bind) {
                 emit(OpCode::SET_UPVALUE, bind.idx);
             },
-            [this](const bite::Analyzer::MemberBinding) {
-                // TODO
+            [this](const bite::Analyzer::MemberBinding& bind) {
+                emit(OpCode::THIS);
+                emit(OpCode::SET_PROPERTY, current_function()->add_constant(*bind.name));
             },
             [this](const bite::Analyzer::ParameterBinding& bind) {
                 emit(OpCode::SET, bind.param_idx + 1); // + 1 for the reserved receiver object
@@ -1463,8 +1519,9 @@ void Compiler::emit_get_variable(const bite::Analyzer::Binding& binding) {
             [this](const bite::Analyzer::UpvalueBinding& bind) {
                emit(OpCode::GET_UPVALUE, bind.idx);
             },
-            [this](const bite::Analyzer::MemberBinding) {
-                // TODO
+            [this](const bite::Analyzer::MemberBinding& bind) {
+                emit(OpCode::THIS);
+                emit(OpCode::GET_PROPERTY, current_function()->add_constant(*bind.name));
             },
             [this](const bite::Analyzer::ParameterBinding& bind) {
                 emit(OpCode::GET, bind.param_idx + 1); // + 1 for the reserved receiver object

@@ -39,6 +39,7 @@ namespace bite {
 
         void expression_statement(const AstNode<ExprStmt>& stmt);
         void function_declaration(const AstNode<FunctionStmt>& box);
+        void function(const AstNode<FunctionStmt>& stmt);
         void native_declaration(const AstNode<NativeStmt>& box);
         void class_declaration(const AstNode<ClassStmt>& box);
         void unary(const AstNode<UnaryExpr>& expr);
@@ -52,6 +53,7 @@ namespace bite {
         void while_expr(const AstNode<WhileExpr>& expr);
         void for_expr(const AstNode<ForExpr>& expr);
         void return_expr(const AstNode<ReturnExpr>& expr);
+        void this_expr(const AstNode<ThisExpr>& expr);
 
         struct LocalBinding {
             std::int64_t local_idx;
@@ -135,6 +137,13 @@ namespace bite {
 
         [[nodiscard]] bool is_in_function() const {
             return std::holds_alternative<FunctionEnviroment>(enviroment_stack.back());
+        }
+
+        [[nodiscard]] bool is_in_class() const {
+            return std::ranges::any_of(
+                enviroment_stack,
+                [](const auto& env) { return std::holds_alternative<ClassEnviroment>(env); }
+            );
         }
 
         // refactor!

@@ -52,6 +52,10 @@ void bite::Analyzer::expression_statement(const AstNode<ExprStmt>& stmt) {
 void bite::Analyzer::function_declaration(const AstNode<FunctionStmt>& stmt) {
     declare(stmt->name.string, stmt.id);
     bindings[stmt.id] = get_binding(stmt->name.string);
+    function(stmt);
+}
+
+void bite::Analyzer::function(const AstNode<FunctionStmt>& stmt) {
     with_enviroment(
         FunctionEnviroment(),
         [&stmt, this] {
@@ -94,7 +98,7 @@ void bite::Analyzer::class_declaration(const AstNode<ClassStmt>& stmt) {
                 declare(method.function->name.string, stmt.id);
             }
             for (const auto& method : stmt->body.methods) {
-                function_declaration(method.function);
+                function(method.function);
             }
         }
     );
@@ -198,6 +202,12 @@ void bite::Analyzer::return_expr(const AstNode<ReturnExpr>& expr) {
     }
 }
 
+void bite::Analyzer::this_expr(const AstNode<ThisExpr>& /*unused*/) {
+    if (!is_in_class()) {
+        emit_message(Logger::Level::error, "'this' outside of class member", "here");
+    }
+}
+
 void bite::Analyzer::visit_stmt(const Stmt& statement) {
     std::visit(
         overloaded {
@@ -235,7 +245,7 @@ void bite::Analyzer::visit_expr(const Expr& expression) {
             [this](const AstNode<ForExpr>& expr) { for_expr(expr); },
             // TODO: implement
             [this](const AstNode<ReturnExpr>& expr) { return_expr(expr); },
-            [this](const AstNode<ThisExpr>&) {},// TODO validate in class scope
+            [this](const AstNode<ThisExpr>& expr) { this_expr(expr); },// TODO validate in class scope
             [this](const AstNode<ObjectExpr>& expr) {},// TODO: implement
             [](const AstNode<InvalidExpr>&) {}
         },
