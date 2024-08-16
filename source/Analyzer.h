@@ -75,10 +75,14 @@ namespace bite {
             StringTable::Handle name;
         };
 
+        struct PropertyBinding {
+            StringTable::Handle property;
+        };
+
         struct NoBinding {};
 
         using Binding = std::variant<LocalBinding, ParameterBinding, UpvalueBinding, MemberBinding, ClassObjectBinding,
-                                     GlobalBinding, NoBinding>;
+                                     GlobalBinding, NoBinding, PropertyBinding>;
 
         struct Local {
             std::int64_t idx;

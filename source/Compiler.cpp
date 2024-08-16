@@ -493,7 +493,7 @@ void Compiler::function(const AstNode<FunctionStmt>& stmt, FunctionType type) {
             emit_default_return();
         }
     );
-    // TODO: upvalues
+
     int constant = current_function()->add_constant(function);
     emit(OpCode::CLOSURE, constant);
     for (const bite::Analyzer::Upvalue& upvalue : analyzer.function_upvalues[stmt.id]) {
@@ -577,6 +577,43 @@ void Compiler::constructor(
 }
 
 void Compiler::default_constructor(const std::vector<Field>& fields, bool has_superclass) {
+
+    // TODO: overlap with function declaration
+    // TODO: integrate into new strings
+    auto* function = new Function("constructor", 0);
+    functions.push_back(function);
+
+    with_context(
+        function,
+        FunctionType::CONSTRUCTOR,
+        [&fields, this] {
+            for (const auto& field : fields) {
+                // possibly desugar
+                if (field.attributes[ClassAttributes::ABSTRACT]) {
+                    continue;
+                }
+                visit_expr(*field.variable->value);
+                emit(OpCode::THIS);
+                int property_name = current_function()->add_constant(*field.variable->name.string);
+                emit(OpCode::SET_PROPERTY, property_name);
+                emit(OpCode::POP); // pop value;
+            }
+            //current_function()->set_upvalue_count(analyzer.function_upvalues[stmt.id].size());
+            emit_default_return();
+        }
+    );
+
+    int constant = current_function()->add_constant(function);
+    emit(OpCode::CLOSURE, constant);
+    // for (const bite::Analyzer::Upvalue& upvalue : analyzer.function_upvalues[stmt.id]) {
+    //     emit(upvalue.is_local);
+    //     if (upvalue.is_local) {
+    //         emit(current_context().slots[upvalue.value].index);
+    //     } else {
+    //         emit(upvalue.value);
+    //     }
+    // }
+
     // // TODO: ideally in future default constructor has just default parameters!
     // auto* function = new Function("constructor", 0);
     // functions.push_back(function);
@@ -1071,15 +1108,17 @@ void Compiler::trait_statement(const AstNode<TraitStmt>& stmt) {
 
 void Compiler::class_declaration(const AstNode<ClassStmt>& stmt) {
     // // TODO: refactor!
-    // std::string name = *stmt.name.string;
-    // uint8_t name_constant = current_function()->add_constant(name);
+    std::string name = *stmt->name.string;
+    uint8_t name_constant = current_function()->add_constant(name);
     //
-    // if (stmt.body.class_object) {
-    //     visit_expr(*stmt.body.class_object);
-    // } else {
-    //     emit(OpCode::NIL);
-    //     current_scope().mark_temporary();
-    // }
+    if (stmt->body.class_object) {
+        std::unreachable(); // TODO
+        //visit_expr(*stmt->body.class_object);
+    } else {
+        emit(OpCode::NIL);
+        current_context().on_stack++;
+        // current_scope().mark_temporary();
+    }
     // if (stmt.is_abstract) {
     //     emit(OpCode::ABSTRACT_CLASS, name_constant);
     // } else {
@@ -1087,6 +1126,28 @@ void Compiler::class_declaration(const AstNode<ClassStmt>& stmt) {
     // }
     // current_scope().pop_temporary();
     // current_scope().define(name);
+
+    emit(OpCode::CLASS, name_constant);
+    define_variable(analyzer.bindings[stmt.id], stmt.id);
+
+    for (const auto& field : stmt->body.fields) {
+        std::string field_name = *field.variable->name.string;
+        int field_constant = current_function()->add_constant(field_name);
+        emit(OpCode::FIELD, field_constant);
+        emit(field.attributes.to_ullong());
+    }
+
+    for (auto& method : stmt->body.methods) {
+        std::string method_name = *method.function->name.string;
+        if (!method.attributes[ClassAttributes::ABSTRACT]) {
+            function(method.function, FunctionType::METHOD);
+        }
+        int idx = current_function()->add_constant(method_name);
+        emit(OpCode::METHOD, idx);
+        emit(method.attributes.to_ullong()); // check size?
+        current_context().on_stack--;
+    }
+
     //
     //
     // begin_scope(ScopeType::CLASS, name);
@@ -1121,9 +1182,15 @@ void Compiler::class_declaration(const AstNode<ClassStmt>& stmt) {
     //     }
     //     default_constructor(stmt.body.fields, static_cast<bool>(stmt.super_class));
     // }
-    // emit(OpCode::CONSTRUCTOR);
-    //
-    // emit(OpCode::POP);
+    if (stmt->body.constructor) {
+        std::unreachable(); // TODO
+    } else {
+        default_constructor(stmt->body.fields, static_cast<bool>(stmt->super_class));
+    }
+
+    emit(OpCode::CONSTRUCTOR);
+    emit(OpCode::POP);
+
     // current_scope().pop_temporary();
     // // TODO: non-expression scope?
     // end_scope();
@@ -1337,6 +1404,9 @@ void Compiler::emit_set_variable(const bite::Analyzer::Binding& binding) {
             [this](const bite::Analyzer::ClassObjectBinding) {
                 // TODO
             },
+            [this](const bite::Analyzer::PropertyBinding& bind) {
+                emit(OpCode::SET_PROPERTY, current_function()->add_constant(*bind.property));
+            },
             [this](const bite::Analyzer::NoBinding) {
                 std::unreachable(); // panic!
             }
@@ -1400,6 +1470,9 @@ void Compiler::emit_get_variable(const bite::Analyzer::Binding& binding) {
                 emit(OpCode::GET, bind.param_idx + 1); // + 1 for the reserved receiver object
             },
             [this](const bite::Analyzer::ClassObjectBinding) {
+                // TODO
+            },
+            [this](const bite::Analyzer::PropertyBinding) {
                 // TODO
             },
             [this](const bite::Analyzer::NoBinding) {

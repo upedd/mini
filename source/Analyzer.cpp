@@ -73,6 +73,7 @@ void bite::Analyzer::native_declaration(const AstNode<NativeStmt>& box) {
 
 void bite::Analyzer::class_declaration(const AstNode<ClassStmt>& stmt) {
     declare(stmt->name.string, stmt.id);
+    bindings[stmt.id] = get_binding(stmt->name.string);
     // TODO: superclasses
     // TODO: class validation!
     with_enviroment(
@@ -116,6 +117,8 @@ void bite::Analyzer::binary(const AstNode<BinaryExpr>& expr) {
         // TODO: handle more lvalues
         if (std::holds_alternative<AstNode<VariableExpr>>(expr->left)) {
             bindings[expr.id] = bindings[std::get<AstNode<VariableExpr>>(expr->left).id];
+        } else if (std::holds_alternative<AstNode<GetPropertyExpr>>(expr->left)) {
+            bindings[expr.id] = PropertyBinding(std::get<AstNode<GetPropertyExpr>>(expr->left)->property.string);
         } else {
             emit_message(Logger::Level::error, "Expected lvalue", "here");
         }

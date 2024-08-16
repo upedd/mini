@@ -77,7 +77,7 @@ public:
         end_expression_scope();
     }
 
-    void with_context(Function* function, FunctionType& type, const auto& fn) {
+    void with_context(Function* function, FunctionType type, const auto& fn) {
         start_context(function, type);
         fn();
         end_context();
