@@ -137,18 +137,43 @@ void bite::Analyzer::if_expression(const AstNode<IfExpr>& expr) {
 }
 
 void bite::Analyzer::loop_expression(const AstNode<LoopExpr>& expr) {
-    block(expr->body);
+    // TODO: refactor this label situation
+    with_semantic_scope(
+        SemanticScope(expr->label ? expr->label->string : std::optional<StringTable::Handle>()),
+        [this, &expr] {
+            block(expr->body);
+        }
+    );
 }
 
 void bite::Analyzer::break_expr(const AstNode<BreakExpr>& expr) {
+    // TODO better break expr analyzing!
+    if (expr->label && !is_there_matching_label(expr->label->string)) {
+        emit_message(Logger::Level::error, "no matching label found.", "referenced here");
+    }
     if (expr->expr) {
         visit_expr(*expr->expr);
     }
 }
 
+void bite::Analyzer::continue_expr(const AstNode<ContinueExpr>& expr) {
+    if (!is_in_loop()) {
+        emit_message(Logger::Level::error, "continue expression outside of loop", "here");
+    }
+    if (expr->label && !is_there_matching_label(expr->label->string)) {
+        emit_message(Logger::Level::error, "no matching label found.", "referenced here");
+    }
+}
+
 void bite::Analyzer::while_expr(const AstNode<WhileExpr>& expr) {
     visit_expr(expr->condition);
-    block(expr->body);
+    // TODO: refactor this label situation
+    with_semantic_scope(
+        SemanticScope(expr->label ? expr->label->string : std::optional<StringTable::Handle>()),
+        [this, &expr] {
+            block(expr->body);
+        }
+    );
 }
 
 void bite::Analyzer::for_expr(const AstNode<ForExpr>& expr) {
@@ -157,6 +182,9 @@ void bite::Analyzer::for_expr(const AstNode<ForExpr>& expr) {
 }
 
 void bite::Analyzer::return_expr(const AstNode<ReturnExpr>& expr) {
+    if (!is_in_function()) {
+        emit_message(Logger::Level::error, "return expression outside of function", "here");
+    }
     if (expr->value) {
         visit_expr(*expr->value);
     }
@@ -170,9 +198,12 @@ void bite::Analyzer::visit_stmt(const Stmt& statement) {
             [this](const AstNode<ExprStmt>& stmt) { expression_statement(stmt); },
             [this](const AstNode<ClassStmt>& stmt) { class_declaration(stmt); },
             [this](const AstNode<NativeStmt>& stmt) { native_declaration(stmt); },
-            [this](const AstNode<ObjectStmt>& stmt) {}, // TODO: implement
-            [this](const AstNode<TraitStmt>& stmt) {}, // TODO: implement
-            [this](const AstNode<UsingStmt>&) {}, // TODO: implement
+            [this](const AstNode<ObjectStmt>& stmt) {},
+            // TODO: implement
+            [this](const AstNode<TraitStmt>& stmt) {},
+            // TODO: implement
+            [this](const AstNode<UsingStmt>&) {},
+            // TODO: implement
             [](const AstNode<InvalidStmt>&) {},
         },
         statement
@@ -183,23 +214,28 @@ void bite::Analyzer::visit_expr(const Expr& expression) {
     std::visit(
         overloaded {
             [this](const AstNode<LiteralExpr>&) {},
-            [this](const AstNode<UnaryExpr>& expr) {unary(expr);},
-            [this](const AstNode<BinaryExpr>& expr) {binary(expr);},
+            [this](const AstNode<UnaryExpr>& expr) { unary(expr); },
+            [this](const AstNode<BinaryExpr>& expr) { binary(expr); },
             [this](const AstNode<StringLiteral>&) {},
             [this](const AstNode<VariableExpr>& expr) { variable_expression(expr); },
             [this](const AstNode<CallExpr>& expr) { call(expr); },
             [this](const AstNode<GetPropertyExpr>& expr) { get_property(expr); },
-            [this](const AstNode<SuperExpr>& expr) {}, // TODO: implement
+            [this](const AstNode<SuperExpr>& expr) {},
+            // TODO: implement
             [this](const AstNode<BlockExpr>& expr) { block(expr); },
-            [this](const AstNode<IfExpr>& expr) { if_expression(expr);},
+            [this](const AstNode<IfExpr>& expr) { if_expression(expr); },
             [this](const AstNode<LoopExpr>& expr) { loop_expression(expr); },
             [this](const AstNode<BreakExpr>& expr) { break_expr(expr); },
-            [this](const AstNode<ContinueExpr>&) {}, // TODO: validate label
-            [this](const AstNode<WhileExpr>& expr) {while_expr(expr);},
-            [this](const AstNode<ForExpr>& expr) {for_expr(expr);}, // TODO: implement
-            [this](const AstNode<ReturnExpr>& expr) {return_expr(expr);},
-            [this](const AstNode<ThisExpr>&) {}, // TODO validate in class scope
-            [this](const AstNode<ObjectExpr>& expr) {}, // TODO: implement
+            [this](const AstNode<ContinueExpr>& expr) { continue_expr(expr); },
+            // TODO: validate label
+            [this](const AstNode<WhileExpr>& expr) { while_expr(expr); },
+            [this](const AstNode<ForExpr>& expr) { for_expr(expr); },
+            // TODO: implement
+            [this](const AstNode<ReturnExpr>& expr) { return_expr(expr); },
+            [this](const AstNode<ThisExpr>&) {},
+            // TODO validate in class scope
+            [this](const AstNode<ObjectExpr>& expr) {},
+            // TODO: implement
             [](const AstNode<InvalidExpr>&) {}
         },
         expression

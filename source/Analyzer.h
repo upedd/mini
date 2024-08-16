@@ -1,6 +1,8 @@
 #ifndef ANALYZER_H
 #define ANALYZER_H
 #include <string>
+#include <algorithm>
+
 #include "Ast.h"
 #include "base/logger.h"
 #include "base/overloaded.h"
@@ -48,6 +50,7 @@ namespace bite {
         void if_expression(const AstNode<IfExpr>& expr);
         void loop_expression(const AstNode<LoopExpr>& expr);
         void break_expr(const AstNode<BreakExpr>& expr);
+        void continue_expr(const AstNode<ContinueExpr>& expr);
         void while_expr(const AstNode<WhileExpr>& expr);
         void for_expr(const AstNode<ForExpr>& expr);
         void return_expr(const AstNode<ReturnExpr>& expr);
@@ -99,11 +102,17 @@ namespace bite {
             std::vector<Local> locals;
         };
 
+        // Only used for semantic analysis
+        struct SemanticScope {
+            std::optional<StringTable::Handle> label;
+        };
+
         struct FunctionEnviroment {
             std::int64_t current_local_idx = 0;
             std::vector<Upvalue> upvalues;
             std::vector<StringTable::Handle> parameters;
             std::vector<Scope> scopes;
+            std::vector<SemanticScope> semantic_scopes;
         };
 
         // TODO: missing class object resolution
@@ -116,9 +125,84 @@ namespace bite {
             std::int64_t current_local_idx = 0;
             unordered_dense::set<StringTable::Handle> globals;
             std::vector<Scope> scopes;
+            std::vector<SemanticScope> semantic_scopes;
         };
 
         using Enviroment = std::variant<FunctionEnviroment, ClassEnviroment, GlobalEnviroment>;
+
+
+        [[nodiscard]] bool is_in_function() const {
+            return std::holds_alternative<FunctionEnviroment>(enviroment_stack.back());
+        }
+
+        // refactor!
+        void with_semantic_scope(const SemanticScope& scope, const auto& fn) {
+            // assert env stack non-empty
+            std::visit(
+                overloaded {
+                    [&fn, this, &scope](GlobalEnviroment&) {
+                        // workaround reference pointing to wrong address after context stack resized, maybe use deque for context_stack?
+                        std::get<GlobalEnviroment>(enviroment_stack.back()).semantic_scopes.push_back(scope);
+                        fn();
+                        std::get<GlobalEnviroment>(enviroment_stack.back()).semantic_scopes.pop_back();
+                    },
+                    [&fn, this, &scope](FunctionEnviroment&) {
+                        std::get<FunctionEnviroment>(enviroment_stack.back()).semantic_scopes.push_back(scope);
+                        fn();
+                        std::get<FunctionEnviroment>(enviroment_stack.back()).semantic_scopes.pop_back();
+                    },
+                    [](ClassEnviroment&) {
+                        // panic!
+                        std::unreachable();
+                    }
+                },
+                enviroment_stack.back()
+            );
+        }
+
+        // TODO: refactor to make use of composition more??
+
+        [[nodiscard]] bool is_in_loop() const {
+            return std::visit(
+                overloaded {
+                    [](const GlobalEnviroment& env) {
+                        return !env.semantic_scopes.empty();
+                    },
+                    [](const FunctionEnviroment& env) {
+                        return !env.semantic_scopes.empty();
+                    },
+                    [](const ClassEnviroment&) {
+                        return false;
+                    }
+                },
+                enviroment_stack.back()
+            );
+        }
+
+
+        [[nodiscard]] bool is_there_matching_label(StringTable::Handle label) const {
+            return std::visit(
+                overloaded {
+                    [&label](const GlobalEnviroment& env) {
+                        return std::ranges::any_of(
+                            env.semantic_scopes,
+                            [&label](const auto& scope) { return scope.label == label; }
+                        );
+                    },
+                    [&label](const FunctionEnviroment& env) {
+                        return std::ranges::any_of(
+                            env.semantic_scopes,
+                            [&label](const auto& scope) { return scope.label == label; }
+                        );
+                    },
+                    [](const ClassEnviroment&) {
+                        return false;
+                    }
+                },
+                enviroment_stack.back()
+            );
+        }
+
 
         static std::optional<LocalBinding> get_local_binding(
             std::vector<Scope>& scopes,
@@ -177,7 +261,11 @@ namespace bite {
             );
         }
 
-        static void declare_in_enviroment(Enviroment& enviroment, StringTable::Handle name, std::int64_t declaration_idx) {
+        static void declare_in_enviroment(
+            Enviroment& enviroment,
+            StringTable::Handle name,
+            std::int64_t declaration_idx
+        ) {
             // TODO: error handling
             std::visit(
                 overloaded {
@@ -185,7 +273,9 @@ namespace bite {
                         if (env.scopes.empty()) {
                             env.parameters.push_back(name);
                         } else {
-                            env.scopes.back().locals.push_back({ .idx = env.current_local_idx++, .name = name, .declared_by_idx = declaration_idx });
+                            env.scopes.back().locals.push_back(
+                                { .idx = env.current_local_idx++, .name = name, .declared_by_idx = declaration_idx }
+                            );
                         }
                     },
                     [name](ClassEnviroment& env) {
@@ -195,7 +285,9 @@ namespace bite {
                         if (env.scopes.empty()) {
                             env.globals.insert(name);
                         } else {
-                            env.scopes.back().locals.push_back({ .idx = env.current_local_idx++, .name = name, .declared_by_idx = declaration_idx });
+                            env.scopes.back().locals.push_back(
+                                { .idx = env.current_local_idx++, .name = name, .declared_by_idx = declaration_idx }
+                            );
                         }
                     }
                 },
@@ -326,6 +418,7 @@ namespace bite {
         unordered_dense::map<std::size_t, Binding> bindings;
         unordered_dense::map<std::size_t, std::vector<Upvalue>> function_upvalues;
         unordered_dense::map<std::size_t, bool> is_declaration_captured;
+
     private:
         std::vector<Enviroment> enviroment_stack { GlobalEnviroment() };
         void visit_stmt(const Stmt& statement);
