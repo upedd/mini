@@ -34,10 +34,10 @@ void bite::Analyzer::block(const AstNode<BlockExpr>& expr) {
 }
 
 void bite::Analyzer::variable_declarataion(const AstNode<VarStmt>& stmt) {
-    declare(stmt->name.string, stmt.id);
     if (stmt->value) {
         visit_expr(*stmt->value);
     }
+    declare(stmt->name.string, stmt.id);
     bindings[stmt.id] = get_binding(stmt->name.string);
 }
 
@@ -104,16 +104,21 @@ void bite::Analyzer::unary(const AstNode<UnaryExpr>& expr) {
 }
 
 void bite::Analyzer::binary(const AstNode<BinaryExpr>& expr) {
-    // TODO: handle error
-    // TODO: handle other lvalues
-    // TODO: maybe isolate all together?
+    // TODO: refactor!
     // make sure to first visit right side!
     visit_expr(expr->right);
     visit_expr(expr->left);
-    if (std::holds_alternative<AstNode<VariableExpr>>(expr->left)) {
-        bindings[expr.id] = bindings[std::get<AstNode<VariableExpr>>(expr->left).id];
-    } else {
-        bindings[expr.id] = NoBinding();
+    // Special handling for assigment
+    if (expr->op == Token::Type::EQUAL || expr->op == Token::Type::PLUS_EQUAL || expr->op == Token::Type::MINUS_EQUAL ||
+        expr->op == Token::Type::STAR_EQUAL || expr->op == Token::Type::SLASH_EQUAL || expr->op ==
+        Token::Type::SLASH_SLASH_EQUAL || expr->op == Token::Type::AND_EQUAL || expr->op == Token::Type::CARET_EQUAL ||
+        expr->op == Token::Type::BAR_EQUAL) {
+        // TODO: handle more lvalues
+        if (std::holds_alternative<AstNode<VariableExpr>>(expr->left)) {
+            bindings[expr.id] = bindings[std::get<AstNode<VariableExpr>>(expr->left).id];
+        } else {
+            emit_message(Logger::Level::error, "Expected lvalue", "here");
+        }
     }
 }
 
@@ -198,12 +203,9 @@ void bite::Analyzer::visit_stmt(const Stmt& statement) {
             [this](const AstNode<ExprStmt>& stmt) { expression_statement(stmt); },
             [this](const AstNode<ClassStmt>& stmt) { class_declaration(stmt); },
             [this](const AstNode<NativeStmt>& stmt) { native_declaration(stmt); },
-            [this](const AstNode<ObjectStmt>& stmt) {},
-            // TODO: implement
-            [this](const AstNode<TraitStmt>& stmt) {},
-            // TODO: implement
-            [this](const AstNode<UsingStmt>&) {},
-            // TODO: implement
+            [this](const AstNode<ObjectStmt>& stmt) {}, // TODO: implement
+            [this](const AstNode<TraitStmt>& stmt) {}, // TODO: implement
+            [this](const AstNode<UsingStmt>&) {}, // TODO: implement
             [](const AstNode<InvalidStmt>&) {},
         },
         statement
@@ -220,22 +222,18 @@ void bite::Analyzer::visit_expr(const Expr& expression) {
             [this](const AstNode<VariableExpr>& expr) { variable_expression(expr); },
             [this](const AstNode<CallExpr>& expr) { call(expr); },
             [this](const AstNode<GetPropertyExpr>& expr) { get_property(expr); },
-            [this](const AstNode<SuperExpr>& expr) {},
-            // TODO: implement
+            [this](const AstNode<SuperExpr>& expr) {},// TODO: implement
             [this](const AstNode<BlockExpr>& expr) { block(expr); },
             [this](const AstNode<IfExpr>& expr) { if_expression(expr); },
             [this](const AstNode<LoopExpr>& expr) { loop_expression(expr); },
             [this](const AstNode<BreakExpr>& expr) { break_expr(expr); },
             [this](const AstNode<ContinueExpr>& expr) { continue_expr(expr); },
-            // TODO: validate label
             [this](const AstNode<WhileExpr>& expr) { while_expr(expr); },
             [this](const AstNode<ForExpr>& expr) { for_expr(expr); },
             // TODO: implement
             [this](const AstNode<ReturnExpr>& expr) { return_expr(expr); },
-            [this](const AstNode<ThisExpr>&) {},
-            // TODO validate in class scope
-            [this](const AstNode<ObjectExpr>& expr) {},
-            // TODO: implement
+            [this](const AstNode<ThisExpr>&) {},// TODO validate in class scope
+            [this](const AstNode<ObjectExpr>& expr) {},// TODO: implement
             [](const AstNode<InvalidExpr>&) {}
         },
         expression

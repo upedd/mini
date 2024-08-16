@@ -19,10 +19,8 @@ namespace bite {
     public:
         explicit Analyzer(SharedContext* context) : context(context) {}
 
-        // TODOs: class analysis, tratis analysis, lvalue analysis, useless break and continue, label validation
+        // TODOs: class analysis, tratis analysis
         // refactor: overlap with parser
-        // TODO: traits
-        // TODO: circular variables
         void emit_message(Logger::Level level, const std::string& content, const std::string& inline_content);
 
         [[nodiscard]] bool has_errors() const {
@@ -261,30 +259,53 @@ namespace bite {
             );
         }
 
-        static void declare_in_enviroment(
-            Enviroment& enviroment,
-            StringTable::Handle name,
-            std::int64_t declaration_idx
-        ) {
+        void declare_in_enviroment(Enviroment& enviroment, StringTable::Handle name, std::int64_t declaration_idx) {
             // TODO: error handling
             std::visit(
                 overloaded {
-                    [name, declaration_idx](FunctionEnviroment& env) {
+                    [this, name, declaration_idx](FunctionEnviroment& env) {
                         if (env.scopes.empty()) {
+                            if (std::ranges::contains(env.parameters, name)) {
+                                emit_message(Logger::Level::error, "duplicate parameter name", "here");
+                            }
                             env.parameters.push_back(name);
                         } else {
+                            for (auto& local : env.scopes.back().locals) {
+                                if (local.name == name) {
+                                    emit_message(
+                                        Logger::Level::error,
+                                        "variable redeclared in same scope",
+                                        "redeclared here"
+                                    );
+                                }
+                            }
                             env.scopes.back().locals.push_back(
                                 { .idx = env.current_local_idx++, .name = name, .declared_by_idx = declaration_idx }
                             );
                         }
                     },
-                    [name](ClassEnviroment& env) {
+                    [name, this](ClassEnviroment& env) {
+                        if (env.members.contains(name)) {
+                            emit_message(Logger::Level::error, "member name conflict", "here");
+                        }
                         env.members.insert(name);
                     },
-                    [name, declaration_idx](GlobalEnviroment& env) {
+                    [name, declaration_idx, this](GlobalEnviroment& env) {
                         if (env.scopes.empty()) {
+                            if (env.globals.contains(name)) {
+                                emit_message(Logger::Level::error, "global variable redeclaration", "here");
+                            }
                             env.globals.insert(name);
                         } else {
+                            for (auto& local : env.scopes.back().locals) {
+                                if (local.name == name) {
+                                    emit_message(
+                                        Logger::Level::error,
+                                        "variable redeclared in same scope",
+                                        "redeclared here"
+                                    );
+                                }
+                            }
                             env.scopes.back().locals.push_back(
                                 { .idx = env.current_local_idx++, .name = name, .declared_by_idx = declaration_idx }
                             );
@@ -371,15 +392,13 @@ namespace bite {
                                 )
                             };
                     }
-
-
                     return *res;
                 }
                 if (std::holds_alternative<FunctionEnviroment>(enviroment)) {
                     function_enviroments_visited.emplace_back(std::get<FunctionEnviroment>(enviroment));
                 }
             }
-            emit_message(Logger::Level::error, "unresolved variable" + std::string(*name), "here");
+            emit_message(Logger::Level::error, "unresolved variable: " + std::string(*name), "here");
 
             return NoBinding();
         }
