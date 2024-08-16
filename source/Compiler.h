@@ -251,6 +251,7 @@ public:
 
     void end_expression_scope() {
         pop_out_of_scopes(1);
+        current_context().expression_scopes.pop_back();
     }
 
     // TODO: do this better

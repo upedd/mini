@@ -118,6 +118,7 @@ private:
     std::vector<CallFrame> frames;
     std::list<Upvalue*> open_upvalues;
     std::unordered_map<std::string, Value> natives;
+    bite::unordered_dense::map<std::string, Value> globals;
 };
 
 template <typename T>

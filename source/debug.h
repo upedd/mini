@@ -205,6 +205,14 @@ inline void Disassembler::disassemble(const std::string& name) {
                 class_inst("GET_TRAIT");
                 break;
             }
+            case OpCode::GET_GLOBAL: {
+                constant_inst("GET_GLOBAL");
+                break;
+            }
+            case OpCode::SET_GLOBAL: {
+                constant_inst("SET_GLOBAL");
+                break;
+            }
         }
     }
 }

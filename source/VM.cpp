@@ -930,6 +930,18 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 }
                 break;
             }
+            case OpCode::GET_GLOBAL: {
+                int constant_idx = fetch();
+                auto name = get_constant(constant_idx).get<std::string>();
+                push(globals[name]); // TODO: what should happen if not present?
+                break;
+            }
+            case OpCode::SET_GLOBAL: {
+                int constant_idx = fetch();
+                auto name = get_constant(constant_idx).get<std::string>();
+                globals[name] = peek();
+                break;
+            }
         }
         // for (int i = 0; i < stack_index; ++i) {
         //     std::cout << '[' << stack[i].to_string() << "] ";

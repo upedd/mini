@@ -427,11 +427,10 @@ void Compiler::pop_out_of_scopes(int64_t depth) {
         bool leave_last = i == depth - 1;
         std::int64_t on_stack_before = get_on_stack_before(scope);
         // Note we actually produce one value
-        for (std::int64_t i = 0; i < current_context().on_stack - on_stack_before - leave_last; ++i) {
+        for (std::int64_t j = 0; j < current_context().on_stack - on_stack_before - leave_last; ++j) {
             // TODO: bug waiting to happen!
-            if (current_context().open_upvalues_slots.contains(current_context().on_stack - i - 1)) {
+            if (current_context().open_upvalues_slots.contains(current_context().on_stack - j - 1)) {
                 emit(OpCode::CLOSE_UPVALUE);
-                //current_context().open_upvalues_slots.erase(current_context().on_stack - i - 1);
             } else {
                 emit(OpCode::POP); // TODO: upvalues!
             }
