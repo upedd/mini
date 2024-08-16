@@ -17,8 +17,7 @@ namespace bite {
     public:
         explicit Analyzer(SharedContext* context) : context(context) {}
 
-        // TODOs: core, variable binding, upvalues?, class analysis, tratis analysis, lvalue analysis, useless break and continue, label validation
-        // TODO: first variable binding
+        // TODOs: class analysis, tratis analysis, lvalue analysis, useless break and continue, label validation
         // refactor: overlap with parser
         // TODO: traits
         // TODO: circular variables
@@ -55,7 +54,6 @@ namespace bite {
 
         struct LocalBinding {
             std::int64_t local_idx;
-            bool is_captured;
         };
 
         struct ParameterBinding {
@@ -84,7 +82,7 @@ namespace bite {
         struct Local {
             std::int64_t idx;
             StringTable::Handle name;
-            bool is_captured; // whetever is captured in a upvalue
+            std::int64_t declared_by_idx;
         };
 
         struct Upvalue {
@@ -131,7 +129,7 @@ namespace bite {
             for (const auto& scope : scopes) {
                 for (const auto& local : scope.locals) {
                     if (local.name == name) {
-                        binding = { .local_idx = local.idx, .is_captured = local.is_captured };
+                        binding = { .local_idx = local.idx };
                     }
                 }
             }
@@ -179,25 +177,25 @@ namespace bite {
             );
         }
 
-        static void declare_in_enviroment(Enviroment& enviroment, StringTable::Handle name) {
+        static void declare_in_enviroment(Enviroment& enviroment, StringTable::Handle name, std::int64_t declaration_idx) {
             // TODO: error handling
             std::visit(
                 overloaded {
-                    [name](FunctionEnviroment& env) {
+                    [name, declaration_idx](FunctionEnviroment& env) {
                         if (env.scopes.empty()) {
                             env.parameters.push_back(name);
                         } else {
-                            env.scopes.back().locals.push_back({ .idx = env.current_local_idx++, .name = name });
+                            env.scopes.back().locals.push_back({ .idx = env.current_local_idx++, .name = name, .declared_by_idx = declaration_idx });
                         }
                     },
                     [name](ClassEnviroment& env) {
                         env.members.insert(name);
                     },
-                    [name](GlobalEnviroment& env) {
+                    [name, declaration_idx](GlobalEnviroment& env) {
                         if (env.scopes.empty()) {
                             env.globals.insert(name);
                         } else {
-                            env.scopes.back().locals.push_back({ .idx = env.current_local_idx++, .name = name });
+                            env.scopes.back().locals.push_back({ .idx = env.current_local_idx++, .name = name, .declared_by_idx = declaration_idx });
                         }
                     }
                 },
@@ -205,8 +203,8 @@ namespace bite {
             );
         }
 
-        void declare(StringTable::Handle name) {
-            declare_in_enviroment(enviroment_stack.back(), name);
+        void declare(StringTable::Handle name, std::int64_t declaration_idx) {
+            declare_in_enviroment(enviroment_stack.back(), name, declaration_idx);
         }
 
         int64_t add_upvalue(FunctionEnviroment& enviroment, const Upvalue& upvalue) {
@@ -236,24 +234,23 @@ namespace bite {
         }
 
         void capture_local(Enviroment& enviroment, int64_t local_idx) {
-            // This needs to change state of already created binding and shit gets complicated...
             std::visit(
                 overloaded {
-                    [local_idx](FunctionEnviroment& env) {
+                    [local_idx, this](FunctionEnviroment& env) {
                         for (auto& scope : env.scopes) {
                             for (auto& local : scope.locals) {
                                 if (local.idx == local_idx) {
-                                    local.is_captured = true;
+                                    is_declaration_captured[local.declared_by_idx] = true;
                                     return;
                                 }
                             }
                         }
                     },
-                    [local_idx](GlobalEnviroment& env) {
+                    [local_idx, this](GlobalEnviroment& env) {
                         for (auto& scope : env.scopes) {
                             for (auto& local : scope.locals) {
                                 if (local.idx == local_idx) {
-                                    local.is_captured = true;
+                                    is_declaration_captured[local.declared_by_idx] = true;
                                     return;
                                 }
                             }
@@ -268,7 +265,6 @@ namespace bite {
             );
         }
 
-        // TODO: missing captures
         Binding get_binding(StringTable::Handle name) {
             std::vector<std::reference_wrapper<FunctionEnviroment>> function_enviroments_visited;
             for (auto& enviroment : enviroment_stack | std::views::reverse) {
@@ -329,7 +325,7 @@ namespace bite {
 
         unordered_dense::map<std::size_t, Binding> bindings;
         unordered_dense::map<std::size_t, std::vector<Upvalue>> function_upvalues;
-
+        unordered_dense::map<std::size_t, bool> is_declaration_captured;
     private:
         std::vector<Enviroment> enviroment_stack { GlobalEnviroment() };
         void visit_stmt(const Stmt& statement);

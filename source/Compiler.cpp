@@ -131,7 +131,7 @@ void Compiler::start_context(Function* function, FunctionType type) {
     current_context().on_stack = function->get_arity() + 1; // plus one for reserved receiver slot!
 }
 
-#define COMPILER_PRINT_BYTECODE
+//#define COMPILER_PRINT_BYTECODE
 
 void Compiler::end_context() {
     #ifdef COMPILER_PRINT_BYTECODE
@@ -300,11 +300,11 @@ void Compiler::visit_stmt(const Stmt& statement) {
     );
 }
 
-void Compiler::define_variable(const bite::Analyzer::Binding& binding) {
+void Compiler::define_variable(const bite::Analyzer::Binding& binding, int64_t declaration_idx) {
     // TODO: refactor!
     if (std::holds_alternative<bite::Analyzer::LocalBinding>(binding)) {
         auto local = std::get<bite::Analyzer::LocalBinding>(binding);
-        bool is_captured = local.is_captured;
+        bool is_captured = analyzer.is_declaration_captured[declaration_idx];
         current_context().slots[local.local_idx] = {
                 current_context().on_stack - 1,
                 is_captured
@@ -326,13 +326,13 @@ void Compiler::variable_declaration(const AstNode<VarStmt>& expr) {
     if (expr->value) {
         visit_expr(*expr->value);
     }
-    define_variable(analyzer.bindings[expr.id]);
+    define_variable(analyzer.bindings[expr.id], expr.id);
 }
 
 void Compiler::function_declaration(const AstNode<FunctionStmt>& stmt) {
     function(stmt, FunctionType::FUNCTION);
     current_context().on_stack++;
-    define_variable(analyzer.bindings[stmt.id]);
+    define_variable(analyzer.bindings[stmt.id], stmt.id);
 }
 
 void Compiler::native_declaration(const AstNode<NativeStmt>& stmt) {
@@ -342,7 +342,7 @@ void Compiler::native_declaration(const AstNode<NativeStmt>& stmt) {
     emit(OpCode::GET_NATIVE, idx);
     current_context().on_stack++;
     // TODO: better way to get those bindings
-    define_variable(analyzer.bindings[stmt.id]);
+    define_variable(analyzer.bindings[stmt.id], stmt.id);
 }
 
 void Compiler::block(const AstNode<BlockExpr>& expr) {
@@ -429,7 +429,7 @@ void Compiler::pop_out_of_scopes(int64_t depth) {
         // Note we actually produce one value
         for (std::int64_t i = 0; i < current_context().on_stack - on_stack_before - leave_last; ++i) {
             // TODO: bug waiting to happen!
-            if (current_context().open_upvalues_slots.contains(current_context().on_stack - i)) {
+            if (current_context().open_upvalues_slots.contains(current_context().on_stack - i - 1)) {
                 emit(OpCode::CLOSE_UPVALUE);
                 //current_context().open_upvalues_slots.erase(current_context().on_stack - i - 1);
             } else {
@@ -496,7 +496,7 @@ void Compiler::for_expr(const AstNode<ForExpr>& expr) {
             int iterator_constant = current_function()->add_constant("iterator");
             emit(OpCode::GET_PROPERTY, iterator_constant);
             emit(OpCode::CALL, 0);
-            define_variable(analyzer.bindings[expr.id]); // iterator
+            define_variable(analyzer.bindings[expr.id], expr.id); // iterator
             std::optional<StringTable::Handle> label = expr->label
                                                            ? expr->label->string
                                                            : std::optional<StringTable::Handle>();
@@ -520,7 +520,7 @@ void Compiler::for_expr(const AstNode<ForExpr>& expr) {
 
                     // begin item
                     // TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                    define_variable(analyzer.bindings[expr.id]);
+                    define_variable(analyzer.bindings[expr.id], expr.id);
                     int item_constant = current_function()->add_constant("next");
                     emit(OpCode::GET_PROPERTY, item_constant);
                     emit(OpCode::CALL, 0);

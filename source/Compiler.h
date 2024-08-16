@@ -329,7 +329,7 @@ private:
     // Compiler::Context::Resolution resolve_upvalue(const std::string& name);
 
     void visit_stmt(const Stmt& stmt);
-    void define_variable(const bite::Analyzer::Binding& binding);
+    void define_variable(const bite::Analyzer::Binding& binding, int64_t declaration_idx);
     bite::Analyzer::Binding get_binding(const Expr& expr);
 
     void variable_declaration(const AstNode<VarStmt>& expr);

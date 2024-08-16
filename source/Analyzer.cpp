@@ -34,7 +34,7 @@ void bite::Analyzer::block(const AstNode<BlockExpr>& expr) {
 }
 
 void bite::Analyzer::variable_declarataion(const AstNode<VarStmt>& stmt) {
-    declare(stmt->name.string);
+    declare(stmt->name.string, stmt.id);
     if (stmt->value) {
         visit_expr(*stmt->value);
     }
@@ -50,14 +50,13 @@ void bite::Analyzer::expression_statement(const AstNode<ExprStmt>& stmt) {
 }
 
 void bite::Analyzer::function_declaration(const AstNode<FunctionStmt>& stmt) {
-    // TODO: handle captures
-    declare(stmt->name.string);
+    declare(stmt->name.string, stmt.id);
     bindings[stmt.id] = get_binding(stmt->name.string);
     with_enviroment(
         FunctionEnviroment(),
         [&stmt, this] {
             for (const auto& param : stmt->params) {
-                declare(param.string);
+                declare(param.string, stmt.id);
             }
             if (stmt->body) {
                 visit_expr(*stmt->body);
@@ -68,12 +67,12 @@ void bite::Analyzer::function_declaration(const AstNode<FunctionStmt>& stmt) {
 }
 
 void bite::Analyzer::native_declaration(const AstNode<NativeStmt>& box) {
-    declare(box->name.string);
+    declare(box->name.string, box.id);
     bindings[box.id] = get_binding(box->name.string);
 }
 
 void bite::Analyzer::class_declaration(const AstNode<ClassStmt>& stmt) {
-    declare(stmt->name.string);
+    declare(stmt->name.string, stmt.id);
     // TODO: superclasses
     // TODO: class validation!
     with_enviroment(
@@ -84,14 +83,14 @@ void bite::Analyzer::class_declaration(const AstNode<ClassStmt>& stmt) {
             // TODO: getters and setters
             // TODO: constuctor
             for (const auto& field : stmt->body.fields) {
-                declare(field.variable->name.string);
+                declare(field.variable->name.string, stmt.id);
                 if (field.variable->value) {
                     visit_expr(*field.variable->value);
                 }
             }
             // hoist methods
             for (const auto& method : stmt->body.methods) {
-                declare(method.function->name.string);
+                declare(method.function->name.string, stmt.id);
             }
             for (const auto& method : stmt->body.methods) {
                 function_declaration(method.function);
