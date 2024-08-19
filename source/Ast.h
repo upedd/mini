@@ -69,7 +69,7 @@ using DeclarationInfo = std::variant<LocalDeclarationInfo, GlobalDeclarationInfo
 
 struct NoBinding {};
 struct LocalBinding {
-    std::int64_t idx;
+    LocalDeclarationInfo* info;
 };
 struct GlobalBinding {
     StringTable::Handle name;
@@ -104,8 +104,18 @@ struct GlobalEnviroment {
     Locals locals;
 };
 
+struct UpValue {
+    int64_t idx;
+    bool local;
+
+    bool operator==(const UpValue& other) const {
+        return this->idx == other.idx && this->local == other.local;
+    }
+};
+
 struct FunctionEnviroment {
     Locals locals;
+    std::vector<UpValue> upvalues;
     std::vector<StringTable::Handle> parameters;
 };
 

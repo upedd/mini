@@ -142,7 +142,7 @@ namespace bite {
         }
 
         // declare variable
-        void new_declare(StringTable::Handle name, Stmt* declaration) {
+        void declare(StringTable::Handle name, Stmt* declaration) {
             for (auto node : node_stack | std::views::reverse) {
                 if (std::holds_alternative<Stmt*>(node)) {
                     auto* stmt = std::get<Stmt*>(node);
@@ -173,7 +173,7 @@ namespace bite {
             for (const auto& scope : env.locals.scopes | std::views::reverse) {
                 for (const auto& local : scope) {
                     if (local.name == name) {
-                        return LocalBinding { .idx = local.declaration->idx };
+                        return LocalBinding { .info = local.declaration };
                     }
                 }
             }
@@ -209,20 +209,44 @@ namespace bite {
             for (const auto& scope : env.locals.scopes | std::views::reverse) {
                 for (const auto& local : scope) {
                     if (local.name == name) {
-                        return LocalBinding { .idx = local.declaration->idx };
+                        return LocalBinding { .info = local.declaration };
                     }
                 }
             }
             return {};
         }
 
-        void new_capture_local() {}
+        void capture_local(LocalDeclarationInfo* info) {
+            info->is_captured = true;
+        }
 
-        void new_handle_closure() {}
+        int64_t add_upvalue(FunctionEnviroment& enviroment, const UpValue& upvalue) {
+            auto found = std::ranges::find(enviroment.upvalues, upvalue);
+            if (found != enviroment.upvalues.end()) {
+                return std::distance(enviroment.upvalues.begin(), found);
+            }
+            enviroment.upvalues.push_back(upvalue);
+            return enviroment.upvalues.size() - 1;
+        }
 
-        // resolve variable
-        // TODO: upvalues!
-        Binding new_resolve(StringTable::Handle name) {
+        int64_t handle_closure(
+            const std::vector<std::reference_wrapper<FunctionEnviroment>>& enviroments_visited,
+            StringTable::Handle name,
+            int64_t local_index
+        ) {
+            bool is_local = true;
+            int64_t value = local_index;
+            for (const auto& enviroment : enviroments_visited | std::views::reverse) {
+                value = add_upvalue(enviroment, UpValue { .idx = value, .local = is_local });
+                if (is_local) {
+                    // Only top level can be pointing to an local variable
+                    is_local = false;
+                }
+            }
+            return value;
+        }
+
+        Binding resolve(StringTable::Handle name) {
             std::vector<std::reference_wrapper<FunctionEnviroment>> function_enviroments_visited;
             for (auto node : node_stack | std::views::reverse) {
                 if (std::holds_alternative<Stmt*>(node)) {
@@ -230,6 +254,17 @@ namespace bite {
                     if (std::holds_alternative<FunctionStmt>(*stmt)) {
                         auto& function = std::get<FunctionStmt>(*stmt);
                         if (auto binding = get_binding_in_function_enviroment(function.enviroment, name)) {
+                            if (std::holds_alternative<LocalBinding>(*binding) && !function_enviroments_visited.empty()) {
+                                capture_local(std::get<LocalBinding>(*binding).info);
+                                return UpvalueBinding {
+                                    handle_closure(
+                                        function_enviroments_visited,
+                                        name,
+                                        std::get<LocalBinding>(*binding).info->idx
+                                    )
+                                };
+                            }
+
                             return *binding;
                         }
                         function_enviroments_visited.emplace_back(function.enviroment);
@@ -249,7 +284,7 @@ namespace bite {
             return NoBinding();
         }
 
-        bool new_is_in_loop() {
+        bool is_in_loop() {
             for (auto node : node_stack) {
                 if (std::holds_alternative<Expr*>(node)) {
                     auto* expr = std::get<Stmt*>(node);
@@ -266,7 +301,7 @@ namespace bite {
             return std::holds_alternative<Stmt*>(node) && std::holds_alternative<FunctionStmt>(*std::get<Stmt*>(node));
         }
 
-        bool new_is_in_function() {
+        bool is_in_function() {
             for (auto node : node_stack) {
                 if (node_is_function(node)) {
                     return true;
@@ -275,7 +310,7 @@ namespace bite {
             return false;
         }
 
-        bool new_is_there_matching_label(StringTable::Handle label_name) {
+        bool is_there_matching_label(StringTable::Handle label_name) {
             for (auto node : node_stack | std::views::reverse) {
                 // labels do not cross functions
                 if (node_is_function(node)) {
@@ -309,7 +344,7 @@ namespace bite {
             return false;
         }
 
-        bool new_is_in_class() {
+        bool is_in_class() {
             for (auto node : node_stack) {
                 if (std::holds_alternative<Stmt*>(node) && std::holds_alternative<ClassStmt>(*std::get<Stmt*>(node))) {
                     return true;
@@ -318,278 +353,25 @@ namespace bite {
             return false;
         }
 
-        using Enviroment = std::variant<FunctionEnviroment, ClassEnviroment, GlobalEnviroment>;
-
-        // refactor!
-        void with_semantic_scope(const SemanticScope& scope, const auto& fn) {
-            // assert env stack non-empty
-            std::visit(
-                overloaded {
-                    [&fn, this, &scope](GlobalEnviroment&) {
-                        // workaround reference pointing to wrong address after context stack resized, maybe use deque for context_stack?
-                        std::get<GlobalEnviroment>(enviroment_stack.back()).semantic_scopes.push_back(scope);
-                        fn();
-                        std::get<GlobalEnviroment>(enviroment_stack.back()).semantic_scopes.pop_back();
-                    },
-                    [&fn, this, &scope](FunctionEnviroment&) {
-                        std::get<FunctionEnviroment>(enviroment_stack.back()).semantic_scopes.push_back(scope);
-                        fn();
-                        std::get<FunctionEnviroment>(enviroment_stack.back()).semantic_scopes.pop_back();
-                    },
-                    [](ClassEnviroment&) {
-                        // panic!
-                        std::unreachable();
-                    }
-                },
-                enviroment_stack.back()
-            );
-        }
-
-        static std::optional<LocalBinding> get_local_binding(
-            std::vector<Scope>& scopes,
-            const StringTable::Handle name
-        ) {
-            std::optional<LocalBinding> binding;
-            // optim?
-            for (const auto& scope : scopes) {
-                for (const auto& local : scope.locals) {
-                    if (local.name == name) {
-                        binding = LocalBinding { .idx = local.idx };
-                    }
-                }
-            }
-            return binding;
-        }
-
-        static std::optional<Binding> get_binding_in_enviroment(Enviroment& enviroment, StringTable::Handle name) {
-            return std::visit(
-                overloaded {
-                    [name](FunctionEnviroment& env) -> std::optional<Binding> {
-                        for (const auto& [idx, param] : env.parameters | std::views::enumerate) {
-                            if (param == name) {
-                                return ParameterBinding { idx };
-                            }
-                        }
-                        if (auto local = get_local_binding(env.scopes, name)) {
-                            return local;
-                        }
-
-                        for (const auto& upvalue : env.upvalues) {
-                            if (upvalue.name == name) {
-                                return UpvalueBinding { upvalue.value };
-                            }
-                        }
-                        return {};
-                    },
-                    [name](const ClassEnviroment& env) -> std::optional<Binding> {
-                        for (const auto& member : env.members) {
-                            if (member == name) {
-                                return MemberBinding { member };
-                            }
-                        }
-                        return {};
-                    },
-                    [name](GlobalEnviroment& env) -> std::optional<Binding> {
-                        for (const auto& global : env.globals) {
-                            if (global == name) {
-                                return GlobalBinding { global };
-                            }
-                        }
-                        return get_local_binding(env.scopes, name);
-                    }
-                },
-                enviroment
-            );
-        }
-
-        void declare_in_enviroment(Enviroment& enviroment, StringTable::Handle name, std::int64_t declaration_idx) {
-            // TODO: error handling
-            std::visit(
-                overloaded {
-                    [this, name, declaration_idx](FunctionEnviroment& env) {
-                        if (env.scopes.empty()) {
-                            if (std::ranges::contains(env.parameters, name)) {
-                                emit_message(Logger::Level::error, "duplicate parameter name", "here");
-                            }
-                            env.parameters.push_back(name);
-                        } else {
-                            for (auto& local : env.scopes.back().locals) {
-                                if (local.name == name) {
-                                    emit_message(
-                                        Logger::Level::error,
-                                        "variable redeclared in same scope",
-                                        "redeclared here"
-                                    );
-                                }
-                            }
-                            env.scopes.back().locals.push_back(
-                                { .idx = env.current_local_idx++, .name = name, .declared_by_idx = declaration_idx }
-                            );
-                        }
-                    },
-                    [name, this](ClassEnviroment& env) {
-                        if (env.members.contains(name)) {
-                            emit_message(Logger::Level::error, "member name conflict", "here");
-                        }
-                        env.members.insert(name);
-                    },
-                    [name, declaration_idx, this](GlobalEnviroment& env) {
-                        if (env.scopes.empty()) {
-                            if (env.globals.contains(name)) {
-                                emit_message(Logger::Level::error, "global variable redeclaration", "here");
-                            }
-                            env.globals.insert(name);
-                        } else {
-                            for (auto& local : env.scopes.back().locals) {
-                                if (local.name == name) {
-                                    emit_message(
-                                        Logger::Level::error,
-                                        "variable redeclared in same scope",
-                                        "redeclared here"
-                                    );
-                                }
-                            }
-                            env.scopes.back().locals.push_back(
-                                { .idx = env.current_local_idx++, .name = name, .declared_by_idx = declaration_idx }
-                            );
-                        }
-                    }
-                },
-                enviroment
-            );
-        }
-
-        void declare(StringTable::Handle name, std::int64_t declaration_idx) {
-            declare_in_enviroment(enviroment_stack.back(), name, declaration_idx);
-        }
-
-        int64_t add_upvalue(FunctionEnviroment& enviroment, const Upvalue& upvalue) {
-            auto found = std::ranges::find(enviroment.upvalues, upvalue);
-            if (found != enviroment.upvalues.end()) {
-                return std::distance(enviroment.upvalues.begin(), found);
-            }
-            enviroment.upvalues.push_back(upvalue);
-            return enviroment.upvalues.size() - 1;
-        }
-
-        int64_t handle_closure_binding(
-            const std::vector<std::reference_wrapper<FunctionEnviroment>>& enviroments_visited,
-            StringTable::Handle name,
-            int64_t local_index
-        ) {
-            bool is_local = true;
-            int64_t value = local_index;
-            for (const auto& enviroment : enviroments_visited | std::views::reverse) {
-                value = add_upvalue(enviroment, Upvalue { .value = value, .name = name, .is_local = is_local });
-                if (is_local) {
-                    // Only top level can be pointing to an local variable
-                    is_local = false;
-                }
-            }
-            return value;
-        }
-
-        void capture_local(Enviroment& enviroment, int64_t local_idx) {
-            std::visit(
-                overloaded {
-                    [local_idx, this](FunctionEnviroment& env) {
-                        for (auto& scope : env.scopes) {
-                            for (auto& local : scope.locals) {
-                                if (local.idx == local_idx) {
-                                    is_declaration_captured[local.declared_by_idx] = true;
-                                    return;
-                                }
-                            }
-                        }
-                    },
-                    [local_idx, this](GlobalEnviroment& env) {
-                        for (auto& scope : env.scopes) {
-                            for (auto& local : scope.locals) {
-                                if (local.idx == local_idx) {
-                                    is_declaration_captured[local.declared_by_idx] = true;
-                                    return;
-                                }
-                            }
-                        }
-                    },
-                    [](ClassEnviroment&) {
-                        // class enviroment must never produce local binding
-                        std::unreachable();
-                    }
-                },
-                enviroment
-            );
-        }
-
-        Binding get_binding(StringTable::Handle name) {
-            std::vector<std::reference_wrapper<FunctionEnviroment>> function_enviroments_visited;
-            for (auto& enviroment : enviroment_stack | std::views::reverse) {
-                if (std::optional<Binding> res = get_binding_in_enviroment(enviroment, name)) {
-                    if (std::holds_alternative<LocalBinding>(*res) && !function_enviroments_visited.empty()) {
-                        capture_local(enviroment, std::get<LocalBinding>(*res).idx);
-                        return UpvalueBinding {
-                                handle_closure_binding(
-                                    function_enviroments_visited,
-                                    name,
-                                    std::get<LocalBinding>(*res).idx
-                                )
-                            };
-                    }
-                    return *res;
-                }
-                if (std::holds_alternative<FunctionEnviroment>(enviroment)) {
-                    function_enviroments_visited.emplace_back(std::get<FunctionEnviroment>(enviroment));
-                }
-            }
-            emit_message(Logger::Level::error, "unresolved variable: " + std::string(*name), "here");
-
-            return NoBinding();
-        }
-
-        void with_enviroment(const Enviroment& enviroment, const auto& fn) {
-            enviroment_stack.push_back(enviroment);
-            fn();
-            enviroment_stack.pop_back();
-        }
-
         void with_scope(const auto& fn) {
-            // assert env stack non-empty
-            std::visit(
-                overloaded {
-                    [&fn, this](GlobalEnviroment&) {
-                        // workaround reference pointing to wrong address after context stack resized, maybe use deque for context_stack?
-                        std::get<GlobalEnviroment>(enviroment_stack.back()).scopes.emplace_back();
-                        fn();
-                        std::get<GlobalEnviroment>(enviroment_stack.back()).scopes.pop_back();
-                    },
-                    [&fn, this](FunctionEnviroment&) {
-                        std::get<FunctionEnviroment>(enviroment_stack.back()).scopes.emplace_back();
-                        fn();
-                        std::get<FunctionEnviroment>(enviroment_stack.back()).scopes.pop_back();
-                    },
-                    [](ClassEnviroment&) {
-                        // panic!
-                        std::unreachable();
-                    }
-                },
-                enviroment_stack.back()
-            );
+            for (auto node : node_stack) {
+                if (node_is_function(node)) {
+                    auto& function = std::get<FunctionStmt>(*std::get<Expr*>(node));
+                    function.enviroment.locals.scopes.emplace_back();
+                    fn();
+                    function.enviroment.locals.scopes.pop_back();
+                    return;
+                }
+            }
+            ast.enviroment.locals.scopes.emplace_back();
+            fn();
+            ast.enviroment.locals.scopes.pop_back();
         }
-
-        unordered_dense::map<std::size_t, Binding> bindings;
-        unordered_dense::map<std::size_t, std::vector<Upvalue>> function_upvalues;
-        unordered_dense::map<std::size_t, bool> is_declaration_captured;
-        unordered_dense::map<std::size_t, bool> class_declaratons;
-
-
-        std::vector<Node> node_stack;
-
     private:
+        std::vector<Node> node_stack;
         Ast& ast;
-        std::vector<Enviroment> enviroment_stack { GlobalEnviroment() };
         void visit_stmt(Stmt& statement);
         void visit_expr(Expr& expression);
-
 
         bool m_has_errors = false;
         std::vector<Message> messages;
