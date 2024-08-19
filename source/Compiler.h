@@ -199,7 +199,7 @@ private:
     void emit_default_return();
 
     void visit_stmt(const Stmt& stmt);
-    void define_variable(const Binding& binding, int64_t declaration_idx);
+    void define_variable(const DeclarationInfo& info);
 
     void variable_declaration(const AstNode<VarStmt>& expr);
     void function_declaration(const AstNode<FunctionStmt>& stmt);

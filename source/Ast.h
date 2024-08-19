@@ -62,6 +62,7 @@ struct LocalDeclarationInfo {
 
 struct GlobalDeclarationInfo {
     Stmt* declaration;
+    StringTable::Handle name;
 };
 
 using DeclarationInfo = std::variant<LocalDeclarationInfo, GlobalDeclarationInfo>;
@@ -125,9 +126,8 @@ struct ClassEnviroment {
 
 class Ast {
 public:
-    GlobalEnviroment enviroment;
     std::vector<Stmt> statements;
-
+    GlobalEnviroment enviroment;
     std::size_t current_id = 0;
 
     template <typename T, typename... Args>
@@ -147,6 +147,7 @@ struct BinaryExpr {
     Expr left;
     Expr right;
     Token::Type op;
+    Binding binding; // TODO: temp
 };
 
 struct CallExpr {
@@ -228,13 +229,14 @@ struct FunctionStmt {
     Token name;
     std::vector<Token> params;
     std::optional<Expr> body;
+    DeclarationInfo info;
     FunctionEnviroment enviroment {};
 };
 
 struct VarStmt {
     Token name;
     std::optional<Expr> value;
-    DeclarationInfo declaration_info;
+    DeclarationInfo info;
 };
 
 struct ExprStmt {
@@ -290,11 +292,13 @@ struct ClassStmt {
     std::optional<Token> super_class;
     StructureBody body;
     bool is_abstract = false;
+    DeclarationInfo info;
     ClassEnviroment enviroment;
 };
 
 struct NativeStmt {
     Token name;
+    DeclarationInfo info;
 };
 
 struct ObjectStmt {
@@ -307,6 +311,7 @@ struct TraitStmt {
     std::vector<Method> methods;
     std::vector<Field> fields;
     std::vector<AstNode<UsingStmt>> using_stmts;
+    DeclarationInfo info;
 };
 
 struct UsingStmtItem {

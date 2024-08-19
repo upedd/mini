@@ -17,8 +17,7 @@ namespace bite {
      */
     class Analyzer {
     public:
-        explicit Analyzer(SharedContext* context, Ast& ast) : context(context),
-                                                              ast(ast) {}
+        explicit Analyzer(SharedContext* context) : context(context) {}
 
         // TODOs: class analysis, tratis analysis
         // refactor: overlap with parser
@@ -33,7 +32,7 @@ namespace bite {
         }
 
 
-        void analyze();
+        void analyze(Ast& ast);
         void block(AstNode<BlockExpr>& expr);
         void variable_declarataion(AstNode<VarStmt>& stmt);
         void variable_expression(AstNode<VariableExpr>& expr);
@@ -41,7 +40,7 @@ namespace bite {
         void expression_statement(AstNode<ExprStmt>& stmt);
         void function_declaration(AstNode<FunctionStmt>& box);
         void function(AstNode<FunctionStmt>& stmt);
-        void native_declaration(AstNode<NativeStmt>& box);
+        void native_declaration(AstNode<NativeStmt>& stmt);
         void class_declaration(AstNode<ClassStmt>& box);
         void unary(AstNode<UnaryExpr>& expr);
         void binary(AstNode<BinaryExpr>& expr);
@@ -63,16 +62,16 @@ namespace bite {
         DeclarationInfo* set_declaration_info(Stmt* statement, DeclarationInfo info) {
             return std::visit<DeclarationInfo*>(
                 overloaded {
-                    [info](AstNode<VarStmt>* stmt) { return &((*stmt)->declaration_info = info); },
-                    [](AstNode<ExprStmt>*) { return nullptr; },
-                    [](AstNode<FunctionStmt>*) { return nullptr; },
-                    [](AstNode<ClassStmt>*) { return nullptr; },
-                    [](AstNode<NativeStmt>*) { return nullptr; },
-                    [](AstNode<TraitStmt>*) { return nullptr; },
-                    [](AstNode<UsingStmt>*) { return nullptr; },
-                    [](AstNode<InvalidStmt>*) { return nullptr; }
+                    [info](AstNode<VarStmt>& stmt) -> DeclarationInfo* { return &((*stmt).info = info); },
+                    [](AstNode<ExprStmt>&) -> DeclarationInfo* { return nullptr; },
+                    [info](AstNode<FunctionStmt>& stmt) -> DeclarationInfo* { return &((*stmt).info = info); },
+                    [info](AstNode<ClassStmt>& stmt) -> DeclarationInfo* { return &((*stmt).info = info);  },
+                    [info](AstNode<NativeStmt>& stmt) -> DeclarationInfo* { return &((*stmt).info = info);  },
+                    [info](AstNode<TraitStmt>& stmt) -> DeclarationInfo* { return &((*stmt).info = info);  },
+                    [](AstNode<UsingStmt>&) -> DeclarationInfo* { return nullptr; },
+                    [](AstNode<InvalidStmt>&) -> DeclarationInfo* { return nullptr; }
                 },
-                statement
+                *statement
             );
         }
 
@@ -93,8 +92,8 @@ namespace bite {
                 DeclarationInfo* info = set_declaration_info(
                     declaration,
                     LocalDeclarationInfo {
-                        .idx = env.locals.locals_count++,
                         .declaration = declaration,
+                        .idx = env.locals.locals_count++,
                         .is_captured = false
                     }
                 );
@@ -118,7 +117,7 @@ namespace bite {
                 }
                 DeclarationInfo* info = set_declaration_info(
                     declaration,
-                    GlobalDeclarationInfo { .declaration = declaration }
+                    GlobalDeclarationInfo { .declaration = declaration, .name = name }
                 );
                 env.globals[name] = reinterpret_cast<GlobalDeclarationInfo*>(info);
             } else {
@@ -130,8 +129,8 @@ namespace bite {
                 DeclarationInfo* info = set_declaration_info(
                     declaration,
                     LocalDeclarationInfo {
-                        .idx = env.locals.locals_count++,
                         .declaration = declaration,
+                        .idx = env.locals.locals_count++,
                         .is_captured = false
                     }
                 );
@@ -158,7 +157,7 @@ namespace bite {
                     }
                 }
             }
-            declare_in_global_enviroment(ast.enviroment, name, declaration);
+            declare_in_global_enviroment(ast->enviroment, name, declaration);
         }
 
         static std::optional<Binding> get_binding_in_function_enviroment(
@@ -277,7 +276,7 @@ namespace bite {
                     }
                 }
             }
-            if (auto binding = get_binding_in_global_enviroment(ast.enviroment, name)) {
+            if (auto binding = get_binding_in_global_enviroment(ast->enviroment, name)) {
                 return *binding;
             }
             emit_message(Logger::Level::error, "unresolved variable: " + std::string(*name), "here");
@@ -363,13 +362,13 @@ namespace bite {
                     return;
                 }
             }
-            ast.enviroment.locals.scopes.emplace_back();
+            ast->enviroment.locals.scopes.emplace_back();
             fn();
-            ast.enviroment.locals.scopes.pop_back();
+            ast->enviroment.locals.scopes.pop_back();
         }
     private:
         std::vector<Node> node_stack;
-        Ast& ast;
+        Ast* ast;
         void visit_stmt(Stmt& statement);
         void visit_expr(Expr& expression);
 
