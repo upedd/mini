@@ -32,106 +32,168 @@ namespace bite {
         }
 
 
-        void analyze(const Ast& ast);
-        void block(const AstNode<BlockExpr>& expr);
-        void variable_declarataion(const AstNode<VarStmt>& stmt);
-        void variable_expression(const AstNode<VariableExpr>& expr);
+        void analyze(Ast& ast);
+        void block(AstNode<BlockExpr>& expr);
+        void variable_declarataion(AstNode<VarStmt>& stmt);
+        void variable_expression(AstNode<VariableExpr>& expr);
 
-        void expression_statement(const AstNode<ExprStmt>& stmt);
-        void function_declaration(const AstNode<FunctionStmt>& box);
-        void function(const AstNode<FunctionStmt>& stmt);
-        void native_declaration(const AstNode<NativeStmt>& box);
-        void class_declaration(const AstNode<ClassStmt>& box);
-        void unary(const AstNode<UnaryExpr>& expr);
-        void binary(const AstNode<BinaryExpr>& expr);
-        void call(const AstNode<CallExpr>& expr);
-        void get_property(const AstNode<GetPropertyExpr>& expr);
-        void if_expression(const AstNode<IfExpr>& expr);
-        void loop_expression(const AstNode<LoopExpr>& expr);
-        void break_expr(const AstNode<BreakExpr>& expr);
-        void continue_expr(const AstNode<ContinueExpr>& expr);
-        void while_expr(const AstNode<WhileExpr>& expr);
-        void for_expr(const AstNode<ForExpr>& expr);
-        void return_expr(const AstNode<ReturnExpr>& expr);
-        void this_expr(const AstNode<ThisExpr>& expr);
+        void expression_statement(AstNode<ExprStmt>& stmt);
+        void function_declaration(AstNode<FunctionStmt>& box);
+        void function(AstNode<FunctionStmt>& stmt);
+        void native_declaration(AstNode<NativeStmt>& box);
+        void class_declaration(AstNode<ClassStmt>& box);
+        void unary(AstNode<UnaryExpr>& expr);
+        void binary(AstNode<BinaryExpr>& expr);
+        void call(AstNode<CallExpr>& expr);
+        void get_property(AstNode<GetPropertyExpr>& expr);
+        void if_expression(AstNode<IfExpr>& expr);
+        void loop_expression(AstNode<LoopExpr>& expr);
+        void break_expr(AstNode<BreakExpr>& expr);
+        void continue_expr(AstNode<ContinueExpr>& expr);
+        void while_expr(AstNode<WhileExpr>& expr);
+        void for_expr(AstNode<ForExpr>& expr);
+        void return_expr(AstNode<ReturnExpr>& expr);
+        void this_expr(AstNode<ThisExpr>& expr);
 
+
+        using Node = std::variant<Stmt*, Expr*>;
 
         // Or just store everything in ast should be smarter
 
-        // declaration tree
-
-        using Declaration = std::variant<struct GlobalDeclaration, struct VariableDeclaration, struct ClassDeclaration, struct FunctionDeclaration, struct ParameterDeclaration>;
-
-        struct GlobalDeclaration {
-            std::vector<Declaration> globals;
-            std::vector<std::vector<Declaration>> scopes;
-        };
-        struct VariableDeclaration {
-            StringTable::Handle name;
-        };
-        struct ClassDeclaration {
-            StringTable::Handle name;
-            std::vector<Declaration> members;
-        };
-        struct ParameterDeclaration {
-            StringTable::Handle name;
-        };
-        struct FunctionDeclaration {
-            std::vector<ParameterDeclaration> parameters;
-            std::vector<std::vector<Declaration>> scopes;
-        };
-
-        bool is_declaration_enviroment(const Declaration& declaration) {
-            return std::holds_alternative<GlobalDeclaration>(declaration) || std::holds_alternative<ClassDeclaration>(declaration) || std::holds_alternative<FunctionDeclaration>(declaration);
-        }
-
-        // maybe two-way connection with declaration tree?
-
         // declare variable
-        void new_declare() {
-
+        void new_declare(StringTable::Handle name) {
+            // TODO: other scopes!!!
+            for (auto node : node_stack | std::views::reverse) {
+                if (std::holds_alternative<Stmt*>(node)) {
+                    auto* stmt = std::get<Stmt*>(node);
+                    if (std::holds_alternative<FunctionStmt>(*stmt)) {
+                        auto& function = std::get<FunctionStmt>(*stmt);
+                        function.enviroment.locals.declare(name); // TODO: handle error!
+                    }
+                }
+            }
         }
         // resolve variable
-        void new_resolve() {
+        // TODO: upvalues!
+        // TODO: other scopes
+        Binding new_resolve(StringTable::Handle name) {
+            for (auto node : node_stack | std::views::reverse) {
+                if (std::holds_alternative<Stmt*>(node)) {
+                    auto* stmt = std::get<Stmt*>(node);
+                    if (std::holds_alternative<FunctionStmt>(*stmt)) {
+                        auto& function = std::get<FunctionStmt>(*stmt);
+                        return LocalBinding {.idx = function.enviroment.locals.get(name)->idx }; // TODO: handle error!
+                    }
+                    if (std::holds_alternative<ClassStmt>(*stmt)) {
 
+                    }
+                }
+            }
         }
         // get binding for resolved varaible
         void new_get_binding() {
 
-        };
+        }
+
+        bool new_is_in_loop() {
+            for (auto node : node_stack) {
+                if (std::holds_alternative<Expr*>(node)) {
+                    auto* expr = std::get<Stmt*>(node);
+                    if (std::holds_alternative<LoopExpr>(*expr) || std::holds_alternative<WhileExpr>(*expr) || std::holds_alternative<ForExpr>(*expr)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        static bool node_is_function(const Node& node) {
+            return std::holds_alternative<Stmt*>(node) && std::holds_alternative<FunctionStmt>(*std::get<Stmt*>(node));
+        }
+
+        bool new_is_in_function() {
+            for (auto node : node_stack) {
+                if (node_is_function(node)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        bool new_is_there_matching_label(StringTable::Handle label_name) {
+            for (auto node : node_stack | std::views::reverse) {
+                // labels do not cross functions
+                if (node_is_function(node)) {
+                    break;
+                }
+                if (std::holds_alternative<Expr*>(node)) {
+                    auto* expr = std::get<Expr*>(node);
+                    if (std::holds_alternative<BlockExpr>(*expr)) {
+                        auto label = std::get<BlockExpr>(*expr).label;
+                        if (label && label->string == label_name) {
+                            return true;
+                        }
+                    } else if (std::holds_alternative<WhileExpr>(*expr)) {
+                        auto label = std::get<WhileExpr>(*expr).label;
+                        if (label && label->string == label_name) {
+                            return true;
+                        }
+                    } else if (std::holds_alternative<LoopExpr>(*expr)) {
+                        auto label = std::get<LoopExpr>(*expr).label;
+                        if (label && label->string == label_name) {
+                            return true;
+                        }
+                    } else if (std::holds_alternative<ForExpr>(*expr)) {
+                        auto label = std::get<ForExpr>(*expr).label;
+                        if (label && label->string == label_name) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        bool new_is_in_class() {
+            for (auto node : node_stack) {
+                if (std::holds_alternative<Stmt*>(node) && std::holds_alternative<ClassStmt>(*std::get<Stmt*>(node))) {
+                    return true;
+                }
+            }
+            return false;
+        }
 
 
-
-        struct LocalBinding {
-            std::int64_t local_idx;
-        };
-
-        struct ParameterBinding {
-            std::int64_t param_idx;
-        };
-
-        struct UpvalueBinding {
-            std::int64_t idx;
-        };
-
-        struct MemberBinding {
-            StringTable::Handle name;
-        };
-
-        struct ClassObjectBinding {};
-
-        struct GlobalBinding {
-            StringTable::Handle name;
-        };
-
-        struct PropertyBinding {
-            StringTable::Handle property;
-        };
-
-        struct NoBinding {};
-
-        using Binding = std::variant<LocalBinding, ParameterBinding, UpvalueBinding, MemberBinding, ClassObjectBinding,
-                                     GlobalBinding, NoBinding, PropertyBinding>;
+        // struct LocalBinding {
+        //     std::int64_t local_idx;
+        // };
+        //
+        // struct ParameterBinding {
+        //     std::int64_t param_idx;
+        // };
+        //
+        // struct UpvalueBinding {
+        //     std::int64_t idx;
+        // };
+        //
+        // struct MemberBinding {
+        //     StringTable::Handle name;
+        // };
+        //
+        // struct ClassObjectBinding {};
+        //
+        // struct GlobalBinding {
+        //     StringTable::Handle name;
+        // };
+        //
+        // struct PropertyBinding {
+        //     StringTable::Handle property;
+        // };
+        //
+        // struct NoBinding {};
+        //
+        // using Binding = std::variant<LocalBinding, ParameterBinding, UpvalueBinding, MemberBinding, ClassObjectBinding,
+        //                              GlobalBinding, NoBinding, PropertyBinding>;
 
         struct Local {
             std::int64_t idx;
@@ -271,7 +333,7 @@ namespace bite {
             for (const auto& scope : scopes) {
                 for (const auto& local : scope.locals) {
                     if (local.name == name) {
-                        binding = { .local_idx = local.idx };
+                        binding = LocalBinding { .idx = local.idx };
                     }
                 }
             }
@@ -443,12 +505,12 @@ namespace bite {
             for (auto& enviroment : enviroment_stack | std::views::reverse) {
                 if (std::optional<Binding> res = get_binding_in_enviroment(enviroment, name)) {
                     if (std::holds_alternative<LocalBinding>(*res) && !function_enviroments_visited.empty()) {
-                        capture_local(enviroment, std::get<LocalBinding>(*res).local_idx);
+                        capture_local(enviroment, std::get<LocalBinding>(*res).idx);
                         return UpvalueBinding {
                                 handle_closure_binding(
                                     function_enviroments_visited,
                                     name,
-                                    std::get<LocalBinding>(*res).local_idx
+                                    std::get<LocalBinding>(*res).idx
                                 )
                             };
                     }
@@ -498,10 +560,12 @@ namespace bite {
         unordered_dense::map<std::size_t, bool> is_declaration_captured;
         unordered_dense::map<std::size_t, bool> class_declaratons;
 
+
+        std::vector<Node> node_stack;
     private:
         std::vector<Enviroment> enviroment_stack { GlobalEnviroment() };
-        void visit_stmt(const Stmt& statement);
-        void visit_expr(const Expr& expression);
+        void visit_stmt(Stmt& statement);
+        void visit_expr(Expr& expression);
 
 
         bool m_has_errors = false;

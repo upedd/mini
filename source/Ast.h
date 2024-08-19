@@ -3,41 +3,13 @@
 #include <format>
 #include <variant>
 #include <vector>
+#include <algorithm>
 
 #include "parser/Token.h"
 #include "Value.h"
 #include "base/bitflags.h"
 #include "base/box.h"
 
-struct NoBinding {};
-struct LocalBinding {
-    std::int64_t idx;
-};
-struct GlobalBinding {
-    StringTable::Handle name;
-};
-struct UpvalueBinding {
-    std::int64_t idx;
-};
-struct ParameterBinding {
-    std::int64_t idx;
-};
-struct MemberBinding {
-    StringTable::Handle name;
-};
-
-using Binding = std::variant<NoBinding, LocalBinding, GlobalBinding, UpvalueBinding, ParameterBinding, MemberBinding>;
-
-struct LocalEnviroment {
-    int64_t locals_count = 0;
-    // LocalBinding binding() {
-    //     return LocalBinding(locals_count++);
-    // }
-};
-
-struct GlobalEnviroment {
-    bite::unordered_dense::set<StringTable::Handle> globals;
-};
 
 // Reference: https://lesleylai.info/en/ast-in-cpp-part-1-variant/
 // https://www.foonathan.net/2022/05/recursive-variant-box/
@@ -82,10 +54,80 @@ using Stmt = std::variant<AstNode<struct VarStmt>, AstNode<struct ExprStmt>, Ast
                                      struct InvalidStmt>>;
 
 
+
+struct NoBinding {};
+struct LocalBinding {
+    std::int64_t idx;
+};
+struct GlobalBinding {
+    StringTable::Handle name;
+};
+struct UpvalueBinding {
+    std::int64_t idx;
+};
+struct ParameterBinding {
+    std::int64_t idx;
+};
+struct MemberBinding {
+    StringTable::Handle name;
+};
+struct PropertyBinding {
+    StringTable::Handle property;
+};
+
+using Binding = std::variant<NoBinding, LocalBinding, GlobalBinding, UpvalueBinding, ParameterBinding, MemberBinding, PropertyBinding>;
+
+struct Local {
+    int64_t idx;
+    StringTable::Handle name;
+};
+
+struct Locals {
+    int64_t locals_count = 0;
+    std::vector<std::vector<Local>> scopes;
+    // LocalBinding binding() {
+    //     return LocalBinding(locals_count++);
+    // }
+
+    bool declare(StringTable::Handle name) {
+        if (std::ranges::any_of(scopes.back(), [name](const Local& local) {return local.name == name;})) {
+            return false;
+        }
+        scopes.back().push_back(Local {.idx = locals_count++, .name = name});
+        return true;
+    }
+
+    std::optional<Local> get(StringTable::Handle name) {
+        for (auto& scope : scopes | std::views::reverse) {
+            auto it = std::ranges::find(scope, name, &Local::name);
+            if (it != scope.end()) {
+                return *it;
+            }
+        }
+        return {};
+    }
+};
+
+
+
+struct GlobalEnviroment {
+    bite::unordered_dense::set<StringTable::Handle> globals;
+    Locals locals;
+};
+
+struct FunctionEnviroment {
+    Locals locals;
+    std::vector<StringTable::Handle> parameters;
+};
+
+struct ClassEnviroment {
+    bite::unordered_dense::set<StringTable::Handle> members;
+};
+
 class Ast {
 public:
     GlobalEnviroment globals;
-    LocalEnviroment locals;
+    Locals locals;
     std::vector<Stmt> statements;
 
     std::size_t current_id = 0;
@@ -95,6 +137,8 @@ public:
         return AstNode<T>(T(std::forward<Args>(args)...), current_id++);
     }
 };
+
+
 
 struct UnaryExpr {
     Expr expr;
@@ -186,12 +230,13 @@ struct FunctionStmt {
     Token name;
     std::vector<Token> params;
     std::optional<Expr> body;
-    LocalEnviroment enviroment {};
+    FunctionEnviroment enviroment {};
 };
 
 struct VarStmt {
     Token name;
     std::optional<Expr> value;
+    Binding binding = NoBinding();
 };
 
 struct ExprStmt {

@@ -130,20 +130,20 @@ void Compiler::visit_stmt(const Stmt& statement) {
     );
 }
 
-void Compiler::define_variable(const bite::Analyzer::Binding& binding, int64_t declaration_idx) {
+void Compiler::define_variable(const Binding& binding, int64_t declaration_idx) {
     // TODO: refactor!
-    if (std::holds_alternative<bite::Analyzer::LocalBinding>(binding)) {
-        auto local = std::get<bite::Analyzer::LocalBinding>(binding);
+    if (std::holds_alternative<LocalBinding>(binding)) {
+        auto local = std::get<LocalBinding>(binding);
         bool is_captured = analyzer.is_declaration_captured[declaration_idx];
-        current_context().slots[local.local_idx] = {
+        current_context().slots[local.idx] = {
                 current_context().on_stack - 1,
                 is_captured
             };
         if (is_captured) {
             current_context().open_upvalues_slots.insert(current_context().on_stack - 1);
         }
-    } else if (std::holds_alternative<bite::Analyzer::GlobalBinding>(binding)) {
-        auto name_constant = current_function()->add_constant(*std::get<bite::Analyzer::GlobalBinding>(binding).name);
+    } else if (std::holds_alternative<GlobalBinding>(binding)) {
+        auto name_constant = current_function()->add_constant(*std::get<GlobalBinding>(binding).name);
         // TODO: refactor handling system
         emit(OpCode::SET_GLOBAL, name_constant);
     } else {
@@ -156,7 +156,7 @@ void Compiler::variable_declaration(const AstNode<VarStmt>& expr) {
     if (expr->value) {
         visit_expr(*expr->value);
     }
-    define_variable(analyzer.bindings[expr.id], expr.id);
+    define_variable(expr->binding, expr.id);
 }
 
 void Compiler::function_declaration(const AstNode<FunctionStmt>& stmt) {
@@ -1434,33 +1434,33 @@ void Compiler::binary(const AstNode<BinaryExpr>& expr) {
     current_context().on_stack--;
 }
 
-void Compiler::emit_set_variable(const bite::Analyzer::Binding& binding) {
+void Compiler::emit_set_variable(const Binding& binding) {
     std::visit(
         overloaded {
-            [this](const bite::Analyzer::LocalBinding& bind) {
-                emit(OpCode::SET, current_context().slots[bind.local_idx].index); // assert exists?
+            [this](const LocalBinding& bind) {
+                emit(OpCode::SET, current_context().slots[bind.idx].index); // assert exists?
             },
-            [this](const bite::Analyzer::GlobalBinding& bind) {
+            [this](const GlobalBinding& bind) {
                 int constant = current_function()->add_constant(*bind.name); // TODO: rework constant system
                 emit(OpCode::SET_GLOBAL, constant);
             },
-            [this](const bite::Analyzer::UpvalueBinding& bind) {
+            [this](const UpvalueBinding& bind) {
                 emit(OpCode::SET_UPVALUE, bind.idx);
             },
-            [this](const bite::Analyzer::MemberBinding& bind) {
+            [this](const MemberBinding& bind) {
                 emit(OpCode::THIS);
                 emit(OpCode::SET_PROPERTY, current_function()->add_constant(*bind.name));
             },
-            [this](const bite::Analyzer::ParameterBinding& bind) {
-                emit(OpCode::SET, bind.param_idx + 1); // + 1 for the reserved receiver object
+            [this](const ParameterBinding& bind) {
+                emit(OpCode::SET, bind.idx + 1); // + 1 for the reserved receiver object
             },
-            [this](const bite::Analyzer::ClassObjectBinding) {
-                // TODO
-            },
-            [this](const bite::Analyzer::PropertyBinding& bind) {
+            // [this](const ClassObjectBinding) {
+            //     // TODO
+            // },
+            [this](const PropertyBinding& bind) {
                 emit(OpCode::SET_PROPERTY, current_function()->add_constant(*bind.property));
             },
-            [this](const bite::Analyzer::NoBinding) {
+            [this](const NoBinding) {
                 std::unreachable(); // panic!
             }
         },
@@ -1503,33 +1503,33 @@ void Compiler::emit_set_variable(const bite::Analyzer::Binding& binding) {
     // }
 }
 
-void Compiler::emit_get_variable(const bite::Analyzer::Binding& binding) {
+void Compiler::emit_get_variable(const Binding& binding) {
     std::visit(
         overloaded {
-            [this](const bite::Analyzer::LocalBinding& bind) {
-                emit(OpCode::GET, current_context().slots[bind.local_idx].index); // assert exists?
+            [this](const LocalBinding& bind) {
+                emit(OpCode::GET, current_context().slots[bind.idx].index); // assert exists?
             },
-            [this](const bite::Analyzer::GlobalBinding& bind) {
+            [this](const GlobalBinding& bind) {
                 int constant = current_function()->add_constant(*bind.name); // TODO: rework constant system
                 emit(OpCode::GET_GLOBAL, constant);
             },
-            [this](const bite::Analyzer::UpvalueBinding& bind) {
+            [this](const UpvalueBinding& bind) {
                emit(OpCode::GET_UPVALUE, bind.idx);
             },
-            [this](const bite::Analyzer::MemberBinding& bind) {
+            [this](const MemberBinding& bind) {
                 emit(OpCode::THIS);
                 emit(OpCode::GET_PROPERTY, current_function()->add_constant(*bind.name));
             },
-            [this](const bite::Analyzer::ParameterBinding& bind) {
-                emit(OpCode::GET, bind.param_idx + 1); // + 1 for the reserved receiver object
+            [this](const ParameterBinding& bind) {
+                emit(OpCode::GET, bind.idx + 1); // + 1 for the reserved receiver object
             },
-            [this](const bite::Analyzer::ClassObjectBinding) {
+            // [this](const bite::Analyzer::ClassObjectBinding) {
+            //     // TODO
+            // }
+            [this](const PropertyBinding) {
                 // TODO
             },
-            [this](const bite::Analyzer::PropertyBinding) {
-                // TODO
-            },
-            [this](const bite::Analyzer::NoBinding) {
+            [this](const NoBinding) {
                 std::unreachable(); // panic!
             }
         },

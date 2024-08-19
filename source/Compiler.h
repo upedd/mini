@@ -199,7 +199,7 @@ private:
     void emit_default_return();
 
     void visit_stmt(const Stmt& stmt);
-    void define_variable(const bite::Analyzer::Binding& binding, int64_t declaration_idx);
+    void define_variable(const Binding& binding, int64_t declaration_idx);
     bite::Analyzer::Binding get_binding(const Expr& expr);
 
     void variable_declaration(const AstNode<VarStmt>& expr);
@@ -248,10 +248,10 @@ private:
     void unary(const AstNode<UnaryExpr>& expr);
 
     void binary(const AstNode<BinaryExpr>& expr);
-    void emit_set_variable(const bite::Analyzer::Binding& binding);
+    void emit_set_variable(const Binding& binding);
 
     void set_variable(const Expr& lvalue);
-    void emit_get_variable(const bite::Analyzer::Binding& binding);
+    void emit_get_variable(const Binding& binding);
 
     void logical(const AstNode<BinaryExpr>& expr);
 
