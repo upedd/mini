@@ -304,6 +304,7 @@ struct NativeStmt {
 struct ObjectStmt {
     Token name;
     Expr object;
+    DeclarationInfo info;
 };
 
 struct TraitStmt {

@@ -50,7 +50,7 @@ void bite::Analyzer::expression_statement(AstNode<ExprStmt>& stmt) {
 }
 
 void bite::Analyzer::function_declaration(AstNode<FunctionStmt>& stmt) {
-    declare(stmt->name.string, reinterpret_cast<Stmt*>(&stmt));
+    declare_in_outer(stmt->name.string, reinterpret_cast<Stmt*>(&stmt));
     function(stmt);
 }
 
@@ -68,7 +68,7 @@ void bite::Analyzer::native_declaration(AstNode<NativeStmt>& stmt) {
 }
 
 void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
-    declare(stmt->name.string, reinterpret_cast<Stmt*>(&stmt));
+    declare_in_outer(stmt->name.string, reinterpret_cast<Stmt*>(&stmt));
     // TODO: superclasses
     // TODO: class validation!
     // TODO: using statement

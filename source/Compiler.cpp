@@ -498,7 +498,7 @@ void Compiler::function(const AstNode<FunctionStmt>& stmt, FunctionType type) {
 
     int constant = current_function()->add_constant(function);
     emit(OpCode::CLOSURE, constant);
-    for (const UpValue& upvalue : stmt->enviroment.upvalues[stmt.id]) {
+    for (const UpValue& upvalue : stmt->enviroment.upvalues) {
         emit(upvalue.local);
         if (upvalue.local) {
             emit(current_context().slots[upvalue.idx].index);
