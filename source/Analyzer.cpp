@@ -92,7 +92,10 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
         declare(method.function->name.string, reinterpret_cast<Stmt*>(&stmt));
     }
     for (auto& method : stmt->body.methods) {
+        // TODO: refactor!
+        //node_stack.emplace_back(Node(reinterpret_cast<ClassStmt>(&method.function)));
         function(method.function);
+        //node_stack.pop_back();
     }
 }
 

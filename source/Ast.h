@@ -19,7 +19,9 @@
 template <typename T>
 class AstNode {
 public:
-    explicit AstNode(T&& value, const std::int64_t id) : id(id), ptr(new T(std::move(value))) {}
+    explicit AstNode(T&& value, const std::int64_t id) : id(id),
+                                                         ptr(new T(std::move(value))) {}
+
     AstNode(const AstNode& value) = delete;
     AstNode& operator=(const AstNode&) = delete;
 
@@ -40,18 +42,16 @@ private:
     std::unique_ptr<T> ptr;
 };
 
-using Expr = std::variant<AstNode<struct LiteralExpr>, AstNode<struct StringLiteral>, AstNode<struct
-                                     UnaryExpr>, AstNode<struct BinaryExpr>, AstNode<struct VariableExpr>, AstNode
-                                 <struct CallExpr>, AstNode<struct GetPropertyExpr>, AstNode<struct SuperExpr>,
-                                 AstNode<struct BlockExpr>, AstNode<struct IfExpr>, AstNode<struct LoopExpr>,
-                                 AstNode<struct BreakExpr>, AstNode<struct ContinueExpr>, AstNode<struct
-                                     WhileExpr>, AstNode<struct ForExpr>, AstNode<struct ReturnExpr>, AstNode<
-                                     struct ThisExpr>, AstNode<struct ObjectExpr>, AstNode<struct InvalidExpr>>;
+using Expr = std::variant<AstNode<struct LiteralExpr>, AstNode<struct StringLiteral>, AstNode<struct UnaryExpr>, AstNode
+                          <struct BinaryExpr>, AstNode<struct VariableExpr>, AstNode<struct CallExpr>, AstNode<struct
+                              GetPropertyExpr>, AstNode<struct SuperExpr>, AstNode<struct BlockExpr>, AstNode<struct
+                              IfExpr>, AstNode<struct LoopExpr>, AstNode<struct BreakExpr>, AstNode<struct ContinueExpr>
+                          , AstNode<struct WhileExpr>, AstNode<struct ForExpr>, AstNode<struct ReturnExpr>, AstNode<
+                              struct ThisExpr>, AstNode<struct ObjectExpr>, AstNode<struct InvalidExpr>>;
 
-using Stmt = std::variant<AstNode<struct VarStmt>, AstNode<struct ExprStmt>, AstNode<struct FunctionStmt>,
-                                 AstNode<struct ClassStmt>, AstNode<struct NativeStmt>, AstNode<struct
-                                     ObjectStmt>, AstNode<struct TraitStmt>, AstNode<struct UsingStmt>, AstNode<
-                                     struct InvalidStmt>>;
+using Stmt = std::variant<AstNode<struct VarStmt>, AstNode<struct ExprStmt>, AstNode<struct FunctionStmt>, AstNode<
+                              struct ClassStmt>, AstNode<struct NativeStmt>, AstNode<struct ObjectStmt>, AstNode<struct
+                              TraitStmt>, AstNode<struct UsingStmt>, AstNode<struct InvalidStmt>>;
 
 
 struct LocalDeclarationInfo {
@@ -69,26 +69,33 @@ using DeclarationInfo = std::variant<LocalDeclarationInfo, GlobalDeclarationInfo
 
 
 struct NoBinding {};
+
 struct LocalBinding {
     LocalDeclarationInfo* info;
 };
+
 struct GlobalBinding {
     StringTable::Handle name;
 };
+
 struct UpvalueBinding {
     std::int64_t idx;
 };
+
 struct ParameterBinding {
     std::int64_t idx;
 };
+
 struct MemberBinding {
     StringTable::Handle name;
 };
+
 struct PropertyBinding {
     StringTable::Handle property;
 };
 
-using Binding = std::variant<NoBinding, LocalBinding, GlobalBinding, UpvalueBinding, ParameterBinding, MemberBinding, PropertyBinding>;
+using Binding = std::variant<NoBinding, LocalBinding, GlobalBinding, UpvalueBinding, ParameterBinding, MemberBinding,
+                             PropertyBinding>;
 
 struct Local {
     LocalDeclarationInfo* declaration;
@@ -135,7 +142,6 @@ public:
         return AstNode<T>(T(std::forward<Args>(args)...), current_id++);
     }
 };
-
 
 
 struct UnaryExpr {
@@ -222,7 +228,6 @@ struct ReturnExpr {
 
 
 struct ThisExpr {};
-
 
 
 struct FunctionStmt {

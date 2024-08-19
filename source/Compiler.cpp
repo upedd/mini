@@ -65,7 +65,7 @@ void Compiler::start_context(Function* function, FunctionType type) {
     current_context().on_stack = function->get_arity() + 1; // plus one for reserved receiver slot!
 }
 
-#define COMPILER_PRINT_BYTECODE
+//#define COMPILER_PRINT_BYTECODE
 
 void Compiler::end_context() {
     #ifdef COMPILER_PRINT_BYTECODE
@@ -79,7 +79,6 @@ void Compiler::end_context() {
 Compiler::Context& Compiler::current_context() {
     return context_stack.back();
 }
-
 
 
 Function* Compiler::current_function() {
@@ -135,10 +134,7 @@ void Compiler::define_variable(const DeclarationInfo& info) {
     if (std::holds_alternative<LocalDeclarationInfo>(info)) {
         auto local = std::get<LocalDeclarationInfo>(info);
         bool is_captured = local.is_captured;
-        current_context().slots[local.idx] = {
-                current_context().on_stack - 1,
-                is_captured
-            };
+        current_context().slots[local.idx] = { current_context().on_stack - 1, is_captured };
         if (is_captured) {
             current_context().open_upvalues_slots.insert(current_context().on_stack - 1);
         }
@@ -611,7 +607,6 @@ void Compiler::constructor(
 }
 
 void Compiler::default_constructor(const std::vector<Field>& fields, bool has_superclass) {
-
     // TODO: overlap with function declaration
     // TODO: integrate into new strings
     auto* function = new Function("constructor", 0);
@@ -1220,12 +1215,7 @@ void Compiler::class_declaration(const AstNode<ClassStmt>& stmt) {
         // cur().constructor_argument_count = stmt.body.constructor->parameters.size();
         //bool has_super_class = static_cast<bool>(stmt.super_class);
         // TODO: support inheritance
-        constructor(
-            *stmt->body.constructor,
-            stmt->body.fields,
-            false,
-            0
-        );
+        constructor(*stmt->body.constructor, stmt->body.fields, false, 0);
     } else {
         default_constructor(stmt->body.fields, static_cast<bool>(stmt->super_class));
     }
@@ -1356,10 +1346,10 @@ void Compiler::binary(const AstNode<BinaryExpr>& expr) {
     visit_expr(expr->right);
 
     // TODO: refactor!!
-    if (std::holds_alternative<AstNode<GetPropertyExpr>>(expr->left) && (expr->op == Token::Type::EQUAL || expr->op == Token::Type::PLUS_EQUAL || expr->op == Token::Type::MINUS_EQUAL ||
-        expr->op == Token::Type::STAR_EQUAL || expr->op == Token::Type::SLASH_EQUAL || expr->op ==
-        Token::Type::SLASH_SLASH_EQUAL || expr->op == Token::Type::AND_EQUAL || expr->op == Token::Type::CARET_EQUAL ||
-        expr->op == Token::Type::BAR_EQUAL)) {
+    if (std::holds_alternative<AstNode<GetPropertyExpr>>(expr->left) && (expr->op == Token::Type::EQUAL || expr->op ==
+        Token::Type::PLUS_EQUAL || expr->op == Token::Type::MINUS_EQUAL || expr->op == Token::Type::STAR_EQUAL || expr->
+        op == Token::Type::SLASH_EQUAL || expr->op == Token::Type::SLASH_SLASH_EQUAL || expr->op ==
+        Token::Type::AND_EQUAL || expr->op == Token::Type::CARET_EQUAL || expr->op == Token::Type::BAR_EQUAL)) {
         visit_expr(std::get<AstNode<GetPropertyExpr>>(expr->left)->left);
     }
     switch (expr->op) {
@@ -1515,7 +1505,7 @@ void Compiler::emit_get_variable(const Binding& binding) {
                 emit(OpCode::GET_GLOBAL, constant);
             },
             [this](const UpvalueBinding& bind) {
-               emit(OpCode::GET_UPVALUE, bind.idx);
+                emit(OpCode::GET_UPVALUE, bind.idx);
             },
             [this](const MemberBinding& bind) {
                 emit(OpCode::THIS);
