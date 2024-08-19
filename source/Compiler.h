@@ -200,7 +200,6 @@ private:
 
     void visit_stmt(const Stmt& stmt);
     void define_variable(const Binding& binding, int64_t declaration_idx);
-    bite::Analyzer::Binding get_binding(const Expr& expr);
 
     void variable_declaration(const AstNode<VarStmt>& expr);
     void function_declaration(const AstNode<FunctionStmt>& stmt);

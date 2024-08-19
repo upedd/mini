@@ -126,8 +126,7 @@ struct ClassEnviroment {
 
 class Ast {
 public:
-    GlobalEnviroment globals;
-    Locals locals;
+    GlobalEnviroment enviroment;
     std::vector<Stmt> statements;
 
     std::size_t current_id = 0;
@@ -292,6 +291,7 @@ struct ClassStmt {
     std::optional<Token> super_class;
     StructureBody body;
     bool is_abstract = false;
+    ClassEnviroment enviroment;
 };
 
 struct NativeStmt {

@@ -13,7 +13,7 @@ void bite::Analyzer::emit_message(
     context->logger.log(level, content);
 }
 
-void bite::Analyzer::analyze(Ast& ast) {
+void bite::Analyzer::analyze() {
     for (auto& stmt : ast.statements) {
         visit_stmt(stmt);
     }

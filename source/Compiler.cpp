@@ -26,7 +26,7 @@ bool Compiler::compile() {
         ); // TODO: workaround
         return false;
     }
-    analyzer.analyze(ast);
+    analyzer.analyze();
     if (analyzer.has_errors()) {
         shared_context->logger.log(
             bite::Logger::Level::error,
