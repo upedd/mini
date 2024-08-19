@@ -83,10 +83,18 @@ void bite::Analyzer::class_declaration(const AstNode<ClassStmt>& stmt) {
     with_enviroment(
         ClassEnviroment(),
         [&stmt, this] {
+            Binding binding = get_binding(stmt->super_class->string);
             // TODO: using statement
             // TODO: class object
             // TODO: getters and setters
             // TODO: constuctor
+            Binding bind = get_binding(stmt->super_class->string);
+            // TODO: init should be an reserved keyword
+            // TODO: default constructor should capture upvalues
+            if (stmt->body.constructor) {
+                visit_expr(stmt->body.constructor->body);
+            }
+
             for (const auto& field : stmt->body.fields) {
                 declare(field.variable->name.string, stmt.id);
                 if (field.variable->value) {

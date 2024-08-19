@@ -9,6 +9,36 @@
 #include "base/bitflags.h"
 #include "base/box.h"
 
+struct NoBinding {};
+struct LocalBinding {
+    std::int64_t idx;
+};
+struct GlobalBinding {
+    StringTable::Handle name;
+};
+struct UpvalueBinding {
+    std::int64_t idx;
+};
+struct ParameterBinding {
+    std::int64_t idx;
+};
+struct MemberBinding {
+    StringTable::Handle name;
+};
+
+using Binding = std::variant<NoBinding, LocalBinding, GlobalBinding, UpvalueBinding, ParameterBinding, MemberBinding>;
+
+struct LocalEnviroment {
+    int64_t locals_count = 0;
+    // LocalBinding binding() {
+    //     return LocalBinding(locals_count++);
+    // }
+};
+
+struct GlobalEnviroment {
+    bite::unordered_dense::set<StringTable::Handle> globals;
+};
+
 // Reference: https://lesleylai.info/en/ast-in-cpp-part-1-variant/
 // https://www.foonathan.net/2022/05/recursive-variant-box/
 /**
@@ -54,6 +84,8 @@ using Stmt = std::variant<AstNode<struct VarStmt>, AstNode<struct ExprStmt>, Ast
 
 class Ast {
 public:
+    GlobalEnviroment globals;
+    LocalEnviroment locals;
     std::vector<Stmt> statements;
 
     std::size_t current_id = 0;
@@ -90,6 +122,7 @@ struct StringLiteral {
 
 struct VariableExpr {
     Token identifier;
+    Binding binding = NoBinding();
 };
 
 struct GetPropertyExpr {
@@ -148,10 +181,12 @@ struct ReturnExpr {
 struct ThisExpr {};
 
 
+
 struct FunctionStmt {
     Token name;
     std::vector<Token> params;
     std::optional<Expr> body;
+    LocalEnviroment enviroment {};
 };
 
 struct VarStmt {

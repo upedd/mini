@@ -513,9 +513,6 @@ void Compiler::constructor(
     int superclass_arguments_count
 ) {
     // refactor: tons of overlap with function generator
-
-    // TODO: check name
-    // TODO: upvalues!!!!
     auto* function = new Function("constructor", stmt.parameters.size());
     functions.push_back(function);
 
@@ -536,7 +533,7 @@ void Compiler::constructor(
                 emit(OpCode::POP); // pop value;
             }
             visit_expr(stmt.body);
-            //current_function()->set_upvalue_count(analyzer.function_upvalues[stmt.id].size());
+            // current_function()->set_upvalue_count(analyzer.function_upvalues[stmt.body.id].size());
             emit_default_return();
         }
     );

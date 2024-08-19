@@ -55,6 +55,53 @@ namespace bite {
         void return_expr(const AstNode<ReturnExpr>& expr);
         void this_expr(const AstNode<ThisExpr>& expr);
 
+
+        // Or just store everything in ast should be smarter
+
+        // declaration tree
+
+        using Declaration = std::variant<struct GlobalDeclaration, struct VariableDeclaration, struct ClassDeclaration, struct FunctionDeclaration, struct ParameterDeclaration>;
+
+        struct GlobalDeclaration {
+            std::vector<Declaration> globals;
+            std::vector<std::vector<Declaration>> scopes;
+        };
+        struct VariableDeclaration {
+            StringTable::Handle name;
+        };
+        struct ClassDeclaration {
+            StringTable::Handle name;
+            std::vector<Declaration> members;
+        };
+        struct ParameterDeclaration {
+            StringTable::Handle name;
+        };
+        struct FunctionDeclaration {
+            std::vector<ParameterDeclaration> parameters;
+            std::vector<std::vector<Declaration>> scopes;
+        };
+
+        bool is_declaration_enviroment(const Declaration& declaration) {
+            return std::holds_alternative<GlobalDeclaration>(declaration) || std::holds_alternative<ClassDeclaration>(declaration) || std::holds_alternative<FunctionDeclaration>(declaration);
+        }
+
+        // maybe two-way connection with declaration tree?
+
+        // declare variable
+        void new_declare() {
+
+        }
+        // resolve variable
+        void new_resolve() {
+
+        }
+        // get binding for resolved varaible
+        void new_get_binding() {
+
+        };
+
+
+
         struct LocalBinding {
             std::int64_t local_idx;
         };
@@ -446,10 +493,10 @@ namespace bite {
             );
         }
 
-
         unordered_dense::map<std::size_t, Binding> bindings;
         unordered_dense::map<std::size_t, std::vector<Upvalue>> function_upvalues;
         unordered_dense::map<std::size_t, bool> is_declaration_captured;
+        unordered_dense::map<std::size_t, bool> class_declaratons;
 
     private:
         std::vector<Enviroment> enviroment_stack { GlobalEnviroment() };
