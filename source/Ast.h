@@ -54,6 +54,18 @@ using Stmt = std::variant<AstNode<struct VarStmt>, AstNode<struct ExprStmt>, Ast
                                      struct InvalidStmt>>;
 
 
+struct LocalDeclarationInfo {
+    Stmt* declaration;
+    std::int64_t idx;
+    bool is_captured;
+};
+
+struct GlobalDeclarationInfo {
+    Stmt* declaration;
+};
+
+using DeclarationInfo = std::variant<LocalDeclarationInfo, GlobalDeclarationInfo>;
+
 
 struct NoBinding {};
 struct LocalBinding {
@@ -78,40 +90,17 @@ struct PropertyBinding {
 using Binding = std::variant<NoBinding, LocalBinding, GlobalBinding, UpvalueBinding, ParameterBinding, MemberBinding, PropertyBinding>;
 
 struct Local {
-    int64_t idx;
+    LocalDeclarationInfo* declaration;
     StringTable::Handle name;
 };
 
 struct Locals {
     int64_t locals_count = 0;
     std::vector<std::vector<Local>> scopes;
-    // LocalBinding binding() {
-    //     return LocalBinding(locals_count++);
-    // }
-
-    bool declare(StringTable::Handle name) {
-        if (std::ranges::any_of(scopes.back(), [name](const Local& local) {return local.name == name;})) {
-            return false;
-        }
-        scopes.back().push_back(Local {.idx = locals_count++, .name = name});
-        return true;
-    }
-
-    std::optional<Local> get(StringTable::Handle name) {
-        for (auto& scope : scopes | std::views::reverse) {
-            auto it = std::ranges::find(scope, name, &Local::name);
-            if (it != scope.end()) {
-                return *it;
-            }
-        }
-        return {};
-    }
 };
 
-
-
 struct GlobalEnviroment {
-    bite::unordered_dense::set<StringTable::Handle> globals;
+    bite::unordered_dense::map<StringTable::Handle, GlobalDeclarationInfo*> globals;
     Locals locals;
 };
 
@@ -235,7 +224,7 @@ struct FunctionStmt {
 struct VarStmt {
     Token name;
     std::optional<Expr> value;
-    Binding binding = NoBinding();
+    DeclarationInfo declaration_info;
 };
 
 struct ExprStmt {
