@@ -58,6 +58,7 @@ namespace bite {
 
         void super_expr(const AstNode<SuperExpr>& expr);
         void object_expr(AstNode<ObjectExpr>& expr);
+        void trait_declaration(AstNode<TraitStmt>& stmt);
 
 
         using Node = std::variant<StmtPtr, ExprPtr>;
@@ -130,6 +131,29 @@ namespace bite {
             env.members[name] = attributes;
         }
 
+
+        void declare_in_trait_enviroment(
+            TraitEnviroment& env,
+            StringTable::Handle name,
+            const bitflags<ClassAttributes>& attributes
+        ) {
+            if (env.members.contains(name)) {
+                auto& member_attr = env.members[name];
+                if (member_attr[ClassAttributes::SETTER] && !member_attr[ClassAttributes::GETTER] && !attributes[
+                    ClassAttributes::SETTER] && attributes[ClassAttributes::GETTER]) {
+                    member_attr += ClassAttributes::GETTER;
+                    return;
+                    }
+                if (member_attr[ClassAttributes::GETTER] && !member_attr[ClassAttributes::SETTER] && !attributes[
+                    ClassAttributes::GETTER] && attributes[ClassAttributes::SETTER]) {
+                    member_attr += ClassAttributes::SETTER;
+                    return;
+                    }
+                emit_message(Logger::Level::error, "member name conflict", "here");
+            }
+            env.members[name] = attributes;
+        }
+
         void declare_in_global_enviroment(GlobalEnviroment& env, StringTable::Handle name, StmtPtr declaration) {
             if (env.locals.scopes.empty()) {
                 if (env.globals.contains(name)) {
@@ -195,6 +219,19 @@ namespace bite {
             return nullptr;
         }
 
+        TraitEnviroment* current_trait_enviroment() {
+            for (auto node : node_stack | std::views::reverse) {
+                if (std::holds_alternative<StmtPtr>(node)) {
+                    auto stmt = std::get<StmtPtr>(node);
+                    if (std::holds_alternative<AstNode<TraitStmt>*>(stmt)) {
+                        auto* klass = std::get<AstNode<TraitStmt>*>(stmt);
+                        return &(*klass)->enviroment;
+                    }
+                }
+            }
+            return nullptr;
+        }
+
         // TODO: refactor!
         void declare_in_outer(StringTable::Handle name, StmtPtr declaration) {
             bool skipped = false;
@@ -251,6 +288,16 @@ namespace bite {
             }
             return {};
         }
+
+        std::optional<Binding> get_binding_in_trait_enviroment(const TraitEnviroment& env, StringTable::Handle name) {
+            for (const auto& member : env.members | std::views::keys) {
+                if (member == name) {
+                    return MemberBinding { member };
+                }
+            }
+            return {};
+        }
+
 
         static std::optional<Binding> get_binding_in_global_enviroment(
             const GlobalEnviroment& env,
@@ -355,6 +402,12 @@ namespace bite {
                     if (std::holds_alternative<AstNode<ClassStmt>*>(stmt)) {
                         auto& klass = std::get<AstNode<ClassStmt>*>(stmt);
                         if (auto binding = get_binding_in_class_enviroment((*klass)->enviroment, name)) {
+                            return std::move(binding.value());
+                        }
+                    }
+                    if (std::holds_alternative<AstNode<TraitStmt>*>(stmt)) {
+                        auto& trait = std::get<AstNode<TraitStmt>*>(stmt);
+                        if (auto binding = get_binding_in_trait_enviroment((*trait)->enviroment, name)) {
                             return std::move(binding.value());
                         }
                     }

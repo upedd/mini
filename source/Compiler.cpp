@@ -917,10 +917,10 @@ void Compiler::object_statement(const AstNode<ObjectStmt>& stmt) {
 }
 
 void Compiler::trait_statement(const AstNode<TraitStmt>& stmt) {
-    // std::string name = *stmt.name.string;
-    // uint8_t name_constanst = current_function()->add_constant(name);
-    //
-    // emit(OpCode::TRAIT, name_constanst);
+    std::string name = *stmt->name.string;
+    uint8_t name_constanst = current_function()->add_constant(name);
+    emit(OpCode::TRAIT, name_constanst);
+
     // current_scope().define(name);
     // // non-expression scopes!
     // begin_scope(ScopeType::CLASS, name);
@@ -1020,6 +1020,15 @@ void Compiler::trait_statement(const AstNode<TraitStmt>& stmt) {
     //     emit(OpCode::TRAIT_METHOD, method_name_constant);
     //     emit(method.attributes.to_ullong()); // check!
     // }
+    for (const auto& method : stmt->methods) {
+        if (!method.attributes[ClassAttributes::ABSTRACT]) {
+            function(method.function, FunctionType::METHOD);
+        }
+        int method_name_constant = current_function()->add_constant(*method.function->name.string);
+        emit(OpCode::TRAIT_METHOD, method_name_constant);
+        emit(method.attributes.to_ullong()); // check!
+    }
+
     //
     // // shadowing requierments?
     // for (auto& requierment : requirements) {

@@ -165,6 +165,12 @@ struct ClassEnviroment {
     ClassEnviroment* class_object_enviroment = nullptr;
 };
 
+// Could it be just an class enviroment?
+// Then it could easily support object for traits if we wanted it?
+struct TraitEnviroment {
+    bite::unordered_dense::map<StringTable::Handle, bitflags<ClassAttributes>> members;
+};
+
 class Ast {
 public:
     std::vector<Stmt> statements;
@@ -344,6 +350,7 @@ struct TraitStmt {
     std::vector<Field> fields;
     std::vector<AstNode<UsingStmt>> using_stmts;
     DeclarationInfo info;
+    TraitEnviroment enviroment;
 };
 
 struct UsingStmtItem {

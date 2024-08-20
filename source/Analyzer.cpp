@@ -493,6 +493,88 @@ void bite::Analyzer::object_expr(AstNode<ObjectExpr>& expr) {
     }
 }
 
+void bite::Analyzer::trait_declaration(AstNode<TraitStmt>& stmt) {
+    declare(stmt->name.string, &stmt);
+    auto* env = current_trait_enviroment();
+    unordered_dense::set<StringTable::Handle> requirements; // TODO: should contain attr as well i guess?
+    for (auto& using_stmt : stmt->using_stmts) {
+        for (auto& item : using_stmt->items) {
+            // Overlap with class
+            // TODO: better error messages, refactor?
+            auto binding = resolve_without_upvalues(item.name.string);
+            AstNode<TraitStmt>* item_trait = nullptr;
+            if (auto* global = std::get_if<GlobalBinding>(&binding)) {
+                if (std::holds_alternative<AstNode<TraitStmt>*>(global->info->declaration)) {
+                    item_trait = std::get<AstNode<TraitStmt>*>(global->info->declaration);
+                } else {
+                    emit_message(
+                        Logger::Level::error,
+                        "using item must be of trait type",
+                        "does not point to trait type"
+                    );
+                }
+            } else if (auto* local = std::get_if<LocalBinding>(&binding)) {
+                if (std::holds_alternative<AstNode<TraitStmt>*>(local->info->declaration)) {
+                    item_trait = std::get<AstNode<TraitStmt>*>(local->info->declaration);
+                } else {
+                    emit_message(
+                        Logger::Level::error,
+                        "using item must be of trait type",
+                        "does not point to trait type"
+                    );
+                }
+            } else {
+                emit_message(
+                    Logger::Level::error,
+                    "Trait must be a local or global variable",
+                    "is not a local or global variable"
+                );
+            }
+
+            // TODO: prob refactor?
+            for (auto& [field_name, field_attr] : (*item_trait)->enviroment.members) {
+                //check if excluded
+                bool is_excluded = false;
+                // possibly use some ranges here
+                for (auto& exclusion : item.exclusions) {
+                    if (exclusion.string == field_name) {
+                        is_excluded = true;
+                        break;
+                    }
+                }
+                if (is_excluded || field_attr[ClassAttributes::ABSTRACT]) {
+                    requirements.insert(field_name);
+                    // warn about useless exclude?
+                    continue;
+                }
+                // should aliasing methods that are requierments be allowed?
+                StringTable::Handle aliased_name = field_name;
+                for (auto& [before, after] : item.aliases) {
+                    if (before.string == field_name) {
+                        aliased_name = after.string;
+                        break;
+                    }
+                }
+                declare_in_trait_enviroment(*env, aliased_name, field_attr);
+            }
+        }
+    }
+
+    for (auto& field : stmt->fields) {
+        declare_in_trait_enviroment(*env, field.variable->name.string, field.attributes);
+    }
+    // hoist methods
+    for (auto& method : stmt->methods) {
+        declare_in_trait_enviroment(*env, method.function->name.string, method.attributes);
+    }
+    for (auto& method : stmt->methods) {
+        node_stack.emplace_back(&method.function);
+        function(method.function);
+        node_stack.pop_back();
+    }
+    // TODO: there was some requirements section here?
+}
+
 void bite::Analyzer::visit_stmt(Stmt& statement) {
     // TODO: refactor?
     std::visit([this](auto& stmt) { node_stack.emplace_back(&stmt); }, statement);
@@ -504,7 +586,7 @@ void bite::Analyzer::visit_stmt(Stmt& statement) {
             [this](AstNode<ClassStmt>& stmt) { class_declaration(stmt); },
             [this](AstNode<NativeStmt>& stmt) { native_declaration(stmt); },
             [this](AstNode<ObjectStmt>& stmt) { object_declaration(stmt); },
-            [this](AstNode<TraitStmt>& stmt) {},
+            [this](AstNode<TraitStmt>& stmt) { trait_declaration(stmt); },
             // TODO: implement
             [this](AstNode<UsingStmt>&) {},
             // TODO: implement
