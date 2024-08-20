@@ -53,15 +53,25 @@ using Stmt = std::variant<AstNode<struct VarStmt>, AstNode<struct ExprStmt>, Ast
                               struct ClassStmt>, AstNode<struct NativeStmt>, AstNode<struct ObjectStmt>, AstNode<struct
                               TraitStmt>, AstNode<struct UsingStmt>, AstNode<struct InvalidStmt>>;
 
+// TODO: this feels wrong...
+using ExprPtr = std::variant<AstNode<LiteralExpr>*, AstNode<StringLiteral>*, AstNode<UnaryExpr>*, AstNode<BinaryExpr>*,
+                             AstNode<VariableExpr>*, AstNode<CallExpr>*, AstNode<GetPropertyExpr>*, AstNode<SuperExpr>*,
+                             AstNode<BlockExpr>*, AstNode<IfExpr>*, AstNode<LoopExpr>*, AstNode<BreakExpr>*, AstNode<
+                                 ContinueExpr>*, AstNode<WhileExpr>*, AstNode<ForExpr>*, AstNode<ReturnExpr>*, AstNode<
+                                 ThisExpr>*, AstNode<ObjectExpr>*, AstNode<InvalidExpr>*>;
+
+using StmtPtr = std::variant<AstNode<VarStmt>*, AstNode<ExprStmt>*, AstNode<FunctionStmt>*, AstNode<ClassStmt>*, AstNode
+                             <NativeStmt>*, AstNode<ObjectStmt>*, AstNode<TraitStmt>*, AstNode<UsingStmt>*, AstNode<
+                                 InvalidStmt>*>;
 
 struct LocalDeclarationInfo {
-    Stmt* declaration;
+    StmtPtr declaration;
     std::int64_t idx;
     bool is_captured;
 };
 
 struct GlobalDeclarationInfo {
-    Stmt* declaration;
+    StmtPtr declaration;
     StringTable::Handle name;
 };
 

@@ -38,7 +38,7 @@ void bite::Analyzer::variable_declarataion(AstNode<VarStmt>& stmt) {
     if (stmt->value) {
         visit_expr(*stmt->value);
     }
-    declare(stmt->name.string, reinterpret_cast<Stmt*>(&stmt)); // TODO is it safe???
+    declare(stmt->name.string, &stmt); // TODO is it safe???
 }
 
 void bite::Analyzer::variable_expression(AstNode<VariableExpr>& expr) {
@@ -50,13 +50,13 @@ void bite::Analyzer::expression_statement(AstNode<ExprStmt>& stmt) {
 }
 
 void bite::Analyzer::function_declaration(AstNode<FunctionStmt>& stmt) {
-    declare_in_outer(stmt->name.string, reinterpret_cast<Stmt*>(&stmt));
+    declare_in_outer(stmt->name.string, &stmt);
     function(stmt);
 }
 
 void bite::Analyzer::function(AstNode<FunctionStmt>& stmt) {
     for (const auto& param : stmt->params) {
-        declare(param.string, reinterpret_cast<Stmt*>(&stmt));
+        declare(param.string, &stmt);
     }
     if (stmt->body) {
         visit_expr(*stmt->body);
@@ -64,11 +64,11 @@ void bite::Analyzer::function(AstNode<FunctionStmt>& stmt) {
 }
 
 void bite::Analyzer::native_declaration(AstNode<NativeStmt>& stmt) {
-    declare(stmt->name.string, reinterpret_cast<Stmt*>(&stmt));
+    declare(stmt->name.string, &stmt);
 }
 
 void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
-    declare_in_outer(stmt->name.string, reinterpret_cast<Stmt*>(&stmt));
+    declare_in_outer(stmt->name.string, &stmt);
     // TODO: superclasses
     // TODO: class validation!
     // TODO: using statement
@@ -82,20 +82,20 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
     }
 
     for (auto& field : stmt->body.fields) {
-        declare(field.variable->name.string, reinterpret_cast<Stmt*>(&stmt));
+        declare(field.variable->name.string, &stmt);
         if (field.variable->value) {
             visit_expr(*field.variable->value);
         }
     }
     // hoist methods
     for (const auto& method : stmt->body.methods) {
-        declare(method.function->name.string, reinterpret_cast<Stmt*>(&stmt));
+        declare(method.function->name.string, &stmt);
     }
     for (auto& method : stmt->body.methods) {
         // TODO: refactor!
-        //node_stack.emplace_back(Node(reinterpret_cast<ClassStmt>(&method.function)));
+        node_stack.emplace_back(&method.function);
         function(method.function);
-        //node_stack.pop_back();
+        node_stack.pop_back();
     }
 }
 
@@ -193,7 +193,8 @@ void bite::Analyzer::this_expr(AstNode<ThisExpr>& /*unused*/) {
 }
 
 void bite::Analyzer::visit_stmt(Stmt& statement) {
-    node_stack.emplace_back(&statement);
+    // TODO: refactor?
+    std::visit([this](auto& stmt) { node_stack.emplace_back(&stmt); }, statement);
     std::visit(
         overloaded {
             [this](AstNode<VarStmt>& stmt) { variable_declarataion(stmt); },
@@ -215,7 +216,7 @@ void bite::Analyzer::visit_stmt(Stmt& statement) {
 }
 
 void bite::Analyzer::visit_expr(Expr& expression) {
-    node_stack.emplace_back(&expression);
+    std::visit([this](auto& expr) { node_stack.emplace_back(&expr); }, expression);
     std::visit(
         overloaded {
             [this](AstNode<LiteralExpr>&) {},

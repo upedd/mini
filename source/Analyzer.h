@@ -56,29 +56,28 @@ namespace bite {
         void this_expr(AstNode<ThisExpr>& expr);
 
 
-        using Node = std::variant<Stmt*, Expr*>;
+        using Node = std::variant<StmtPtr, ExprPtr>;
 
         // TODO: mess?
-        DeclarationInfo* set_declaration_info(Stmt* statement, DeclarationInfo info) {
-            Stmt& ref = *statement;
+        DeclarationInfo* set_declaration_info(StmtPtr statement, DeclarationInfo info) {
             return std::visit(
                 overloaded {
-                    [info](AstNode<VarStmt>& stmt) -> DeclarationInfo* { return &((*stmt).info = info); },
-                    [](AstNode<ExprStmt>&) -> DeclarationInfo* { return nullptr; },
-                    [info](AstNode<FunctionStmt>& stmt) -> DeclarationInfo* { return &((*stmt).info = info); },
-                    [info](AstNode<ClassStmt>& stmt) -> DeclarationInfo* { return &((*stmt).info = info); },
-                    [info](AstNode<NativeStmt>& stmt) -> DeclarationInfo* { return &((*stmt).info = info); },
-                    [info](AstNode<ObjectStmt>& stmt) -> DeclarationInfo* { return &((*stmt).info = info); },
-                    [info](AstNode<TraitStmt>& stmt) -> DeclarationInfo* { return &((*stmt).info = info); },
-                    [](AstNode<UsingStmt>&) -> DeclarationInfo* { return nullptr; },
-                    [](AstNode<InvalidStmt>&) -> DeclarationInfo* { return nullptr; }
+                    [info](AstNode<VarStmt>* stmt) -> DeclarationInfo* { return &((*stmt)->info = info); },
+                    [](AstNode<ExprStmt>*) -> DeclarationInfo* { return nullptr; },
+                    [info](AstNode<FunctionStmt>* stmt) -> DeclarationInfo* { return &((*stmt)->info = info); },
+                    [info](AstNode<ClassStmt>* stmt) -> DeclarationInfo* { return &((*stmt)->info = info); },
+                    [info](AstNode<NativeStmt>* stmt) -> DeclarationInfo* { return &((*stmt)->info = info); },
+                    [info](AstNode<ObjectStmt>* stmt) -> DeclarationInfo* { return &((*stmt)->info = info); },
+                    [info](AstNode<TraitStmt>* stmt) -> DeclarationInfo* { return &((*stmt)->info = info); },
+                    [](AstNode<UsingStmt>*) -> DeclarationInfo* { return nullptr; },
+                    [](AstNode<InvalidStmt>*) -> DeclarationInfo* { return nullptr; }
                 },
-                ref
+                statement
             );
         }
 
         // Or just store everything in ast should be smarter
-        void declare_in_function_enviroment(FunctionEnviroment& env, StringTable::Handle name, Stmt* declaration) {
+        void declare_in_function_enviroment(FunctionEnviroment& env, StringTable::Handle name, StmtPtr declaration) {
             if (env.locals.scopes.empty()) {
                 if (std::ranges::contains(env.parameters, name)) {
                     emit_message(Logger::Level::error, "duplicate parameter name", "here");
@@ -112,7 +111,7 @@ namespace bite {
             env.members.insert(name);
         }
 
-        void declare_in_global_enviroment(GlobalEnviroment& env, StringTable::Handle name, Stmt* declaration) {
+        void declare_in_global_enviroment(GlobalEnviroment& env, StringTable::Handle name, StmtPtr declaration) {
             if (env.locals.scopes.empty()) {
                 if (env.globals.contains(name)) {
                     emit_message(Logger::Level::error, "global variable redeclaration", "here");
@@ -143,18 +142,18 @@ namespace bite {
         }
 
         // declare variable
-        void declare(StringTable::Handle name, Stmt* declaration) {
+        void declare(StringTable::Handle name, StmtPtr declaration) {
             for (auto node : node_stack | std::views::reverse) {
-                if (std::holds_alternative<Stmt*>(node)) {
-                    auto* stmt = std::get<Stmt*>(node);
-                    if (std::holds_alternative<AstNode<FunctionStmt>>(*stmt)) {
-                        auto& function = std::get<AstNode<FunctionStmt>>(*stmt);
-                        declare_in_function_enviroment(function->enviroment, name, declaration);
+                if (std::holds_alternative<StmtPtr>(node)) {
+                    auto stmt = std::get<StmtPtr>(node);
+                    if (std::holds_alternative<AstNode<FunctionStmt>*>(stmt)) {
+                        auto* function = std::get<AstNode<FunctionStmt>*>(stmt);
+                        declare_in_function_enviroment((*function)->enviroment, name, declaration);
                         return;
                     }
-                    if (std::holds_alternative<AstNode<ClassStmt>>(*stmt)) {
-                        auto& klass = std::get<AstNode<ClassStmt>>(*stmt);
-                        declare_in_class_enviroment(klass->enviroment, name);
+                    if (std::holds_alternative<AstNode<ClassStmt>*>(stmt)) {
+                        auto* klass = std::get<AstNode<ClassStmt>*>(stmt);
+                        declare_in_class_enviroment((*klass)->enviroment, name);
                         return;
                     }
                 }
@@ -163,27 +162,27 @@ namespace bite {
         }
 
         // TODO: refactor!
-        void declare_in_outer(StringTable::Handle name, Stmt* declaration) {
+        void declare_in_outer(StringTable::Handle name, StmtPtr declaration) {
             bool skipped = false;
             for (auto node : node_stack | std::views::reverse) {
-                if (std::holds_alternative<Stmt*>(node)) {
-                    auto* stmt = std::get<Stmt*>(node);
-                    if (std::holds_alternative<AstNode<FunctionStmt>>(*stmt)) {
+                if (std::holds_alternative<StmtPtr>(node)) {
+                    auto stmt = std::get<StmtPtr>(node);
+                    if (std::holds_alternative<AstNode<FunctionStmt>*>(stmt)) {
                         if (!skipped) {
                             skipped = true;
                             continue;
                         }
-                        auto& function = std::get<AstNode<FunctionStmt>>(*stmt);
-                        declare_in_function_enviroment(function->enviroment, name, declaration);
+                        auto* function = std::get<AstNode<FunctionStmt>*>(stmt);
+                        declare_in_function_enviroment((*function)->enviroment, name, declaration);
                         return;
                     }
-                    if (std::holds_alternative<AstNode<ClassStmt>>(*stmt)) {
+                    if (std::holds_alternative<AstNode<ClassStmt>*>(stmt)) {
                         if (!skipped) {
                             skipped = true;
                             continue;
                         }
-                        auto& klass = std::get<AstNode<ClassStmt>>(*stmt);
-                        declare_in_class_enviroment(klass->enviroment, name);
+                        auto* klass = std::get<AstNode<ClassStmt>*>(stmt);
+                        declare_in_class_enviroment((*klass)->enviroment, name);
                         return;
                     }
                 }
@@ -232,7 +231,7 @@ namespace bite {
             const GlobalEnviroment& env,
             StringTable::Handle name
         ) {
-            for (const auto& [global_name, _] : env.globals) {
+            for (const auto& global_name : env.globals | std::views::keys) {
                 if (global_name == name) {
                     return GlobalBinding { global_name };
                 }
@@ -281,11 +280,11 @@ namespace bite {
         Binding resolve(StringTable::Handle name) {
             std::vector<std::reference_wrapper<FunctionEnviroment>> function_enviroments_visited;
             for (auto node : node_stack | std::views::reverse) {
-                if (std::holds_alternative<Stmt*>(node)) {
-                    auto* stmt = std::get<Stmt*>(node);
-                    if (std::holds_alternative<AstNode<FunctionStmt>>(*stmt)) {
-                        auto& function = std::get<AstNode<FunctionStmt>>(*stmt);
-                        if (auto binding = get_binding_in_function_enviroment(function->enviroment, name)) {
+                if (std::holds_alternative<StmtPtr>(node)) {
+                    auto stmt = std::get<StmtPtr>(node);
+                    if (std::holds_alternative<AstNode<FunctionStmt>*>(stmt)) {
+                        auto* function = std::get<AstNode<FunctionStmt>*>(stmt);
+                        if (auto binding = get_binding_in_function_enviroment((*function)->enviroment, name)) {
                             if (std::holds_alternative<LocalBinding>(*binding) && !function_enviroments_visited.
                                 empty()) {
                                 capture_local(std::get<LocalBinding>(*binding).info);
@@ -300,11 +299,11 @@ namespace bite {
 
                             return *binding;
                         }
-                        function_enviroments_visited.emplace_back(function->enviroment);
+                        function_enviroments_visited.emplace_back((*function)->enviroment);
                     }
-                    if (std::holds_alternative<AstNode<ClassStmt>>(*stmt)) {
-                        auto& klass = std::get<AstNode<ClassStmt>>(*stmt);
-                        if (auto binding = get_binding_in_class_enviroment(klass->enviroment, name)) {
+                    if (std::holds_alternative<AstNode<ClassStmt>*>(stmt)) {
+                        auto& klass = std::get<AstNode<ClassStmt>*>(stmt);
+                        if (auto binding = get_binding_in_class_enviroment((*klass)->enviroment, name)) {
                             return *binding;
                         }
                     }
@@ -330,11 +329,11 @@ namespace bite {
 
         bool is_in_loop() {
             for (auto node : node_stack) {
-                if (std::holds_alternative<Expr*>(node)) {
-                    auto* expr = std::get<Expr*>(node);
-                    if (std::holds_alternative<AstNode<LoopExpr>>(*expr) || std::holds_alternative<AstNode<WhileExpr>>(
-                        *expr
-                    ) || std::holds_alternative<AstNode<ForExpr>>(*expr)) {
+                if (std::holds_alternative<ExprPtr>(node)) {
+                    auto expr = std::get<ExprPtr>(node);
+                    if (std::holds_alternative<AstNode<LoopExpr>*>(expr) || std::holds_alternative<AstNode<WhileExpr>*>(
+                        expr
+                    ) || std::holds_alternative<AstNode<ForExpr>*>(expr)) {
                         return true;
                     }
                 }
@@ -343,8 +342,8 @@ namespace bite {
         }
 
         static bool node_is_function(const Node& node) {
-            return std::holds_alternative<Stmt*>(node) && std::holds_alternative<AstNode<FunctionStmt>>(
-                *std::get<Stmt*>(node)
+            return std::holds_alternative<StmtPtr>(node) && std::holds_alternative<AstNode<FunctionStmt>*>(
+                std::get<StmtPtr>(node)
             );
         }
 
@@ -363,25 +362,25 @@ namespace bite {
                 if (node_is_function(node)) {
                     break;
                 }
-                if (std::holds_alternative<Expr*>(node)) {
-                    auto* expr = std::get<Expr*>(node);
-                    if (std::holds_alternative<AstNode<BlockExpr>>(*expr)) {
-                        auto label = std::get<AstNode<BlockExpr>>(*expr)->label;
+                if (std::holds_alternative<ExprPtr>(node)) {
+                    auto expr = std::get<ExprPtr>(node);
+                    if (std::holds_alternative<AstNode<BlockExpr>*>(expr)) {
+                        auto label = (*std::get<AstNode<BlockExpr>*>(expr))->label;
                         if (label && label->string == label_name) {
                             return true;
                         }
-                    } else if (std::holds_alternative<AstNode<WhileExpr>>(*expr)) {
-                        auto label = std::get<AstNode<WhileExpr>>(*expr)->label;
+                    } else if (std::holds_alternative<AstNode<WhileExpr>*>(expr)) {
+                        auto label = (*std::get<AstNode<WhileExpr>*>(expr))->label;
                         if (label && label->string == label_name) {
                             return true;
                         }
-                    } else if (std::holds_alternative<AstNode<LoopExpr>>(*expr)) {
-                        auto label = std::get<AstNode<LoopExpr>>(*expr)->label;
+                    } else if (std::holds_alternative<AstNode<LoopExpr>*>(expr)) {
+                        auto label = (*std::get<AstNode<LoopExpr>*>(expr))->label;
                         if (label && label->string == label_name) {
                             return true;
                         }
-                    } else if (std::holds_alternative<AstNode<ForExpr>>(*expr)) {
-                        auto label = std::get<AstNode<ForExpr>>(*expr)->label;
+                    } else if (std::holds_alternative<AstNode<ForExpr>*>(expr)) {
+                        auto label = (*std::get<AstNode<ForExpr>*>(expr))->label;
                         if (label && label->string == label_name) {
                             return true;
                         }
@@ -393,8 +392,8 @@ namespace bite {
 
         bool is_in_class() {
             for (auto node : node_stack) {
-                if (std::holds_alternative<Stmt*>(node) && std::holds_alternative<AstNode<ClassStmt>>(
-                    *std::get<Stmt*>(node)
+                if (std::holds_alternative<StmtPtr>(node) && std::holds_alternative<AstNode<ClassStmt>*>(
+                    std::get<StmtPtr>(node)
                 )) {
                     return true;
                 }
@@ -405,10 +404,10 @@ namespace bite {
         void with_scope(const auto& fn) {
             for (auto node : node_stack | std::views::reverse) {
                 if (node_is_function(node)) {
-                    auto& function = std::get<AstNode<FunctionStmt>>(*std::get<Stmt*>(node));
-                    function->enviroment.locals.scopes.emplace_back();
+                    auto* function = std::get<AstNode<FunctionStmt>*>(std::get<StmtPtr>(node));
+                    (*function)->enviroment.locals.scopes.emplace_back();
                     fn();
-                    function->enviroment.locals.scopes.pop_back();
+                    (*function)->enviroment.locals.scopes.pop_back();
                     return;
                 }
             }
