@@ -311,6 +311,8 @@ struct ClassStmt {
     bool is_abstract = false;
     DeclarationInfo info;
     ClassEnviroment enviroment;
+    Binding class_binding = NoBinding(); // TODO: maybe elimanate the need for this
+    Binding superclass_binding = NoBinding();
 };
 
 struct NativeStmt {

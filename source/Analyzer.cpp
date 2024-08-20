@@ -69,6 +69,7 @@ void bite::Analyzer::native_declaration(AstNode<NativeStmt>& stmt) {
 
 void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
     declare_in_outer(stmt->name.string, &stmt);
+    stmt->class_binding = resolve(stmt->name.string); // TODO: elimnate the need for this
     auto* env = current_class_enviroment(); // assert non-null
     // TODO: superclasses
     // TODO: class validation!
@@ -79,17 +80,19 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
     // TODO: init should be an reserved keyword
     // TODO: default constructor should capture upvalues
     unordered_dense::map<StringTable::Handle, bitflags<ClassAttributes>> overrideable_members;
+    AstNode<ClassStmt>* superclass = nullptr;
     if (stmt->super_class) {
-        auto binding = resolve(stmt->super_class->string);
+        stmt->superclass_binding = resolve(stmt->super_class->string);
         // TODO: refactor? better error message?
-        AstNode<ClassStmt>* superclass = nullptr;
-        if (auto* global = std::get_if<GlobalBinding>(&binding)) {
+        // TODO: upvalue binding!
+
+        if (auto* global = std::get_if<GlobalBinding>(&stmt->superclass_binding)) {
             if (std::holds_alternative<AstNode<ClassStmt>*>(global->info->declaration)) {
                 superclass = std::get<AstNode<ClassStmt>*>(global->info->declaration);
             } else {
                 emit_message(Logger::Level::error, "superclass must be of class type", "does not point to class type");
             }
-        } else if (auto* local = std::get_if<LocalBinding>(&binding)) {
+        } else if (auto* local = std::get_if<LocalBinding>(&stmt->superclass_binding)) {
             if (std::holds_alternative<AstNode<ClassStmt>*>(local->info->declaration)) {
                 superclass = std::get<AstNode<ClassStmt>*>(local->info->declaration);
             } else {
@@ -112,15 +115,46 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
             }
         }
     }
-
+    // TODO: better error messages
+    if (superclass && (*superclass)->body.constructor && !(*superclass)->body.constructor->parameters.empty() && !stmt->body.constructor) {
+        emit_message(
+            Logger::Level::error,
+            "subclass must contain constructor in order to call superclass constructor",
+            ""
+        );
+    }
+    if (!superclass && stmt->body.constructor->has_super) {
+        emit_message(
+            Logger::Level::error,
+            "no superclass constructor to call",
+            ""
+        );
+    }
     if (stmt->body.constructor) {
+        if (superclass && (*superclass)->body.constructor) {
+            if (!(*superclass)->body.constructor->parameters.empty() && !stmt->body.constructor->has_super) {
+                emit_message(Logger::Level::error, "subclass constructor must call superclass constructor", "here");
+            }
+            if (stmt->body.constructor->super_arguments.size() != (*superclass)->body.constructor->parameters.size()) {
+                emit_message(
+                    Logger::Level::error,
+                    std::format(
+                        "expected {} arguments, but got {}.",
+                        (*superclass)->body.constructor->parameters.size(),
+                        stmt->body.constructor->super_arguments.size()
+                    ),
+                    "here"
+                );
+            }
+        }
+
         visit_expr(stmt->body.constructor->body);
     }
 
     for (auto& field : stmt->body.fields) {
         // TODO: better error messages!
         if (overrideable_members.contains(field.variable->name.string)) {
-            if (field.attributes[ClassAttributes::OVERRIDE]) {
+            if (!field.attributes[ClassAttributes::OVERRIDE]) {
                 emit_message(Logger::Level::error, "member should override explicitly", "add \"overrdie\" attribute");
             }
             overrideable_members.erase(field.variable->name.string);
@@ -136,7 +170,7 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
     for (const auto& method : stmt->body.methods) {
         // TODO: deduplicate
         if (overrideable_members.contains(method.function->name.string)) {
-            if (method.attributes[ClassAttributes::OVERRIDE]) {
+            if (!method.attributes[ClassAttributes::OVERRIDE]) {
                 emit_message(Logger::Level::error, "member should override explicitly", "add \"overrdie\" attribute");
             }
             overrideable_members.erase(method.function->name.string);

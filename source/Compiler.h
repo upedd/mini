@@ -208,8 +208,7 @@ private:
     void constructor(
         const Constructor& stmt,
         const std::vector<Field>& fields,
-        bool has_superclass,
-        int superclass_arguments_count
+        bool has_superclass
     );
 
     void default_constructor(const std::vector<Field>& fields, bool has_superclass);

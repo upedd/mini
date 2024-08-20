@@ -507,8 +507,7 @@ void Compiler::function(const AstNode<FunctionStmt>& stmt, FunctionType type) {
 void Compiler::constructor(
     const Constructor& stmt,
     const std::vector<Field>& fields,
-    bool has_superclass,
-    int superclass_arguments_count
+    bool has_superclass
 ) {
     // refactor: tons of overlap with function generator
     auto* function = new Function("constructor", stmt.parameters.size());
@@ -517,7 +516,20 @@ void Compiler::constructor(
     with_context(
         function,
         FunctionType::CONSTRUCTOR,
-        [&fields, this, &stmt] {
+        [&fields, this, &stmt, has_superclass] {
+            if (stmt.has_super) {
+                for (const Expr& expr : stmt.super_arguments) {
+                    visit_expr(expr);
+                }
+                // maybe better way to do this instead of this superinstruction?
+                emit(OpCode::CALL_SUPER_CONSTRUCTOR, stmt.super_arguments.size());
+                emit(OpCode::POP); // discard constructor response
+            } else if (has_superclass && stmt.super_arguments.empty()) {
+                // default superclass construct
+                emit(OpCode::CALL_SUPER_CONSTRUCTOR, stmt.super_arguments.size());
+                emit(OpCode::POP); // discard constructor response
+            }
+
             // default initialize
             for (const auto& field : fields) {
                 // possibly desugar
@@ -615,7 +627,12 @@ void Compiler::default_constructor(const std::vector<Field>& fields, bool has_su
     with_context(
         function,
         FunctionType::CONSTRUCTOR,
-        [&fields, this] {
+        [&fields, this, has_superclass] {
+            if (has_superclass) {
+                // default superclass construct
+                emit(OpCode::CALL_SUPER_CONSTRUCTOR, 0);
+                emit(OpCode::POP); // discard constructor response
+            }
             for (const auto& field : fields) {
                 // possibly desugar
                 if (field.attributes[ClassAttributes::ABSTRACT]) {
@@ -1159,6 +1176,13 @@ void Compiler::class_declaration(const AstNode<ClassStmt>& stmt) {
     emit(OpCode::CLASS, name_constant);
     define_variable(stmt->info);
 
+    if (stmt->super_class) {
+        emit_get_variable(stmt->superclass_binding);
+        emit_get_variable(stmt->class_binding);
+        emit(OpCode::INHERIT);
+        emit(OpCode::POP);
+    }
+
     for (const auto& field : stmt->body.fields) {
         std::string field_name = *field.variable->name.string;
         int field_constant = current_function()->add_constant(field_name);
@@ -1193,32 +1217,24 @@ void Compiler::class_declaration(const AstNode<ClassStmt>& stmt) {
     //     stmt.is_abstract
     // );
     //
-    // if (stmt.body.constructor) {
-    //     current_scope().constructor_argument_count = stmt.body.constructor->parameters.size();
-    //     bool has_super_class = static_cast<bool>(stmt.super_class);
-    //     constructor(
-    //         *stmt.body.constructor,
-    //         stmt.body.fields,
-    //         has_super_class,
-    //         has_super_class
-    //             ? current_context().resolved_classes[*stmt.super_class->string].constructor_argument_count
-    //             : 0
-    //     );
-    // } else {
-    //     if (stmt.super_class && current_context().resolved_classes[*stmt.super_class->string].constructor_argument_count
-    //         != 0) {
-    //         assert(false && "Class must implement constructor because it needs to call superclass constructor");
-    //     }
-    //     default_constructor(stmt.body.fields, static_cast<bool>(stmt.super_class));
-    // }
     if (stmt->body.constructor) {
-        // cur().constructor_argument_count = stmt.body.constructor->parameters.size();
-        //bool has_super_class = static_cast<bool>(stmt.super_class);
-        // TODO: support inheritance
-        constructor(*stmt->body.constructor, stmt->body.fields, false, 0);
+        bool has_super_class = static_cast<bool>(stmt->super_class);
+        constructor(
+            *stmt->body.constructor,
+            stmt->body.fields,
+            has_super_class
+        );
     } else {
         default_constructor(stmt->body.fields, static_cast<bool>(stmt->super_class));
     }
+    // if (stmt->body.constructor) {
+    //     // cur().constructor_argument_count = stmt.body.constructor->parameters.size();
+    //     //bool has_super_class = static_cast<bool>(stmt.super_class);
+    //     // TODO: support inheritance
+    //     constructor(*stmt->body.constructor, stmt->body.fields, false, 0);
+    // } else {
+    //     default_constructor(stmt->body.fields, static_cast<bool>(stmt->super_class));
+    // }
 
     emit(OpCode::CONSTRUCTOR);
     //emit(OpCode::POP);
