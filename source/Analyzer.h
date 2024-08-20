@@ -235,13 +235,18 @@ namespace bite {
             return {};
         }
 
-        static std::optional<Binding> get_binding_in_class_enviroment(
-            const ClassEnviroment& env,
-            StringTable::Handle name
-        ) {
+        std::optional<Binding> get_binding_in_class_enviroment(const ClassEnviroment& env, StringTable::Handle name) {
             for (const auto& member : env.members | std::views::keys) {
                 if (member == name) {
                     return MemberBinding { member };
+                }
+            }
+            if (env.class_object_enviroment) {
+                for (const auto& member : env.class_object_enviroment->members | std::views::keys) {
+                    if (member == name) {
+                        // TODO: disallow defining anything with class name inside of class otherwise this will not work
+                        return ClassObjectBinding { .class_binding = resolve(env.class_name), .name = member };
+                    }
                 }
             }
             return {};
@@ -304,19 +309,19 @@ namespace bite {
                     if (std::holds_alternative<AstNode<FunctionStmt>*>(stmt)) {
                         auto* function = std::get<AstNode<FunctionStmt>*>(stmt);
                         if (auto binding = get_binding_in_function_enviroment((*function)->enviroment, name)) {
-                            return *binding;
+                            return std::move(binding.value());
                         }
                     }
                     if (std::holds_alternative<AstNode<ClassStmt>*>(stmt)) {
                         auto& klass = std::get<AstNode<ClassStmt>*>(stmt);
                         if (auto binding = get_binding_in_class_enviroment((*klass)->enviroment, name)) {
-                            return *binding;
+                            return std::move(binding.value());
                         }
                     }
                 }
             }
             if (auto binding = get_binding_in_global_enviroment(ast->enviroment, name)) {
-                return *binding;
+                return std::move(binding.value());
             }
             emit_message(Logger::Level::error, "unresolved variable: " + std::string(*name), "here");
             return NoBinding();
@@ -343,14 +348,14 @@ namespace bite {
                                     };
                             }
 
-                            return *binding;
+                            return std::move(binding.value());
                         }
                         function_enviroments_visited.emplace_back((*function)->enviroment);
                     }
                     if (std::holds_alternative<AstNode<ClassStmt>*>(stmt)) {
                         auto& klass = std::get<AstNode<ClassStmt>*>(stmt);
                         if (auto binding = get_binding_in_class_enviroment((*klass)->enviroment, name)) {
-                            return *binding;
+                            return std::move(binding.value());
                         }
                     }
                 } else if (std::holds_alternative<ExprPtr>(node)) {
@@ -358,7 +363,7 @@ namespace bite {
                     if (std::holds_alternative<AstNode<ObjectExpr>*>(expr)) {
                         auto& object = std::get<AstNode<ObjectExpr>*>(expr);
                         if (auto binding = get_binding_in_class_enviroment((*object)->class_enviroment, name)) {
-                            return *binding;
+                            return std::move(binding.value());
                         }
                     }
                 }
@@ -375,7 +380,7 @@ namespace bite {
                         };
                 }
 
-                return *binding;
+                return std::move(binding.value());
             }
             emit_message(Logger::Level::error, "unresolved variable: " + std::string(*name), "here");
             return NoBinding();

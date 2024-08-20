@@ -70,6 +70,14 @@ void bite::Analyzer::native_declaration(AstNode<NativeStmt>& stmt) {
 void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
     declare(stmt->name.string, &stmt);
     auto* env = current_class_enviroment(); // assert non-null
+    env->class_name = stmt->name.string;
+    if (stmt->body.class_object) {
+        env->class_object_enviroment = &(*stmt->body.class_object)->class_enviroment;
+        node_stack.emplace_back(&(*stmt->body.class_object));
+        object_expr(*stmt->body.class_object);
+        node_stack.pop_back();
+    }
+
     // TODO: using statement
     // TODO: class object
     // TODO: getters and setters
@@ -112,6 +120,7 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
     if (!superclass && stmt->body.constructor && stmt->body.constructor->has_super) {
         emit_message(Logger::Level::error, "no superclass constructor to call", "");
     }
+    // TODO: abstract constructor??
     if (stmt->body.constructor) { // TODO: always must have constructor!
         if (superclass && (*superclass)->body.constructor) {
             if (!(*superclass)->body.constructor->function->params.empty() && !stmt->body.constructor->has_super) {
@@ -139,6 +148,10 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
         }
         // visit in this env to support upvalues!
         for (auto& field : stmt->body.fields) {
+            if (field.attributes[ClassAttributes::ABSTRACT] && !stmt->is_abstract) {
+                emit_message(Logger::Level::error, "abstract member inside of non-abstract class", "here");
+            }
+
             // TODO: better error messages!
             if (overrideable_members.contains(field.variable->name.string)) {
                 if (!field.attributes[ClassAttributes::OVERRIDE]) {
@@ -167,6 +180,9 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
     // hoist methods
     for (const auto& method : stmt->body.methods) {
         // TODO: deduplicate
+        if (method.attributes[ClassAttributes::ABSTRACT] && !stmt->is_abstract) {
+            emit_message(Logger::Level::error, "abstract member inside of non-abstract class", "here");
+        }
         if (overrideable_members.contains(method.function->name.string)) {
             auto& member_attr = overrideable_members[method.function->name.string];
             auto& method_attr = method.attributes;
@@ -323,7 +339,9 @@ void bite::Analyzer::super_expr(const AstNode<SuperExpr>& /*unused*/) {
 void bite::Analyzer::object_expr(AstNode<ObjectExpr>& expr) {
     auto* env = current_class_enviroment(); // assert non-null
     // TODO: refactor!
-
+    if (expr->body.class_object) {
+        emit_message(Logger::Level::error, "nested object", "here");
+    }
     // TODO: using statement
     // TODO: class object
     // TODO: getters and setters
@@ -393,6 +411,9 @@ void bite::Analyzer::object_expr(AstNode<ObjectExpr>& expr) {
         }
         // visit in this env to support upvalues!
         for (auto& field : expr->body.fields) {
+            if (field.attributes[ClassAttributes::ABSTRACT]) {
+                emit_message(Logger::Level::error, "abstract member inside of an object", "here");
+            }
             // TODO: better error messages!
             if (overrideable_members.contains(field.variable->name.string)) {
                 if (!field.attributes[ClassAttributes::OVERRIDE]) {
@@ -420,6 +441,10 @@ void bite::Analyzer::object_expr(AstNode<ObjectExpr>& expr) {
 
     // hoist methods
     for (const auto& method : expr->body.methods) {
+        // TODO: abstract or fun before method with body in class deadlocks
+        if (method.attributes[ClassAttributes::ABSTRACT]) {
+            emit_message(Logger::Level::error, "abstract member inside of an object", "here");
+        }
         // TODO: deduplicate
         if (overrideable_members.contains(method.function->name.string)) {
             auto& member_attr = overrideable_members[method.function->name.string];

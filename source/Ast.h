@@ -78,6 +78,10 @@ struct GlobalDeclarationInfo {
 using DeclarationInfo = std::variant<LocalDeclarationInfo, GlobalDeclarationInfo>;
 
 
+
+using Binding = std::variant<struct NoBinding, struct LocalBinding, struct GlobalBinding, struct UpvalueBinding, struct ParameterBinding, struct MemberBinding,
+                             struct PropertyBinding, struct SuperBinding, struct ClassObjectBinding>;
+
 struct NoBinding {};
 
 struct LocalBinding {
@@ -99,6 +103,10 @@ struct ParameterBinding {
 struct MemberBinding {
     StringTable::Handle name;
 };
+struct ClassObjectBinding {
+    bite::box<Binding> class_binding; // performance overhead?
+    StringTable::Handle name;
+};
 
 struct PropertyBinding {
     StringTable::Handle property;
@@ -108,8 +116,6 @@ struct SuperBinding {
     StringTable::Handle property;
 };
 
-using Binding = std::variant<NoBinding, LocalBinding, GlobalBinding, UpvalueBinding, ParameterBinding, MemberBinding,
-                             PropertyBinding, SuperBinding>;
 
 struct Local {
     LocalDeclarationInfo* declaration;
@@ -154,7 +160,9 @@ enum class ClassAttributes: std::uint8_t {
 
 
 struct ClassEnviroment {
+    StringTable::Handle class_name; // TODO: temporary!
     bite::unordered_dense::map<StringTable::Handle, bitflags<ClassAttributes>> members;
+    ClassEnviroment* class_object_enviroment = nullptr;
 };
 
 class Ast {

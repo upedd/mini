@@ -504,11 +504,7 @@ void Compiler::function(const AstNode<FunctionStmt>& stmt, FunctionType type) {
     }
 }
 
-void Compiler::constructor(
-    const Constructor& stmt,
-    const std::vector<Field>& fields,
-    bool has_superclass
-) {
+void Compiler::constructor(const Constructor& stmt, const std::vector<Field>& fields, bool has_superclass) {
     // refactor: tons of overlap with function generator
     auto* function = new Function("constructor", stmt.function->params.size());
     functions.push_back(function);
@@ -908,11 +904,7 @@ void Compiler::object_expression(const AstNode<ObjectExpr>& expr) {
 
     if (expr->body.constructor) { // TODO: always must have constructor!
         bool has_super_class = static_cast<bool>(expr->super_class);
-        constructor(
-            *expr->body.constructor,
-            expr->body.fields,
-            has_super_class
-        );
+        constructor(*expr->body.constructor, expr->body.fields, has_super_class);
     }
 
     emit(OpCode::CONSTRUCTOR);
@@ -1053,8 +1045,7 @@ void Compiler::class_declaration(const AstNode<ClassStmt>& stmt) {
     std::string name = *stmt->name.string;
     uint8_t name_constant = current_function()->add_constant(name);
     if (stmt->body.class_object) {
-        std::unreachable(); // TODO
-        //visit_expr(*stmt->body.class_object);
+        object_expression(*stmt->body.class_object);
     } else {
         emit(OpCode::NIL);
         current_context().on_stack++;
@@ -1091,11 +1082,7 @@ void Compiler::class_declaration(const AstNode<ClassStmt>& stmt) {
 
     if (stmt->body.constructor) { // TODO: always must have constructor!
         bool has_super_class = static_cast<bool>(stmt->super_class);
-        constructor(
-            *stmt->body.constructor,
-            stmt->body.fields,
-            has_super_class
-        );
+        constructor(*stmt->body.constructor, stmt->body.fields, has_super_class);
     }
 
     emit(OpCode::CONSTRUCTOR);
@@ -1316,9 +1303,10 @@ void Compiler::emit_set_variable(const Binding& binding) {
             [this](const ParameterBinding& bind) {
                 emit(OpCode::SET, bind.idx + 1); // + 1 for the reserved receiver object
             },
-            // [this](const ClassObjectBinding) {
-            //     // TODO
-            // },
+            [this](const ClassObjectBinding& bind) {
+                emit_get_variable(*bind.class_binding);
+                emit(OpCode::SET_PROPERTY, current_function()->add_constant(*bind.name));
+            },
             [this](const PropertyBinding& bind) {
                 emit(OpCode::SET_PROPERTY, current_function()->add_constant(*bind.property));
             },
@@ -1354,9 +1342,10 @@ void Compiler::emit_get_variable(const Binding& binding) {
             [this](const ParameterBinding& bind) {
                 emit(OpCode::GET, bind.idx + 1); // + 1 for the reserved receiver object
             },
-            // [this](const bite::Analyzer::ClassObjectBinding) {
-            //     // TODO
-            // }
+            [this](const ClassObjectBinding& bind) {
+                emit_get_variable(*bind.class_binding);
+                emit(OpCode::GET_PROPERTY, current_function()->add_constant(*bind.name));
+            },
             [this](const PropertyBinding) {
                 // TODO
             },
