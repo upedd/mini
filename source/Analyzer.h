@@ -106,6 +106,15 @@ namespace bite {
 
         void declare_in_class_enviroment(ClassEnviroment& env, StringTable::Handle name, const bitflags<ClassAttributes>& attributes) {
             if (env.members.contains(name)) {
+                auto& member_attr = env.members[name];
+                if (member_attr[ClassAttributes::SETTER] && !member_attr[ClassAttributes::GETTER] && !attributes[ClassAttributes::SETTER] && attributes[ClassAttributes::GETTER]) {
+                    member_attr += ClassAttributes::GETTER;
+                    return;
+                }
+                if (member_attr[ClassAttributes::GETTER] && !member_attr[ClassAttributes::SETTER] && !attributes[ClassAttributes::GETTER] && attributes[ClassAttributes::SETTER]) {
+                    member_attr += ClassAttributes::SETTER;
+                    return;
+                }
                 emit_message(Logger::Level::error, "member name conflict", "here");
             }
             env.members[name] = attributes;
