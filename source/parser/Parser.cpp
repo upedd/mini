@@ -717,7 +717,11 @@ AstNode<ObjectExpr> Parser::object_expression() {
         }
     }
 
+    // TODO: validate consturctor across parser?? (or in analysis)
+
     StructureBody body = structure_body(object_token);
+    body.constructor->has_super = static_cast<bool>(superclass);
+    body.constructor->super_arguments = std::move(superclass_arguments);
 
     return ast.make_node<ObjectExpr>(std::move(body), superclass, std::move(superclass_arguments));
 }

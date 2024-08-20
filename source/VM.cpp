@@ -696,8 +696,8 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 break;
             }
             case OpCode::INHERIT: {
-                Class* superclass = dynamic_cast<Class*>(peek(1).get<Object*>());
-                Class* subclass = dynamic_cast<Class*>(peek(0).get<Object*>());
+                Class* superclass = dynamic_cast<Class*>(peek(0).get<Object*>());
+                Class* subclass = dynamic_cast<Class*>(peek(1).get<Object*>());
                 // for (auto &value: superclass->methods) {
                 //     if (value.second.is_private ||) continue;
                 //     subclass->methods.insert(value);

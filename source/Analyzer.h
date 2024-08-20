@@ -42,6 +42,7 @@ namespace bite {
         void function(AstNode<FunctionStmt>& stmt);
         void native_declaration(AstNode<NativeStmt>& stmt);
         void class_declaration(AstNode<ClassStmt>& box);
+        void object_declaration(AstNode<ObjectStmt>& stmt);
         void unary(AstNode<UnaryExpr>& expr);
         void binary(AstNode<BinaryExpr>& expr);
         void call(AstNode<CallExpr>& expr);
@@ -56,7 +57,7 @@ namespace bite {
         void this_expr(AstNode<ThisExpr>& expr);
 
         void super_expr(const AstNode<SuperExpr>& expr);
-        void object_expr(const AstNode<ObjectExpr>& expr);
+        void object_expr(AstNode<ObjectExpr>& expr);
 
 
         using Node = std::variant<StmtPtr, ExprPtr>;
@@ -169,11 +170,6 @@ namespace bite {
                         declare_in_function_enviroment((*function)->enviroment, name, declaration);
                         return;
                     }
-                    // if (std::holds_alternative<AstNode<ClassStmt>*>(stmt)) {
-                    //     auto* klass = std::get<AstNode<ClassStmt>*>(stmt);
-                    //     declare_in_class_enviroment((*klass)->enviroment, name);
-                    //     return;
-                    // }
                 }
             }
             declare_in_global_enviroment(ast->enviroment, name, declaration);
@@ -186,6 +182,13 @@ namespace bite {
                     if (std::holds_alternative<AstNode<ClassStmt>*>(stmt)) {
                         auto* klass = std::get<AstNode<ClassStmt>*>(stmt);
                         return &(*klass)->enviroment;
+                    }
+                }
+                if (std::holds_alternative<ExprPtr>(node)) {
+                    auto expr = std::get<ExprPtr>(node);
+                    if (std::holds_alternative<AstNode<ObjectExpr>*>(expr)) {
+                        auto* object = std::get<AstNode<ObjectExpr>*>(expr);
+                        return &(*object)->class_enviroment;
                     }
                 }
             }
@@ -207,15 +210,6 @@ namespace bite {
                         declare_in_function_enviroment((*function)->enviroment, name, declaration);
                         return;
                     }
-                    // if (std::holds_alternative<AstNode<ClassStmt>*>(stmt)) {
-                    //     if (!skipped) {
-                    //         skipped = true;
-                    //         continue;
-                    //     }
-                    //     auto* klass = std::get<AstNode<ClassStmt>*>(stmt);
-                    //     declare_in_class_enviroment((*klass)->enviroment, name);
-                    //     return;
-                    // }
                 }
             }
             declare_in_global_enviroment(ast->enviroment, name, declaration);
@@ -238,11 +232,6 @@ namespace bite {
                     }
                 }
             }
-            // for (const auto& upvalue : env.upvalues) {
-            //     if (upvalue.name == name) {
-            //         return UpvalueBinding { upvalue.value };
-            //     }
-            // }
             return {};
         }
 
@@ -364,6 +353,14 @@ namespace bite {
                             return *binding;
                         }
                     }
+                } else if (std::holds_alternative<ExprPtr>(node)) {
+                    auto expr = std::get<ExprPtr>(node);
+                    if (std::holds_alternative<AstNode<ObjectExpr>*>(expr)) {
+                        auto& object = std::get<AstNode<ObjectExpr>*>(expr);
+                        if (auto binding = get_binding_in_class_enviroment((*object)->class_enviroment, name)) {
+                            return *binding;
+                        }
+                    }
                 }
             }
             if (auto binding = get_binding_in_global_enviroment(ast->enviroment, name)) {
@@ -451,7 +448,9 @@ namespace bite {
             for (auto node : node_stack) {
                 if (std::holds_alternative<StmtPtr>(node) && std::holds_alternative<AstNode<ClassStmt>*>(
                     std::get<StmtPtr>(node)
-                )) {
+                ) || (std::holds_alternative<ExprPtr>(node) && std::holds_alternative<AstNode<ObjectExpr>*>(
+                    std::get<ExprPtr>(node)
+                ))) {
                     return true;
                 }
             }
@@ -460,9 +459,12 @@ namespace bite {
 
         bool is_in_class_with_superclass() {
             for (auto node : node_stack) {
-                if (std::holds_alternative<StmtPtr>(node) && std::holds_alternative<AstNode<ClassStmt>*>(
-                    std::get<StmtPtr>(node)
-                ) && (*std::get<AstNode<ClassStmt>*>(std::get<StmtPtr>(node)))->super_class) {
+                if ((std::holds_alternative<StmtPtr>(node) && std::holds_alternative<AstNode<ClassStmt>
+                        *>(std::get<StmtPtr>(node)) && (*std::get<AstNode<ClassStmt>*>(std::get<StmtPtr>(node)))->
+                    super_class) || (std::holds_alternative<ExprPtr>(node) && std::holds_alternative<AstNode<ObjectExpr>
+                    *>(
+                    std::get<ExprPtr>(node)
+                ) && (*std::get<AstNode<ObjectExpr>*>(std::get<ExprPtr>(node)))->super_class)) {
                     return true;
                 }
             }

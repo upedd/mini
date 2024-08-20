@@ -305,6 +305,8 @@ struct ObjectExpr {
     StructureBody body;
     std::optional<Token> super_class;
     std::vector<Expr> superclass_arguments;
+    ClassEnviroment class_enviroment;
+    Binding superclass_binding = NoBinding();
 };
 
 struct ClassStmt {
@@ -314,40 +316,8 @@ struct ClassStmt {
     bool is_abstract = false;
     DeclarationInfo info;
     ClassEnviroment enviroment;
-    Binding class_binding = NoBinding(); // TODO: maybe elimanate the need for this
     Binding superclass_binding = NoBinding();
 };
-
-struct ClassNode {
-    std::optional<Token> super_class;
-    std::vector<Method> methods;
-    std::vector<Field> fields;
-    std::optional<AstNode<ObjectExpr>> class_object;
-    std::vector<AstNode<UsingStmt>> using_statements;
-    Constructor constructor; // TODO: remove this optional
-    bool is_abstract;
-    ClassEnviroment enviroment;
-    Binding superclass_binding = NoBinding();
-};
-
-
-struct ClassDeclarationStmt {
-    Token name;
-    ClassNode klass;
-    Binding class_binding = NoBinding(); // eliminate this
-    DeclarationInfo info;
-
-};
-
-struct NewObjectExpr {
-    ClassNode klass;
-};
-
-struct NewObjectStmt {
-    NewObjectExpr object;
-    DeclarationInfo info;
-};
-
 
 struct NativeStmt {
     Token name;

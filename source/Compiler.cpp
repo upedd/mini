@@ -878,50 +878,50 @@ void Compiler::object_constructor(
 }
 
 void Compiler::object_expression(const AstNode<ObjectExpr>& expr) {
-    // // TODO: refactor!
-    // begin_scope(ScopeType::BLOCK);
-    // emit(OpCode::NIL);
-    // define_variable("$scope_return");
-    // std::string name = "object"; // todo: check!
-    // uint8_t name_constant = current_function()->add_constant(name);
-    // emit(OpCode::NIL);
-    // emit(OpCode::CLASS, name_constant);
-    // current_scope().define(name);
-    //
-    // begin_scope(ScopeType::CLASS, name);
-    // // TODO: non-expression scope?
-    // emit(OpCode::NIL);
-    // define_variable("$scope_return");
-    //
-    // // TODO: traits in objects.
-    // class_core(
-    //     std::get<Context::LocalResolution>(current_context().resolve_variable(name)).slot,
-    //     expr.super_class,
-    //     expr.body.methods,
-    //     expr.body.fields,
-    //     expr.body.using_statements,
-    //     false
-    // );
-    //
-    // object_constructor(expr.body.fields, expr.super_class.has_value(), expr.superclass_arguments);
-    // emit(OpCode::CONSTRUCTOR);
-    //
-    // emit(OpCode::POP);
-    // current_scope().pop_temporary();
-    // // TODO: non-expression scope?
-    // end_scope();
-    // emit(OpCode::POP);
-    // current_scope().pop_temporary();
-    // // constructing object logic goes here!
-    // emit(OpCode::CALL, 0);
-    // emit(OpCode::SET, std::get<Context::LocalResolution>(current_context().resolve_variable("$scope_return")).slot);
-    // end_scope();
+    // TODO: refactor! tons of overlap with class
+    std::string name = "object"; // todo: check!
+    uint8_t name_constant = current_function()->add_constant(name);
+    emit(OpCode::NIL);
+    emit(OpCode::CLASS, name_constant);
+
+    if (expr->super_class) {
+        emit_get_variable(expr->superclass_binding);
+        emit(OpCode::INHERIT);
+    }
+    for (const auto& field : expr->body.fields) {
+        std::string field_name = *field.variable->name.string;
+        int field_constant = current_function()->add_constant(field_name);
+        emit(OpCode::FIELD, field_constant);
+        emit(field.attributes.to_ullong());
+    }
+
+    for (auto& method : expr->body.methods) {
+        std::string method_name = *method.function->name.string;
+        if (!method.attributes[ClassAttributes::ABSTRACT]) {
+            function(method.function, FunctionType::METHOD);
+        }
+        int idx = current_function()->add_constant(method_name);
+        emit(OpCode::METHOD, idx);
+        emit(method.attributes.to_ullong()); // check size?
+        current_context().on_stack--;
+    }
+
+    if (expr->body.constructor) { // TODO: always must have constructor!
+        bool has_super_class = static_cast<bool>(expr->super_class);
+        constructor(
+            *expr->body.constructor,
+            expr->body.fields,
+            has_super_class
+        );
+    }
+
+    emit(OpCode::CONSTRUCTOR);
+    emit(OpCode::CALL, 0);
 }
 
 void Compiler::object_statement(const AstNode<ObjectStmt>& stmt) {
-    // visit_expr(stmt.object);
-    // current_scope().pop_temporary();
-    // define_variable(*stmt.name.string);
+    visit_expr(stmt->object);
+    define_variable(stmt->info);
 }
 
 void Compiler::trait_statement(const AstNode<TraitStmt>& stmt) {
@@ -1068,9 +1068,7 @@ void Compiler::class_declaration(const AstNode<ClassStmt>& stmt) {
 
     if (stmt->super_class) {
         emit_get_variable(stmt->superclass_binding);
-        emit_get_variable(stmt->class_binding);
         emit(OpCode::INHERIT);
-        emit(OpCode::POP);
     }
 
     for (const auto& field : stmt->body.fields) {
@@ -1091,22 +1089,6 @@ void Compiler::class_declaration(const AstNode<ClassStmt>& stmt) {
         current_context().on_stack--;
     }
 
-    //
-    //
-    // begin_scope(ScopeType::CLASS, name);
-    // // TODO: non-expression scope?
-    // emit(OpCode::NIL);
-    // define_variable("$scope_return");
-    //
-    // class_core(
-    //     std::get<Context::LocalResolution>(current_context().resolve_variable(name)).slot,
-    //     stmt.super_class,
-    //     stmt.body.methods,
-    //     stmt.body.fields,
-    //     stmt.body.using_statements,
-    //     stmt.is_abstract
-    // );
-    //
     if (stmt->body.constructor) { // TODO: always must have constructor!
         bool has_super_class = static_cast<bool>(stmt->super_class);
         constructor(
