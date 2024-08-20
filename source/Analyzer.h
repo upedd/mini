@@ -56,6 +56,7 @@ namespace bite {
         void this_expr(AstNode<ThisExpr>& expr);
 
         void super_expr(const AstNode<SuperExpr>& expr);
+        void object_expr(const AstNode<ObjectExpr>& expr);
 
 
         using Node = std::variant<StmtPtr, ExprPtr>;

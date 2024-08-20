@@ -560,64 +560,6 @@ void Compiler::constructor(
             emit(upvalue.idx);
         }
     }
-
-    // start_context(function, FunctionType::CONSTRUCTOR);
-    // begin_scope(ScopeType::BLOCK); // doesn't context already start a new scope therefor it is reduntant
-    // current_scope().define(""); // reserve slot for receiver
-    //
-    // for (const Token& param : stmt.parameters) {
-    //     define_variable(*param.string);
-    // }
-    //
-    // if (stmt.has_super) {
-    //     if (!has_superclass) {
-    //         assert(false && "No superclass to be constructed");
-    //     }
-    //     for (const Expr& expr : stmt.super_arguments) {
-    //         visit_expr(expr);
-    //     }
-    //     // maybe better way to do this instead of this superinstruction?
-    //     emit(OpCode::CALL_SUPER_CONSTRUCTOR, stmt.super_arguments.size());
-    //     emit(OpCode::POP); // discard constructor response
-    // } else if (has_superclass) {
-    //     if (superclass_arguments_count == 0) {
-    //         // default superclass construct
-    //         emit(OpCode::CALL_SUPER_CONSTRUCTOR, stmt.super_arguments.size());
-    //         emit(OpCode::POP); // discard constructor response
-    //     } else {
-    //         assert(false && "expected superconstructor call");
-    //     }
-    // }
-    //
-    //
-    // // default initialize fields
-    // for (auto& field : fields) {
-    //     // ast builder
-    //     if (field.attributes[ClassAttributes::ABSTRACT])
-    //         continue;
-    //     visit_expr(*field.variable.value);
-    //     emit(OpCode::THIS);
-    //     int property_name = current_function()->add_constant(*field.variable.name.string);
-    //     emit(OpCode::SET_PROPERTY, property_name);
-    //     emit(OpCode::POP); // pop value;
-    // }
-    //
-    // visit_expr(stmt.body);
-    // emit_default_return();
-    // end_scope();
-    //
-    // function->set_upvalue_count(current_context().upvalues.size());
-    // // we need to emit those upvalues in enclosing context (context where function is called)
-    // std::vector<Upvalue> function_upvalues = std::move(current_context().upvalues);
-    // end_context();
-    //
-    // int constant = current_function()->add_constant(function);
-    // emit(OpCode::CLOSURE, constant);
-    //
-    // for (const Upvalue& upvalue : function_upvalues) {
-    //     emit(upvalue.is_local);
-    //     emit(upvalue.index);
-    // }
 }
 
 // TODO: should be safe for removal
@@ -654,55 +596,6 @@ void Compiler::default_constructor(const std::vector<Field>& fields, bool has_su
 
     int constant = current_function()->add_constant(function);
     emit(OpCode::CLOSURE, constant);
-    // for (const bite::Analyzer::Upvalue& upvalue : analyzer.function_upvalues[stmt.id]) {
-    //     emit(upvalue.is_local);
-    //     if (upvalue.is_local) {
-    //         emit(current_context().slots[upvalue.value].index);
-    //     } else {
-    //         emit(upvalue.value);
-    //     }
-    // }
-
-    // // TODO: ideally in future default constructor has just default parameters!
-    // auto* function = new Function("constructor", 0);
-    // functions.push_back(function);
-    // start_context(function, FunctionType::CONSTRUCTOR);
-    // begin_scope(ScopeType::BLOCK); // doesn't context already start a new scope therefor it is reduntant
-    // current_scope().define(""); // reserve slot for receiver
-    //
-    // if (has_superclass) {
-    //     // default superclass construct
-    //     emit(OpCode::CALL_SUPER_CONSTRUCTOR, 0);
-    //     emit(OpCode::POP); // discard constructor response
-    // }
-    //
-    // // default initialize fields
-    // for (auto& field : fields) {
-    //     // ast builder
-    //     if (field.attributes[ClassAttributes::ABSTRACT])
-    //         continue;
-    //     visit_expr(*field.variable.value);
-    //     emit(OpCode::THIS);
-    //     int property_name = current_function()->add_constant(*field.variable.name.string);
-    //     emit(OpCode::SET_PROPERTY, property_name);
-    //     emit(OpCode::POP); // pop value;
-    // }
-    //
-    // emit_default_return();
-    // end_scope();
-    //
-    // function->set_upvalue_count(current_context().upvalues.size());
-    // // we need to emit those upvalues in enclosing context (context where function is called)
-    // std::vector<Upvalue> function_upvalues = std::move(current_context().upvalues);
-    // end_context();
-    //
-    // int constant = current_function()->add_constant(function);
-    // emit(OpCode::CLOSURE, constant);
-    //
-    // for (const Upvalue& upvalue : function_upvalues) {
-    //     emit(upvalue.is_local);
-    //     emit(upvalue.index);
-    // }
 }
 
 // TODO: refactor!!! this whole class parsing part is a total mess!
@@ -1156,27 +1049,21 @@ void Compiler::trait_statement(const AstNode<TraitStmt>& stmt) {
 }
 
 void Compiler::class_declaration(const AstNode<ClassStmt>& stmt) {
-    // // TODO: refactor!
+    // TODO: refactor!
     std::string name = *stmt->name.string;
     uint8_t name_constant = current_function()->add_constant(name);
-    //
     if (stmt->body.class_object) {
         std::unreachable(); // TODO
         //visit_expr(*stmt->body.class_object);
     } else {
         emit(OpCode::NIL);
         current_context().on_stack++;
-        // current_scope().mark_temporary();
     }
-    // if (stmt.is_abstract) {
-    //     emit(OpCode::ABSTRACT_CLASS, name_constant);
-    // } else {
-    //     emit(OpCode::CLASS, name_constant);
-    // }
-    // current_scope().pop_temporary();
-    // current_scope().define(name);
-
-    emit(OpCode::CLASS, name_constant);
+    if (stmt->is_abstract) {
+        emit(OpCode::ABSTRACT_CLASS, name_constant);
+    } else {
+        emit(OpCode::CLASS, name_constant);
+    }
     define_variable(stmt->info);
 
     if (stmt->super_class) {
@@ -1228,23 +1115,8 @@ void Compiler::class_declaration(const AstNode<ClassStmt>& stmt) {
             has_super_class
         );
     }
-    // if (stmt->body.constructor) {
-    //     // cur().constructor_argument_count = stmt.body.constructor->parameters.size();
-    //     //bool has_super_class = static_cast<bool>(stmt.super_class);
-    //     // TODO: support inheritance
-    //     constructor(*stmt->body.constructor, stmt->body.fields, false, 0);
-    // } else {
-    //     default_constructor(stmt->body.fields, static_cast<bool>(stmt->super_class));
-    // }
 
     emit(OpCode::CONSTRUCTOR);
-    //emit(OpCode::POP);
-
-    // current_scope().pop_temporary();
-    // // TODO: non-expression scope?
-    // end_scope();
-    // emit(OpCode::POP);
-    // current_scope().pop_temporary();
 }
 
 void Compiler::expr_statement(const AstNode<ExprStmt>& stmt) {
@@ -1478,41 +1350,6 @@ void Compiler::emit_set_variable(const Binding& binding) {
         },
         binding
     );
-
-    // if (std::holds_alternative<bite::box<VariableExpr>>(lvalue)) {
-    //     std::string name = *std::get<bite::box<VariableExpr>>(lvalue)->identifier.string;
-    //     auto resolution = current_context().resolve_variable(name);
-    //     if (std::holds_alternative<Context::LocalResolution>(resolution)) {
-    //         emit(OpCode::SET, std::get<Context::LocalResolution>(resolution).slot); // todo: handle overflow
-    //     } else if (std::holds_alternative<Context::FieldResolution>(resolution)) {
-    //         // TODO: this doesn't work with nested classes i think?
-    //         emit(OpCode::THIS);
-    //         emit(OpCode::SET_PROPERTY, current_function()->add_constant(name));
-    //     } else {
-    //         auto up_resolution = resolve_upvalue(name);
-    //         if (std::holds_alternative<Context::LocalResolution>(up_resolution)) {
-    //             emit(OpCode::SET_UPVALUE, std::get<Context::LocalResolution>(up_resolution).slot);
-    //             // todo: handle overflow
-    //         } else if (std::holds_alternative<Context::FieldResolution>(up_resolution)) {
-    //             // TODO: this doesn't work with nested classes i think?
-    //             emit(OpCode::THIS);
-    //             emit(OpCode::SET_PROPERTY, current_function()->add_constant(name));
-    //         }
-    //     }
-    // } else if (std::holds_alternative<bite::box<GetPropertyExpr>>(lvalue)) {
-    //     const auto& property_expr = std::get<bite::box<GetPropertyExpr>>(lvalue);
-    //     std::string name = *property_expr->property.string;
-    //     int constant = current_function()->add_constant(name);
-    //     visit_expr(property_expr->left);
-    //     emit(OpCode::SET_PROPERTY, constant);
-    // } else if (std::holds_alternative<bite::box<SuperExpr>>(lvalue)) {
-    //     const auto& super_expr = std::get<bite::box<SuperExpr>>(lvalue);
-    //     int constant = current_function()->add_constant(*super_expr->method.string);
-    //     emit(OpCode::THIS);
-    //     emit(OpCode::SET_SUPER, constant);
-    // } else {
-    //     assert("Expected lvalue.");
-    // }
 }
 
 void Compiler::emit_get_variable(const Binding& binding) {

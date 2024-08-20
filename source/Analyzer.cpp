@@ -314,6 +314,10 @@ void bite::Analyzer::super_expr(const AstNode<SuperExpr>& /*unused*/) {
     }
 }
 
+void bite::Analyzer::object_expr(const AstNode<ObjectExpr>& expr) {
+
+}
+
 void bite::Analyzer::visit_stmt(Stmt& statement) {
     // TODO: refactor?
     std::visit([this](auto& stmt) { node_stack.emplace_back(&stmt); }, statement);
@@ -360,8 +364,7 @@ void bite::Analyzer::visit_expr(Expr& expression) {
             [this](AstNode<ReturnExpr>& expr) { return_expr(expr); },
             [this](AstNode<ThisExpr>& expr) { this_expr(expr); },
             // TODO validate in class scope
-            [this](AstNode<ObjectExpr>& expr) {},
-            // TODO: implement
+            [this](AstNode<ObjectExpr>& expr) { object_expr(expr); },
             [](AstNode<InvalidExpr>&) {}
         },
         expression
