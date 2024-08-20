@@ -178,6 +178,15 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
         declare_in_class_enviroment(*env, method.function->name.string, method.attributes);
     }
 
+    // Must overrdie abstracts
+    if (!stmt->is_abstract && superclass && (*superclass)->is_abstract) {
+        for (const auto& [name, attr] : overrideable_members) {
+            if (attr[ClassAttributes::ABSTRACT]) {
+                emit_message(Logger::Level::error, "abstract method not overrdien: " + std::string(*name), "");
+            }
+        }
+    }
+
     for (const auto& [name, attr] : overrideable_members) {
         declare_in_class_enviroment(*env, name, attr);
     }
@@ -188,6 +197,8 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
         function(method.function);
         node_stack.pop_back();
     }
+
+
 }
 
 void bite::Analyzer::unary(AstNode<UnaryExpr>& expr) {
