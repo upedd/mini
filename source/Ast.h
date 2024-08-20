@@ -104,8 +104,12 @@ struct PropertyBinding {
     StringTable::Handle property;
 };
 
+struct SuperBinding {
+    StringTable::Handle property;
+};
+
 using Binding = std::variant<NoBinding, LocalBinding, GlobalBinding, UpvalueBinding, ParameterBinding, MemberBinding,
-                             PropertyBinding>;
+                             PropertyBinding, SuperBinding>;
 
 struct Local {
     LocalDeclarationInfo* declaration;

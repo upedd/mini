@@ -65,7 +65,7 @@ void Compiler::start_context(Function* function, FunctionType type) {
     current_context().on_stack = function->get_arity() + 1; // plus one for reserved receiver slot!
 }
 
-#define COMPILER_PRINT_BYTECODE
+//#define COMPILER_PRINT_BYTECODE
 
 void Compiler::end_context() {
     #ifdef COMPILER_PRINT_BYTECODE
@@ -1468,6 +1468,10 @@ void Compiler::emit_set_variable(const Binding& binding) {
             [this](const PropertyBinding& bind) {
                 emit(OpCode::SET_PROPERTY, current_function()->add_constant(*bind.property));
             },
+            [this](const SuperBinding& bind) {
+                emit(OpCode::THIS);
+                emit(OpCode::SET_SUPER, current_function()->add_constant(*bind.property));
+            },
             [this](const NoBinding) {
                 std::unreachable(); // panic!
             }
@@ -1539,6 +1543,9 @@ void Compiler::emit_get_variable(const Binding& binding) {
             },
             [this](const NoBinding) {
                 std::unreachable(); // panic!
+            },
+            [this](const SuperBinding) {
+                std::unreachable(); // TODO
             }
         },
         binding
@@ -1576,10 +1583,9 @@ void Compiler::get_property(const AstNode<GetPropertyExpr>& expr) {
 }
 
 void Compiler::super(const AstNode<SuperExpr>& expr) {
-    // int constant = current_function()->add_constant(*expr.method.string);
-    // // or just resolve this in vm?
-    // emit(OpCode::THIS);
-    // //resolve_variable("super");
-    // emit(OpCode::GET_SUPER, constant);
-    // current_scope().mark_temporary();
+    int constant = current_function()->add_constant(*expr->method.string);
+    // or just resolve this in vm?
+    emit(OpCode::THIS);
+    emit(OpCode::GET_SUPER, constant);
+    current_context().on_stack++;
 }

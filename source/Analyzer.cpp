@@ -111,18 +111,15 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
         }
     }
     if (!superclass && stmt->body.constructor && stmt->body.constructor->has_super) {
-        emit_message(
-            Logger::Level::error,
-            "no superclass constructor to call",
-            ""
-        );
+        emit_message(Logger::Level::error, "no superclass constructor to call", "");
     }
     if (stmt->body.constructor) { // TODO: always must have constructor!
         if (superclass && (*superclass)->body.constructor) {
             if (!(*superclass)->body.constructor->function->params.empty() && !stmt->body.constructor->has_super) {
                 emit_message(Logger::Level::error, "subclass constructor must call superclass constructor", "here");
             }
-            if (stmt->body.constructor->super_arguments.size() != (*superclass)->body.constructor->function->params.size()) {
+            if (stmt->body.constructor->super_arguments.size() != (*superclass)->body.constructor->function->params.
+                size()) {
                 emit_message(
                     Logger::Level::error,
                     std::format(
@@ -146,7 +143,11 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
             // TODO: better error messages!
             if (overrideable_members.contains(field.variable->name.string)) {
                 if (!field.attributes[ClassAttributes::OVERRIDE]) {
-                    emit_message(Logger::Level::error, "member should override explicitly", "add \"overrdie\" attribute");
+                    emit_message(
+                        Logger::Level::error,
+                        "member should override explicitly",
+                        "add \"overrdie\" attribute"
+                    );
                 }
                 overrideable_members.erase(field.variable->name.string);
             } else if (field.attributes[ClassAttributes::OVERRIDE]) {
@@ -168,10 +169,23 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
     for (const auto& method : stmt->body.methods) {
         // TODO: deduplicate
         if (overrideable_members.contains(method.function->name.string)) {
-            if (!method.attributes[ClassAttributes::OVERRIDE]) {
+            auto& member_attr = overrideable_members[method.function->name.string];
+            auto& method_attr = method.attributes;
+            // TODO: refactor me pls
+            if (!method.attributes[ClassAttributes::OVERRIDE] && ((member_attr[ClassAttributes::GETTER] && method_attr[
+                ClassAttributes::GETTER]) || (member_attr[ClassAttributes::SETTER] && method_attr[
+                ClassAttributes::SETTER]))) {
                 emit_message(Logger::Level::error, "member should override explicitly", "add \"overrdie\" attribute");
             }
-            overrideable_members.erase(method.function->name.string);
+            if (member_attr[ClassAttributes::GETTER] && member_attr[ClassAttributes::SETTER] && method_attr[
+                ClassAttributes::GETTER] && !method_attr[ClassAttributes::SETTER] && method_attr[ClassAttributes::OVERRIDE]) {
+                member_attr -= ClassAttributes::GETTER;
+            } else if (member_attr[ClassAttributes::GETTER] && member_attr[ClassAttributes::SETTER] && !method_attr[
+                ClassAttributes::GETTER] && method_attr[ClassAttributes::SETTER] && method_attr[ClassAttributes::OVERRIDE]) {
+                member_attr -= ClassAttributes::SETTER;
+            } else if (method_attr[ClassAttributes::OVERRIDE]) {
+                overrideable_members.erase(method.function->name.string);
+            }
         } else if (method.attributes[ClassAttributes::OVERRIDE]) {
             emit_message(Logger::Level::error, "member does not override anything", "remove this");
         }
@@ -197,8 +211,6 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
         function(method.function);
         node_stack.pop_back();
     }
-
-
 }
 
 void bite::Analyzer::unary(AstNode<UnaryExpr>& expr) {
@@ -221,6 +233,8 @@ void bite::Analyzer::binary(AstNode<BinaryExpr>& expr) {
             expr->binding = std::get<AstNode<VariableExpr>>(expr->left)->binding;
         } else if (std::holds_alternative<AstNode<GetPropertyExpr>>(expr->left)) {
             expr->binding = PropertyBinding(std::get<AstNode<GetPropertyExpr>>(expr->left)->property.string);
+        } else if (std::holds_alternative<AstNode<SuperExpr>>(expr->left)) {
+            expr->binding = SuperBinding(std::get<AstNode<SuperExpr>>(expr->left)->method.string);
         } else {
             emit_message(Logger::Level::error, "Expected lvalue", "here");
         }
@@ -294,6 +308,12 @@ void bite::Analyzer::this_expr(AstNode<ThisExpr>& /*unused*/) {
     }
 }
 
+void bite::Analyzer::super_expr(const AstNode<SuperExpr>& /*unused*/) {
+    if (!is_in_class_with_superclass()) {
+        emit_message(Logger::Level::error, "'super' outside of class with superclass", "here");
+    }
+}
+
 void bite::Analyzer::visit_stmt(Stmt& statement) {
     // TODO: refactor?
     std::visit([this](auto& stmt) { node_stack.emplace_back(&stmt); }, statement);
@@ -328,8 +348,7 @@ void bite::Analyzer::visit_expr(Expr& expression) {
             [this](AstNode<VariableExpr>& expr) { variable_expression(expr); },
             [this](AstNode<CallExpr>& expr) { call(expr); },
             [this](AstNode<GetPropertyExpr>& expr) { get_property(expr); },
-            [this](AstNode<SuperExpr>& expr) {},
-            // TODO: implement
+            [this](AstNode<SuperExpr>& expr) { super_expr(expr); },
             [this](AstNode<BlockExpr>& expr) { block(expr); },
             [this](AstNode<IfExpr>& expr) { if_expression(expr); },
             [this](AstNode<LoopExpr>& expr) { loop_expression(expr); },

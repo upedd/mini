@@ -55,6 +55,8 @@ namespace bite {
         void return_expr(AstNode<ReturnExpr>& expr);
         void this_expr(AstNode<ThisExpr>& expr);
 
+        void super_expr(const AstNode<SuperExpr>& expr);
+
 
         using Node = std::variant<StmtPtr, ExprPtr>;
 
@@ -104,14 +106,20 @@ namespace bite {
             }
         }
 
-        void declare_in_class_enviroment(ClassEnviroment& env, StringTable::Handle name, const bitflags<ClassAttributes>& attributes) {
+        void declare_in_class_enviroment(
+            ClassEnviroment& env,
+            StringTable::Handle name,
+            const bitflags<ClassAttributes>& attributes
+        ) {
             if (env.members.contains(name)) {
                 auto& member_attr = env.members[name];
-                if (member_attr[ClassAttributes::SETTER] && !member_attr[ClassAttributes::GETTER] && !attributes[ClassAttributes::SETTER] && attributes[ClassAttributes::GETTER]) {
+                if (member_attr[ClassAttributes::SETTER] && !member_attr[ClassAttributes::GETTER] && !attributes[
+                    ClassAttributes::SETTER] && attributes[ClassAttributes::GETTER]) {
                     member_attr += ClassAttributes::GETTER;
                     return;
                 }
-                if (member_attr[ClassAttributes::GETTER] && !member_attr[ClassAttributes::SETTER] && !attributes[ClassAttributes::GETTER] && attributes[ClassAttributes::SETTER]) {
+                if (member_attr[ClassAttributes::GETTER] && !member_attr[ClassAttributes::SETTER] && !attributes[
+                    ClassAttributes::GETTER] && attributes[ClassAttributes::SETTER]) {
                     member_attr += ClassAttributes::SETTER;
                     return;
                 }
@@ -443,6 +451,17 @@ namespace bite {
                 if (std::holds_alternative<StmtPtr>(node) && std::holds_alternative<AstNode<ClassStmt>*>(
                     std::get<StmtPtr>(node)
                 )) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        bool is_in_class_with_superclass() {
+            for (auto node : node_stack) {
+                if (std::holds_alternative<StmtPtr>(node) && std::holds_alternative<AstNode<ClassStmt>*>(
+                    std::get<StmtPtr>(node)
+                ) && (*std::get<AstNode<ClassStmt>*>(std::get<StmtPtr>(node)))->super_class) {
                     return true;
                 }
             }
