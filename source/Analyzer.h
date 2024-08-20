@@ -104,11 +104,11 @@ namespace bite {
             }
         }
 
-        void declare_in_class_enviroment(ClassEnviroment& env, StringTable::Handle name) {
+        void declare_in_class_enviroment(ClassEnviroment& env, StringTable::Handle name, const bitflags<ClassAttributes>& attributes) {
             if (env.members.contains(name)) {
                 emit_message(Logger::Level::error, "member name conflict", "here");
             }
-            env.members.insert(name);
+            env.members[name] = attributes;
         }
 
         void declare_in_global_enviroment(GlobalEnviroment& env, StringTable::Handle name, StmtPtr declaration) {
@@ -151,14 +151,27 @@ namespace bite {
                         declare_in_function_enviroment((*function)->enviroment, name, declaration);
                         return;
                     }
-                    if (std::holds_alternative<AstNode<ClassStmt>*>(stmt)) {
-                        auto* klass = std::get<AstNode<ClassStmt>*>(stmt);
-                        declare_in_class_enviroment((*klass)->enviroment, name);
-                        return;
-                    }
+                    // if (std::holds_alternative<AstNode<ClassStmt>*>(stmt)) {
+                    //     auto* klass = std::get<AstNode<ClassStmt>*>(stmt);
+                    //     declare_in_class_enviroment((*klass)->enviroment, name);
+                    //     return;
+                    // }
                 }
             }
             declare_in_global_enviroment(ast->enviroment, name, declaration);
+        }
+
+        ClassEnviroment* current_class_enviroment() {
+            for (auto node : node_stack | std::views::reverse) {
+                if (std::holds_alternative<StmtPtr>(node)) {
+                    auto stmt = std::get<StmtPtr>(node);
+                    if (std::holds_alternative<AstNode<ClassStmt>*>(stmt)) {
+                        auto* klass = std::get<AstNode<ClassStmt>*>(stmt);
+                        return &(*klass)->enviroment;
+                    }
+                }
+            }
+            return nullptr;
         }
 
         // TODO: refactor!
@@ -176,15 +189,15 @@ namespace bite {
                         declare_in_function_enviroment((*function)->enviroment, name, declaration);
                         return;
                     }
-                    if (std::holds_alternative<AstNode<ClassStmt>*>(stmt)) {
-                        if (!skipped) {
-                            skipped = true;
-                            continue;
-                        }
-                        auto* klass = std::get<AstNode<ClassStmt>*>(stmt);
-                        declare_in_class_enviroment((*klass)->enviroment, name);
-                        return;
-                    }
+                    // if (std::holds_alternative<AstNode<ClassStmt>*>(stmt)) {
+                    //     if (!skipped) {
+                    //         skipped = true;
+                    //         continue;
+                    //     }
+                    //     auto* klass = std::get<AstNode<ClassStmt>*>(stmt);
+                    //     declare_in_class_enviroment((*klass)->enviroment, name);
+                    //     return;
+                    // }
                 }
             }
             declare_in_global_enviroment(ast->enviroment, name, declaration);
@@ -219,7 +232,7 @@ namespace bite {
             const ClassEnviroment& env,
             StringTable::Handle name
         ) {
-            for (const auto& member : env.members) {
+            for (const auto& member : env.members | std::views::keys) {
                 if (member == name) {
                     return MemberBinding { member };
                 }
@@ -231,9 +244,9 @@ namespace bite {
             const GlobalEnviroment& env,
             StringTable::Handle name
         ) {
-            for (const auto& global_name : env.globals | std::views::keys) {
+            for (const auto& [global_name, declaration] : env.globals) {
                 if (global_name == name) {
-                    return GlobalBinding { global_name };
+                    return GlobalBinding { declaration };
                 }
             }
             for (const auto& scope : env.locals.scopes | std::views::reverse) {

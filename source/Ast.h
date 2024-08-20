@@ -85,7 +85,7 @@ struct LocalBinding {
 };
 
 struct GlobalBinding {
-    StringTable::Handle name;
+    GlobalDeclarationInfo* info;
 };
 
 struct UpvalueBinding {
@@ -137,8 +137,20 @@ struct FunctionEnviroment {
     std::vector<StringTable::Handle> parameters;
 };
 
+
+enum class ClassAttributes: std::uint8_t {
+    PRIVATE,
+    OVERRIDE,
+    ABSTRACT,
+    GETTER,
+    SETTER,
+    OPERATOR,
+    size // tracks ClassAttributes size. Must be at end!
+};
+
+
 struct ClassEnviroment {
-    bite::unordered_dense::set<StringTable::Handle> members;
+    bite::unordered_dense::map<StringTable::Handle, bitflags<ClassAttributes>> members;
 };
 
 class Ast {
@@ -256,16 +268,6 @@ struct VarStmt {
 
 struct ExprStmt {
     Expr expr;
-};
-
-enum class ClassAttributes: std::uint8_t {
-    PRIVATE,
-    OVERRIDE,
-    ABSTRACT,
-    GETTER,
-    SETTER,
-    OPERATOR,
-    size // tracks ClassAttributes size. Must be at end!
 };
 
 struct Field {

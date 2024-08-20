@@ -1432,7 +1432,7 @@ void Compiler::emit_set_variable(const Binding& binding) {
                 emit(OpCode::SET, current_context().slots[bind.info->idx].index); // assert exists?
             },
             [this](const GlobalBinding& bind) {
-                int constant = current_function()->add_constant(*bind.name); // TODO: rework constant system
+                int constant = current_function()->add_constant(*bind.info->name); // TODO: rework constant system
                 emit(OpCode::SET_GLOBAL, constant);
             },
             [this](const UpvalueBinding& bind) {
@@ -1501,7 +1501,7 @@ void Compiler::emit_get_variable(const Binding& binding) {
                 emit(OpCode::GET, current_context().slots[bind.info->idx].index); // assert exists?
             },
             [this](const GlobalBinding& bind) {
-                int constant = current_function()->add_constant(*bind.name); // TODO: rework constant system
+                int constant = current_function()->add_constant(*bind.info->name); // TODO: rework constant system
                 emit(OpCode::GET_GLOBAL, constant);
             },
             [this](const UpvalueBinding& bind) {

@@ -69,6 +69,7 @@ void bite::Analyzer::native_declaration(AstNode<NativeStmt>& stmt) {
 
 void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
     declare_in_outer(stmt->name.string, &stmt);
+    auto* env = current_class_enviroment(); // assert non-null
     // TODO: superclasses
     // TODO: class validation!
     // TODO: using statement
@@ -77,20 +78,78 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
     // TODO: constuctor
     // TODO: init should be an reserved keyword
     // TODO: default constructor should capture upvalues
+    unordered_dense::map<StringTable::Handle, bitflags<ClassAttributes>> overrideable_members;
+    if (stmt->super_class) {
+        auto binding = resolve(stmt->super_class->string);
+        // TODO: refactor? better error message?
+        AstNode<ClassStmt>* superclass = nullptr;
+        if (auto* global = std::get_if<GlobalBinding>(&binding)) {
+            if (std::holds_alternative<AstNode<ClassStmt>*>(global->info->declaration)) {
+                superclass = std::get<AstNode<ClassStmt>*>(global->info->declaration);
+            } else {
+                emit_message(Logger::Level::error, "superclass must be of class type", "does not point to class type");
+            }
+        } else if (auto* local = std::get_if<LocalBinding>(&binding)) {
+            if (std::holds_alternative<AstNode<ClassStmt>*>(local->info->declaration)) {
+                superclass = std::get<AstNode<ClassStmt>*>(local->info->declaration);
+            } else {
+                emit_message(Logger::Level::error, "superclass must be of class type", "does not point to class type");
+            }
+        } else {
+            emit_message(
+                Logger::Level::error,
+                "superclass must be a local or global variable",
+                "is not a local or global variable"
+            );
+        }
+
+        if (superclass) {
+            for (auto& [name, attr] : (*superclass)->enviroment.members) {
+                if (attr[ClassAttributes::PRIVATE]) {
+                    continue;
+                }
+                overrideable_members[name] = attr;
+            }
+        }
+    }
+
     if (stmt->body.constructor) {
         visit_expr(stmt->body.constructor->body);
     }
 
     for (auto& field : stmt->body.fields) {
-        declare(field.variable->name.string, &stmt);
+        // TODO: better error messages!
+        if (overrideable_members.contains(field.variable->name.string)) {
+            if (field.attributes[ClassAttributes::OVERRIDE]) {
+                emit_message(Logger::Level::error, "member should override explicitly", "add \"overrdie\" attribute");
+            }
+            overrideable_members.erase(field.variable->name.string);
+        } else if (field.attributes[ClassAttributes::OVERRIDE]) {
+            emit_message(Logger::Level::error, "member does not override anything", "remove this");
+        }
+        declare_in_class_enviroment(*env, field.variable->name.string, field.attributes);
         if (field.variable->value) {
             visit_expr(*field.variable->value);
         }
     }
     // hoist methods
     for (const auto& method : stmt->body.methods) {
-        declare(method.function->name.string, &stmt);
+        // TODO: deduplicate
+        if (overrideable_members.contains(method.function->name.string)) {
+            if (method.attributes[ClassAttributes::OVERRIDE]) {
+                emit_message(Logger::Level::error, "member should override explicitly", "add \"overrdie\" attribute");
+            }
+            overrideable_members.erase(method.function->name.string);
+        } else if (method.attributes[ClassAttributes::OVERRIDE]) {
+            emit_message(Logger::Level::error, "member does not override anything", "remove this");
+        }
+        declare_in_class_enviroment(*env, method.function->name.string, method.attributes);
     }
+
+    for (const auto& [name, attr] : overrideable_members) {
+        declare_in_class_enviroment(*env, name, attr);
+    }
+
     for (auto& method : stmt->body.methods) {
         // TODO: refactor!
         node_stack.emplace_back(&method.function);
