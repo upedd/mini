@@ -77,7 +77,7 @@ private:
     std::vector<Expr> call_arguments();
 
     Stmt class_declaration(bool is_abstract = false);
-    StructureBody structure_body();
+    StructureBody structure_body(const Token& class_token);
 
     AstNode<UsingStmt> using_statement();
     UsingStmtItem using_stmt_item();
@@ -86,6 +86,7 @@ private:
     bitflags<ClassAttributes> member_attributes();
 
     Constructor constructor_statement();
+    Constructor default_constructor(const Token& class_token);
     AstNode<FunctionStmt> abstract_method(const Token& name, bool skip_params);
     AstNode<VarStmt> abstract_field(const Token& name);
 

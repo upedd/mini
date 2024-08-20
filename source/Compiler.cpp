@@ -65,7 +65,7 @@ void Compiler::start_context(Function* function, FunctionType type) {
     current_context().on_stack = function->get_arity() + 1; // plus one for reserved receiver slot!
 }
 
-//#define COMPILER_PRINT_BYTECODE
+#define COMPILER_PRINT_BYTECODE
 
 void Compiler::end_context() {
     #ifdef COMPILER_PRINT_BYTECODE
@@ -510,7 +510,7 @@ void Compiler::constructor(
     bool has_superclass
 ) {
     // refactor: tons of overlap with function generator
-    auto* function = new Function("constructor", stmt.parameters.size());
+    auto* function = new Function("constructor", stmt.function->params.size());
     functions.push_back(function);
 
     with_context(
@@ -542,22 +542,24 @@ void Compiler::constructor(
                 emit(OpCode::SET_PROPERTY, property_name);
                 emit(OpCode::POP); // pop value;
             }
-            visit_expr(stmt.body);
-            // current_function()->set_upvalue_count(analyzer.function_upvalues[stmt.body.id].size());
+            if (stmt.function->body) {
+                visit_expr(*stmt.function->body);
+            }
+            current_function()->set_upvalue_count(stmt.function->enviroment.upvalues.size());
             emit_default_return();
         }
     );
 
     int constant = current_function()->add_constant(function);
     emit(OpCode::CLOSURE, constant);
-    // for (const bite::Analyzer::Upvalue& upvalue : analyzer.function_upvalues[stmt.id]) {
-    //     emit(upvalue.is_local);
-    //     if (upvalue.is_local) {
-    //         emit(current_context().slots[upvalue.value].index);
-    //     } else {
-    //         emit(upvalue.value);
-    //     }
-
+    for (const UpValue& upvalue : stmt.function->enviroment.upvalues) {
+        emit(upvalue.local);
+        if (upvalue.local) {
+            emit(current_context().slots[upvalue.idx].index);
+        } else {
+            emit(upvalue.idx);
+        }
+    }
 
     // start_context(function, FunctionType::CONSTRUCTOR);
     // begin_scope(ScopeType::BLOCK); // doesn't context already start a new scope therefor it is reduntant
@@ -618,6 +620,7 @@ void Compiler::constructor(
     // }
 }
 
+// TODO: should be safe for removal
 void Compiler::default_constructor(const std::vector<Field>& fields, bool has_superclass) {
     // TODO: overlap with function declaration
     // TODO: integrate into new strings
@@ -1217,15 +1220,13 @@ void Compiler::class_declaration(const AstNode<ClassStmt>& stmt) {
     //     stmt.is_abstract
     // );
     //
-    if (stmt->body.constructor) {
+    if (stmt->body.constructor) { // TODO: always must have constructor!
         bool has_super_class = static_cast<bool>(stmt->super_class);
         constructor(
             *stmt->body.constructor,
             stmt->body.fields,
             has_super_class
         );
-    } else {
-        default_constructor(stmt->body.fields, static_cast<bool>(stmt->super_class));
     }
     // if (stmt->body.constructor) {
     //     // cur().constructor_argument_count = stmt.body.constructor->parameters.size();

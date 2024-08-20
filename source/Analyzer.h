@@ -289,6 +289,32 @@ namespace bite {
             return value;
         }
 
+        // TODO: refactor?
+        Binding resolve_without_upvalues(StringTable::Handle name) {
+            for (auto node : node_stack | std::views::reverse) {
+                if (std::holds_alternative<StmtPtr>(node)) {
+                    auto stmt = std::get<StmtPtr>(node);
+                    if (std::holds_alternative<AstNode<FunctionStmt>*>(stmt)) {
+                        auto* function = std::get<AstNode<FunctionStmt>*>(stmt);
+                        if (auto binding = get_binding_in_function_enviroment((*function)->enviroment, name)) {
+                            return *binding;
+                        }
+                    }
+                    if (std::holds_alternative<AstNode<ClassStmt>*>(stmt)) {
+                        auto& klass = std::get<AstNode<ClassStmt>*>(stmt);
+                        if (auto binding = get_binding_in_class_enviroment((*klass)->enviroment, name)) {
+                            return *binding;
+                        }
+                    }
+                }
+            }
+            if (auto binding = get_binding_in_global_enviroment(ast->enviroment, name)) {
+                return *binding;
+            }
+            emit_message(Logger::Level::error, "unresolved variable: " + std::string(*name), "here");
+            return NoBinding();
+        }
+
         // TODO: refactor!
         Binding resolve(StringTable::Handle name) {
             std::vector<std::reference_wrapper<FunctionEnviroment>> function_enviroments_visited;

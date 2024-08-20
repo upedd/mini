@@ -281,10 +281,9 @@ struct Method {
 };
 
 struct Constructor {
-    std::vector<Token> parameters;
     bool has_super;
     std::vector<Expr> super_arguments;
-    Expr body;
+    AstNode<FunctionStmt> function;
 };
 
 /**
@@ -295,7 +294,7 @@ struct StructureBody {
     std::vector<Field> fields;
     std::optional<AstNode<ObjectExpr>> class_object;
     std::vector<AstNode<UsingStmt>> using_statements;
-    std::optional<Constructor> constructor;
+    std::optional<Constructor> constructor; // TODO: remove this optional
 };
 
 struct ObjectExpr {

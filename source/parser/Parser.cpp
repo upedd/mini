@@ -300,12 +300,12 @@ Stmt Parser::class_declaration(const bool is_abstract) {
         consume(Token::Type::IDENTIFIER, "missing superclass name");
         superclass = current;
     }
-    StructureBody body = structure_body();
+    StructureBody body = structure_body(class_name);
 
     return ast.make_node<ClassStmt>(class_name, superclass, std::move(body), is_abstract);
 }
 
-StructureBody Parser::structure_body() {
+StructureBody Parser::structure_body(const Token& class_token) {
     StructureBody body;
     consume(Token::Type::LEFT_BRACE, "missing body");
     while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
@@ -348,6 +348,10 @@ StructureBody Parser::structure_body() {
         attributes += ClassAttributes::SETTER;
         body.fields.emplace_back(var_declaration_body(member_name), attributes);
     }
+    if (!body.constructor) {
+        body.constructor = default_constructor(class_token);
+    }
+
     consume(Token::Type::RIGHT_BRACE, "unmatched }");
     return body;
 }
@@ -422,6 +426,7 @@ bitflags<ClassAttributes> Parser::member_attributes() {
 }
 
 Constructor Parser::constructor_statement() {
+    Token init_token = current;
     std::vector<Token> parameters = functions_parameters();
     std::vector<Expr> super_arguments;
     bool has_super = false;
@@ -435,7 +440,19 @@ Constructor Parser::constructor_statement() {
     }
 
     consume(Token::Type::LEFT_BRACE, "missing constructor body");
-    return {parameters, has_super, std::move(super_arguments), block()};
+    return {
+            has_super,
+            std::move(super_arguments),
+            ast.make_node<FunctionStmt>(init_token, std::move(parameters), block())
+        };
+}
+
+Constructor Parser::default_constructor(const Token& class_token) {
+    return {
+            .has_super = false,
+            .super_arguments = {},
+            .function = ast.make_node<FunctionStmt>(class_token, std::vector<Token>(), std::optional<Expr>())
+        };
 }
 
 AstNode<FunctionStmt> Parser::abstract_method(const Token& name, const bool skip_params) {
@@ -688,6 +705,7 @@ Expr Parser::return_expression() {
 }
 
 AstNode<ObjectExpr> Parser::object_expression() {
+    Token object_token = current;
     std::optional<Token> superclass;
     std::vector<Expr> superclass_arguments;
     if (match(Token::Type::COLON)) {
@@ -699,7 +717,7 @@ AstNode<ObjectExpr> Parser::object_expression() {
         }
     }
 
-    StructureBody body = structure_body();
+    StructureBody body = structure_body(object_token);
 
     return ast.make_node<ObjectExpr>(std::move(body), superclass, std::move(superclass_arguments));
 }
