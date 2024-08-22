@@ -65,7 +65,7 @@ void Compiler::start_context(Function* function, FunctionType type) {
     current_context().on_stack = function->get_arity() + 1; // plus one for reserved receiver slot!
 }
 
-//#define COMPILER_PRINT_BYTECODE
+#define COMPILER_PRINT_BYTECODE
 
 void Compiler::end_context() {
     #ifdef COMPILER_PRINT_BYTECODE
@@ -884,6 +884,49 @@ void Compiler::object_expression(const AstNode<ObjectExpr>& expr) {
         emit_get_variable(expr->superclass_binding);
         emit(OpCode::INHERIT);
     }
+
+
+
+    // TODO: overlap with trait declaration
+    for (const auto& using_stmt : expr->body.using_statements) {
+        for (const auto& item : using_stmt->items) {
+            for (auto& [original_name, field_name, attr] : item.declarations) {
+                int field_name_constant = current_function()->add_constant(*original_name);
+                // TODO: performance
+                // TODO: shouldn't this be in trait declaration as well
+                // TODO: refactor
+                if (attr[ClassAttributes::GETTER]) {
+                    emit_get_variable(item.binding);
+                    emit(OpCode::GET_TRAIT, field_name_constant);
+                    bitflags<ClassAttributes> hack;
+                    hack += ClassAttributes::GETTER;
+                    emit(hack.to_ullong());
+                    int aliased_name_constant = current_function()->add_constant(*field_name);
+                    emit(OpCode::METHOD, aliased_name_constant);
+                    emit(hack.to_ullong());
+                }
+                if (attr[ClassAttributes::SETTER]) {
+                    emit_get_variable(item.binding);
+                    emit(OpCode::GET_TRAIT, field_name_constant);
+                    bitflags<ClassAttributes> hack;
+                    hack += ClassAttributes::SETTER;
+                    emit(hack.to_ullong());
+                    int aliased_name_constant = current_function()->add_constant(*field_name);
+                    emit(OpCode::METHOD, aliased_name_constant);
+                    emit(hack.to_ullong());
+                }
+                if (!attr[ClassAttributes::GETTER] && !attr[ClassAttributes::SETTER]) {
+                    emit_get_variable(item.binding);
+                    emit(OpCode::GET_TRAIT, field_name_constant);
+                    emit(0);
+                    int aliased_name_constant = current_function()->add_constant(*field_name);
+                    emit(OpCode::METHOD, aliased_name_constant);
+                    emit(attr.to_ullong());
+                }
+            }
+        }
+    }
+
     for (const auto& field : expr->body.fields) {
         std::string field_name = *field.variable->name.string;
         int field_constant = current_function()->add_constant(field_name);
@@ -920,6 +963,7 @@ void Compiler::trait_statement(const AstNode<TraitStmt>& stmt) {
     std::string name = *stmt->name.string;
     uint8_t name_constanst = current_function()->add_constant(name);
     emit(OpCode::TRAIT, name_constanst);
+    define_variable(stmt->info);
 
     // current_scope().define(name);
     // // non-expression scopes!
@@ -977,6 +1021,20 @@ void Compiler::trait_statement(const AstNode<TraitStmt>& stmt) {
     //         }
     //     }
     // }
+
+    for (const auto& using_stmt : stmt->using_stmts) {
+        for (const auto& item : using_stmt->items) {
+            for (const auto& [original_name, field_name, attr] : item.declarations) {
+                int field_name_constant = current_function()->add_constant(*original_name);
+                emit_get_variable(item.binding);
+                emit(OpCode::GET_TRAIT, field_name_constant);
+                emit(0); // TODO HACK
+                int aliased_name_constant = current_function()->add_constant(*field_name);
+                emit(OpCode::TRAIT_METHOD, aliased_name_constant);
+                emit(attr.to_ullong());
+            }
+        }
+    }
     //
     // // mess
     // for (auto& field : stmt.fields) {
@@ -1043,6 +1101,16 @@ void Compiler::trait_statement(const AstNode<TraitStmt>& stmt) {
     //     }
     // }
     //
+    for (auto& requirement : stmt->enviroment.requirements) {
+        // pass requirements down
+        int constant_idx = current_function()->add_constant(*requirement);
+        emit(OpCode::TRAIT_METHOD, constant_idx);
+        // TODO: pass attributes also!
+        bitflags<ClassAttributes> attr;
+        attr += ClassAttributes::ABSTRACT;
+        emit(attr.to_ullong());
+    }
+
     //
     // end_scope();
     // emit(OpCode::POP);
@@ -1069,6 +1137,46 @@ void Compiler::class_declaration(const AstNode<ClassStmt>& stmt) {
     if (stmt->super_class) {
         emit_get_variable(stmt->superclass_binding);
         emit(OpCode::INHERIT);
+    }
+
+    // TODO: overlap with trait declaration
+    for (const auto& using_stmt : stmt->body.using_statements) {
+        for (const auto& item : using_stmt->items) {
+            for (auto& [original_name, field_name, attr] : item.declarations) {
+                int field_name_constant = current_function()->add_constant(*original_name);
+                // TODO: performance
+                // TODO: shouldn't this be in trait declaration as well
+                // TODO: refactor
+                if (attr[ClassAttributes::GETTER]) {
+                    emit_get_variable(item.binding);
+                    emit(OpCode::GET_TRAIT, field_name_constant);
+                    bitflags<ClassAttributes> hack;
+                    hack += ClassAttributes::GETTER;
+                    emit(hack.to_ullong());
+                    int aliased_name_constant = current_function()->add_constant(*field_name);
+                    emit(OpCode::METHOD, aliased_name_constant);
+                    emit(hack.to_ullong());
+                }
+                if (attr[ClassAttributes::SETTER]) {
+                    emit_get_variable(item.binding);
+                    emit(OpCode::GET_TRAIT, field_name_constant);
+                    bitflags<ClassAttributes> hack;
+                    hack += ClassAttributes::SETTER;
+                    emit(hack.to_ullong());
+                    int aliased_name_constant = current_function()->add_constant(*field_name);
+                    emit(OpCode::METHOD, aliased_name_constant);
+                    emit(hack.to_ullong());
+                }
+                if (!attr[ClassAttributes::GETTER] && !attr[ClassAttributes::SETTER]) {
+                    emit_get_variable(item.binding);
+                    emit(OpCode::GET_TRAIT, field_name_constant);
+                    emit(0);
+                    int aliased_name_constant = current_function()->add_constant(*field_name);
+                    emit(OpCode::METHOD, aliased_name_constant);
+                    emit(attr.to_ullong());
+                }
+            }
+        }
     }
 
     for (const auto& field : stmt->body.fields) {

@@ -78,9 +78,79 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
         node_stack.pop_back();
     }
 
-    // TODO: using statement
-    // TODO: class object
-    // TODO: getters and setters
+    // TODO: is this good ordering?
+    // TODO: overlap with trait
+    unordered_dense::set<StringTable::Handle> requirements; // TODO: should contain attr as well i guess?
+    for (auto& using_stmt : stmt->body.using_statements) {
+        for (auto& item : using_stmt->items) {
+            // Overlap with class
+            // TODO: better error messages, refactor?
+            auto binding = resolve_without_upvalues(item.name.string);
+            item.binding = resolve(item.name.string);
+            AstNode<TraitStmt>* item_trait = nullptr;
+            if (auto* global = std::get_if<GlobalBinding>(&binding)) {
+                if (std::holds_alternative<AstNode<TraitStmt>*>(global->info->declaration)) {
+                    item_trait = std::get<AstNode<TraitStmt>*>(global->info->declaration);
+                } else {
+                    emit_message(
+                        Logger::Level::error,
+                        "using item must be of trait type",
+                        "does not point to trait type"
+                    );
+                }
+            } else if (auto* local = std::get_if<LocalBinding>(&binding)) {
+                if (std::holds_alternative<AstNode<TraitStmt>*>(local->info->declaration)) {
+                    item_trait = std::get<AstNode<TraitStmt>*>(local->info->declaration);
+                } else {
+                    emit_message(
+                        Logger::Level::error,
+                        "using item must be of trait type",
+                        "does not point to trait type"
+                    );
+                }
+            } else {
+                emit_message(
+                    Logger::Level::error,
+                    "Trait must be a local or global variable",
+                    "is not a local or global variable"
+                );
+            }
+
+            if (!item_trait) {
+                continue;
+            }
+
+            // TODO: prob refactor?
+            for (auto& [field_name, field_attr] : (*item_trait)->enviroment.members) {
+                //check if excluded
+                bool is_excluded = false;
+                // possibly use some ranges here
+                for (auto& exclusion : item.exclusions) {
+                    if (exclusion.string == field_name) {
+                        is_excluded = true;
+                        break;
+                    }
+                }
+                if (is_excluded || field_attr[ClassAttributes::ABSTRACT]) {
+                    requirements.insert(field_name);
+                    // warn about useless exclude?
+                    continue;
+                }
+                // should aliasing methods that are requierments be allowed?
+                StringTable::Handle aliased_name = field_name;
+                for (auto& [before, after] : item.aliases) {
+                    if (before.string == field_name) {
+                        aliased_name = after.string;
+                        break;
+                    }
+                }
+                declare_in_class_enviroment(*env, aliased_name, field_attr);
+                item.declarations.emplace_back(field_name, aliased_name, field_attr);
+            }
+        }
+    }
+
+
     // TODO: init should be an reserved keyword
     unordered_dense::map<StringTable::Handle, bitflags<ClassAttributes>> overrideable_members;
     AstNode<ClassStmt>* superclass = nullptr;
@@ -228,6 +298,14 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
         function(method.function);
         node_stack.pop_back();
     }
+
+    // TODO: getter and setters requirements workings
+    for (auto& requirement : requirements) {
+        if (!env->members.contains(requirement)) {
+            // TODO: better error
+            emit_message(Logger::Level::error, "Trait requirement not satisfied.", "");
+        }
+    }
 }
 
 void bite::Analyzer::object_declaration(AstNode<ObjectStmt>& stmt) {
@@ -337,14 +415,12 @@ void bite::Analyzer::super_expr(const AstNode<SuperExpr>& /*unused*/) {
 }
 
 void bite::Analyzer::object_expr(AstNode<ObjectExpr>& expr) {
+    // TODO: tons of overlap with class declaration!
     auto* env = current_class_enviroment(); // assert non-null
     // TODO: refactor!
     if (expr->body.class_object) {
         emit_message(Logger::Level::error, "nested object", "here");
     }
-    // TODO: using statement
-    // TODO: class object
-    // TODO: getters and setters
     // TODO: init should be an reserved keyword
     unordered_dense::map<StringTable::Handle, bitflags<ClassAttributes>> overrideable_members;
     AstNode<ClassStmt>* superclass = nullptr;
@@ -384,6 +460,79 @@ void bite::Analyzer::object_expr(AstNode<ObjectExpr>& expr) {
     if (!superclass && expr->body.constructor->has_super) {
         emit_message(Logger::Level::error, "no superclass constructor to call", "");
     }
+
+      // TODO: is this good ordering?
+    // TODO: overlap with trait
+    unordered_dense::set<StringTable::Handle> requirements; // TODO: should contain attr as well i guess?
+    for (auto& using_stmt : expr->body.using_statements) {
+        for (auto& item : using_stmt->items) {
+            // Overlap with class
+            // TODO: better error messages, refactor?
+            auto binding = resolve_without_upvalues(item.name.string);
+            item.binding = resolve(item.name.string);
+            AstNode<TraitStmt>* item_trait = nullptr;
+            if (auto* global = std::get_if<GlobalBinding>(&binding)) {
+                if (std::holds_alternative<AstNode<TraitStmt>*>(global->info->declaration)) {
+                    item_trait = std::get<AstNode<TraitStmt>*>(global->info->declaration);
+                } else {
+                    emit_message(
+                        Logger::Level::error,
+                        "using item must be of trait type",
+                        "does not point to trait type"
+                    );
+                }
+            } else if (auto* local = std::get_if<LocalBinding>(&binding)) {
+                if (std::holds_alternative<AstNode<TraitStmt>*>(local->info->declaration)) {
+                    item_trait = std::get<AstNode<TraitStmt>*>(local->info->declaration);
+                } else {
+                    emit_message(
+                        Logger::Level::error,
+                        "using item must be of trait type",
+                        "does not point to trait type"
+                    );
+                }
+            } else {
+                emit_message(
+                    Logger::Level::error,
+                    "Trait must be a local or global variable",
+                    "is not a local or global variable"
+                );
+            }
+
+            if (!item_trait) {
+                continue;
+            }
+
+            // TODO: prob refactor?
+            for (auto& [field_name, field_attr] : (*item_trait)->enviroment.members) {
+                //check if excluded
+                bool is_excluded = false;
+                // possibly use some ranges here
+                for (auto& exclusion : item.exclusions) {
+                    if (exclusion.string == field_name) {
+                        is_excluded = true;
+                        break;
+                    }
+                }
+                if (is_excluded || field_attr[ClassAttributes::ABSTRACT]) {
+                    requirements.insert(field_name);
+                    // warn about useless exclude?
+                    continue;
+                }
+                // should aliasing methods that are requierments be allowed?
+                StringTable::Handle aliased_name = field_name;
+                for (auto& [before, after] : item.aliases) {
+                    if (before.string == field_name) {
+                        aliased_name = after.string;
+                        break;
+                    }
+                }
+                declare_in_class_enviroment(*env, aliased_name, field_attr);
+                item.declarations.emplace_back(field_name, aliased_name, field_attr);
+            }
+        }
+    }
+
     if (expr->body.constructor) { // TODO: always must have constructor!
         if (superclass && (*superclass)->body.constructor) {
             if (!(*superclass)->body.constructor->function->params.empty() && !expr->body.constructor->has_super) {
@@ -491,6 +640,14 @@ void bite::Analyzer::object_expr(AstNode<ObjectExpr>& expr) {
         function(method.function);
         node_stack.pop_back();
     }
+
+    // TODO: getter and setters requirements workings
+    for (auto& requirement : requirements) {
+        if (!env->members.contains(requirement)) {
+            // TODO: better error
+            emit_message(Logger::Level::error, "Trait requirement not satisfied.", "");
+        }
+    }
 }
 
 void bite::Analyzer::trait_declaration(AstNode<TraitStmt>& stmt) {
@@ -502,6 +659,7 @@ void bite::Analyzer::trait_declaration(AstNode<TraitStmt>& stmt) {
             // Overlap with class
             // TODO: better error messages, refactor?
             auto binding = resolve_without_upvalues(item.name.string);
+            item.binding = resolve(item.name.string);
             AstNode<TraitStmt>* item_trait = nullptr;
             if (auto* global = std::get_if<GlobalBinding>(&binding)) {
                 if (std::holds_alternative<AstNode<TraitStmt>*>(global->info->declaration)) {
@@ -531,6 +689,10 @@ void bite::Analyzer::trait_declaration(AstNode<TraitStmt>& stmt) {
                 );
             }
 
+            if (!item_trait) {
+                continue;
+            }
+
             // TODO: prob refactor?
             for (auto& [field_name, field_attr] : (*item_trait)->enviroment.members) {
                 //check if excluded
@@ -556,6 +718,7 @@ void bite::Analyzer::trait_declaration(AstNode<TraitStmt>& stmt) {
                     }
                 }
                 declare_in_trait_enviroment(*env, aliased_name, field_attr);
+                item.declarations.emplace_back(field_name, aliased_name, field_attr);
             }
         }
     }
@@ -572,7 +735,14 @@ void bite::Analyzer::trait_declaration(AstNode<TraitStmt>& stmt) {
         function(method.function);
         node_stack.pop_back();
     }
-    // TODO: there was some requirements section here?
+    // TODO: check
+    // TODO: ranges
+    // TODO: passing attributes
+    for (auto& requirement : requirements) {
+        if (!env->members.contains(requirement)) {
+            env->requirements.push_back(requirement);
+        }
+    }
 }
 
 void bite::Analyzer::visit_stmt(Stmt& statement) {

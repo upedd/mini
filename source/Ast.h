@@ -169,6 +169,7 @@ struct ClassEnviroment {
 // Then it could easily support object for traits if we wanted it?
 struct TraitEnviroment {
     bite::unordered_dense::map<StringTable::Handle, bitflags<ClassAttributes>> members;
+    std::vector<StringTable::Handle> requirements;
 };
 
 class Ast {
@@ -353,10 +354,21 @@ struct TraitStmt {
     TraitEnviroment enviroment;
 };
 
+
+// TODO: insane...
+// find a better way to write this
+struct UsingStmtMemeberDeclaration {
+    StringTable::Handle original_name;
+    StringTable::Handle aliased_name;
+    bitflags<ClassAttributes> attributes;
+};
+
 struct UsingStmtItem {
     Token name;
     std::vector<Token> exclusions;
     std::vector<std::pair<Token, Token>> aliases;
+    std::vector<UsingStmtMemeberDeclaration> declarations; // TODO
+    Binding binding = NoBinding();
 };
 
 struct UsingStmt {
