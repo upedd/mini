@@ -64,14 +64,16 @@ using StmtPtr = std::variant<AstNode<VarStmt>*, AstNode<ExprStmt>*, AstNode<Func
                              <NativeStmt>*, AstNode<ObjectStmt>*, AstNode<TraitStmt>*, AstNode<UsingStmt>*, AstNode<
                                  InvalidStmt>*>;
 
+using Node = std::variant<StmtPtr, ExprPtr>;
+
 struct LocalDeclarationInfo {
-    StmtPtr declaration;
+    Node declaration;
     std::int64_t idx;
     bool is_captured;
 };
 
 struct GlobalDeclarationInfo {
-    StmtPtr declaration;
+    Node declaration;
     StringTable::Handle name;
 };
 
@@ -261,6 +263,7 @@ struct ForExpr {
     Expr iterable;
     AstNode<BlockExpr> body;
     std::optional<Token> label;
+    DeclarationInfo info; // For iterator variable
 };
 
 struct ReturnExpr {

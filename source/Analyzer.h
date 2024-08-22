@@ -61,11 +61,11 @@ namespace bite {
         void trait_declaration(AstNode<TraitStmt>& stmt);
 
 
-        using Node = std::variant<StmtPtr, ExprPtr>;
-
         // TODO: mess?
-        DeclarationInfo* set_declaration_info(StmtPtr statement, DeclarationInfo info) {
-            return std::visit(
+        DeclarationInfo* set_declaration_info(Node node, DeclarationInfo info) {
+            if (std::holds_alternative<StmtPtr>(node)) {
+                auto statement = std::get<StmtPtr>(node);
+                return std::visit(
                 overloaded {
                     [info](AstNode<VarStmt>* stmt) -> DeclarationInfo* { return &((*stmt)->info = info); },
                     [](AstNode<ExprStmt>*) -> DeclarationInfo* { return nullptr; },
@@ -79,10 +79,16 @@ namespace bite {
                 },
                 statement
             );
+            }
+            auto expr = std::get<ExprPtr>(node);
+            if (std::holds_alternative<AstNode<ForExpr>*>(expr)) {
+                return &((*std::get<AstNode<ForExpr>*>(expr))->info = info);
+            }
+            return nullptr;
         }
 
         // Or just store everything in ast should be smarter
-        void declare_in_function_enviroment(FunctionEnviroment& env, StringTable::Handle name, StmtPtr declaration) {
+        void declare_in_function_enviroment(FunctionEnviroment& env, StringTable::Handle name, Node declaration) {
             if (env.locals.scopes.empty()) {
                 if (std::ranges::contains(env.parameters, name)) {
                     emit_message(Logger::Level::error, "duplicate parameter name", "here");
@@ -154,7 +160,7 @@ namespace bite {
             env.members[name] = attributes;
         }
 
-        void declare_in_global_enviroment(GlobalEnviroment& env, StringTable::Handle name, StmtPtr declaration) {
+        void declare_in_global_enviroment(GlobalEnviroment& env, StringTable::Handle name, Node declaration) {
             if (env.locals.scopes.empty()) {
                 if (env.globals.contains(name)) {
                     emit_message(Logger::Level::error, "global variable redeclaration", "here");
@@ -185,7 +191,7 @@ namespace bite {
         }
 
         // declare variable
-        void declare(StringTable::Handle name, StmtPtr declaration) {
+        void declare(StringTable::Handle name, Node declaration) {
             for (auto node : node_stack | std::views::reverse) {
                 if (std::holds_alternative<StmtPtr>(node)) {
                     auto stmt = std::get<StmtPtr>(node);

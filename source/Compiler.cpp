@@ -148,6 +148,10 @@ void Compiler::define_variable(const DeclarationInfo& info) {
     }
 }
 
+int64_t Compiler::synthetic_variable() {
+    return current_context().on_stack - 1;
+}
+
 void Compiler::variable_declaration(const AstNode<VarStmt>& expr) {
     if (expr->value) {
         visit_expr(*expr->value);
@@ -293,65 +297,64 @@ void Compiler::while_expr(const AstNode<WhileExpr>& expr) {
 }
 
 void Compiler::for_expr(const AstNode<ForExpr>& expr) {
-    // FIX!
-    std::unreachable();
+
     // TODO: desugaring step!
-    // with_expression_scope(
-    //     BlockScope(),
-    //     [&expr, this](const ExpressionScope&) {
-    //         visit_expr(expr->iterable);
-    //         int iterator_constant = current_function()->add_constant("iterator");
-    //         emit(OpCode::GET_PROPERTY, iterator_constant);
-    //         emit(OpCode::CALL, 0);
-    //         // define_variable(stmt.inf); // iterator
-    //         std::optional<StringTable::Handle> label = expr->label
-    //                                                        ? expr->label->string
-    //                                                        : std::optional<StringTable::Handle>();
-    //         int continue_idx = current_function()->add_empty_jump_destination();
-    //         int break_idx = current_function()->add_empty_jump_destination();
-    //         int end_idx = current_function()->add_empty_jump_destination();
-    //         with_expression_scope(
-    //             LoopScope { .label = label, .break_idx = break_idx, .continue_idx = continue_idx },
-    //             [this, continue_idx, &expr, end_idx](const ExpressionScope&) {
-    //                 current_function()->patch_jump_destination(continue_idx, current_program().size());
-    //                 // begin condition
-    //                 emit_get_variable(analyzer.bindings[expr.id]);
-    //                 int condition_constant = current_function()->add_constant("has_next");
-    //                 emit(OpCode::GET_PROPERTY, condition_constant);
-    //                 emit(OpCode::CALL, 0);
-    //                 // end condition
-    //
-    //                 emit(OpCode::JUMP_IF_FALSE, end_idx);
-    //                 emit(OpCode::POP); // pop evaluation condition result
-    //                 current_context().on_stack--;
-    //
-    //                 // begin item
-    //                 // TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    //                 define_variable(TODO);
-    //                 int item_constant = current_function()->add_constant("next");
-    //                 emit(OpCode::GET_PROPERTY, item_constant);
-    //                 emit(OpCode::CALL, 0);
-    //                 // end item
-    //
-    //                 with_expression_scope(
-    //                     BlockScope(),
-    //                     [this, &expr](const ExpressionScope&) {
-    //                         for (const auto& stmt : expr->body->stmts) {
-    //                             visit_stmt(stmt);
-    //                         }
-    //                         if (expr->body->expr) {
-    //                             visit_expr(*expr->body->expr);
-    //                         }
-    //                     }
-    //                 );
-    //             }
-    //         );
-    //         emit(OpCode::JUMP, continue_idx);
-    //         current_function()->patch_jump_destination(end_idx, current_program().size());
-    //         emit(OpCode::POP); // pop evalutaion condition result
-    //         current_function()->patch_jump_destination(break_idx, current_program().size());
-    //     }
-    // );
+    with_expression_scope(
+        BlockScope(),
+        [&expr, this](const ExpressionScope&) {
+            visit_expr(expr->iterable);
+            int iterator_constant = current_function()->add_constant("iterator");
+            emit(OpCode::GET_PROPERTY, iterator_constant);
+            emit(OpCode::CALL, 0);
+            int64_t iterator_slot = synthetic_variable();
+            std::optional<StringTable::Handle> label = expr->label
+                                                           ? expr->label->string
+                                                           : std::optional<StringTable::Handle>();
+            int continue_idx = current_function()->add_empty_jump_destination();
+            int break_idx = current_function()->add_empty_jump_destination();
+            int end_idx = current_function()->add_empty_jump_destination();
+            with_expression_scope(
+                LoopScope { .label = label, .break_idx = break_idx, .continue_idx = continue_idx },
+                [this, continue_idx, &expr, end_idx, iterator_slot](const ExpressionScope&) {
+                    current_function()->patch_jump_destination(continue_idx, current_program().size());
+                    // begin condition
+                    emit(OpCode::GET, iterator_slot);
+                    int condition_constant = current_function()->add_constant("has_next");
+                    emit(OpCode::GET_PROPERTY, condition_constant);
+                    emit(OpCode::CALL, 0);
+                    // end condition
+
+                    emit(OpCode::JUMP_IF_FALSE, end_idx);
+                    emit(OpCode::POP); // pop evaluation condition result
+                    current_context().on_stack--;
+
+                    // begin item
+                    emit(OpCode::GET, iterator_slot);
+                    int item_constant = current_function()->add_constant("next");
+                    emit(OpCode::GET_PROPERTY, item_constant);
+                    emit(OpCode::CALL, 0);
+                    define_variable(expr->info);
+                    // end item
+
+                    with_expression_scope(
+                        BlockScope(),
+                        [this, &expr](const ExpressionScope&) {
+                            for (const auto& stmt : expr->body->stmts) {
+                                visit_stmt(stmt);
+                            }
+                            if (expr->body->expr) {
+                                visit_expr(*expr->body->expr);
+                            }
+                        }
+                    );
+                }
+            );
+            emit(OpCode::JUMP, continue_idx);
+            current_function()->patch_jump_destination(end_idx, current_program().size());
+            emit(OpCode::POP); // pop evalutaion condition result
+            current_function()->patch_jump_destination(break_idx, current_program().size());
+        }
+    );
 
     // // Tons of overlap with while loop maybe abstract this away?
     // // ideally some sort of desugaring step
@@ -1194,7 +1197,6 @@ void Compiler::class_declaration(const AstNode<ClassStmt>& stmt) {
         int idx = current_function()->add_constant(method_name);
         emit(OpCode::METHOD, idx);
         emit(method.attributes.to_ullong()); // check size?
-        current_context().on_stack--;
     }
 
     if (stmt->body.constructor) { // TODO: always must have constructor!

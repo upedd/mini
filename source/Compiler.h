@@ -200,6 +200,7 @@ private:
 
     void visit_stmt(const Stmt& stmt);
     void define_variable(const DeclarationInfo& info);
+    int64_t synthetic_variable();
 
     void variable_declaration(const AstNode<VarStmt>& expr);
     void function_declaration(const AstNode<FunctionStmt>& stmt);

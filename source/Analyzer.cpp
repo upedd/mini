@@ -89,8 +89,9 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
             item.binding = resolve(item.name.string);
             AstNode<TraitStmt>* item_trait = nullptr;
             if (auto* global = std::get_if<GlobalBinding>(&binding)) {
-                if (std::holds_alternative<AstNode<TraitStmt>*>(global->info->declaration)) {
-                    item_trait = std::get<AstNode<TraitStmt>*>(global->info->declaration);
+                if (std::holds_alternative<StmtPtr>(global->info->declaration) && std::holds_alternative<AstNode<
+                    TraitStmt>*>(std::get<StmtPtr>(global->info->declaration))) {
+                    item_trait = std::get<AstNode<TraitStmt>*>(std::get<StmtPtr>(global->info->declaration));
                 } else {
                     emit_message(
                         Logger::Level::error,
@@ -99,8 +100,9 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
                     );
                 }
             } else if (auto* local = std::get_if<LocalBinding>(&binding)) {
-                if (std::holds_alternative<AstNode<TraitStmt>*>(local->info->declaration)) {
-                    item_trait = std::get<AstNode<TraitStmt>*>(local->info->declaration);
+                if (std::holds_alternative<StmtPtr>(global->info->declaration) && std::holds_alternative<AstNode<
+                    TraitStmt>*>(std::get<StmtPtr>(local->info->declaration))) {
+                    item_trait = std::get<AstNode<TraitStmt>*>(std::get<StmtPtr>(local->info->declaration));
                 } else {
                     emit_message(
                         Logger::Level::error,
@@ -159,14 +161,16 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
         auto binding = resolve_without_upvalues(stmt->super_class->string);
         stmt->superclass_binding = resolve(stmt->super_class->string);
         if (auto* global = std::get_if<GlobalBinding>(&binding)) {
-            if (std::holds_alternative<AstNode<ClassStmt>*>(global->info->declaration)) {
-                superclass = std::get<AstNode<ClassStmt>*>(global->info->declaration);
+            if (std::holds_alternative<StmtPtr>(global->info->declaration) && std::holds_alternative<AstNode<ClassStmt>
+                *>(std::get<StmtPtr>(global->info->declaration))) {
+                superclass = std::get<AstNode<ClassStmt>*>(std::get<StmtPtr>(global->info->declaration));
             } else {
                 emit_message(Logger::Level::error, "superclass must be of class type", "does not point to class type");
             }
         } else if (auto* local = std::get_if<LocalBinding>(&binding)) {
-            if (std::holds_alternative<AstNode<ClassStmt>*>(local->info->declaration)) {
-                superclass = std::get<AstNode<ClassStmt>*>(local->info->declaration);
+            if (std::holds_alternative<StmtPtr>(local->info->declaration) && std::holds_alternative<AstNode<ClassStmt>
+                *>(std::get<StmtPtr>(local->info->declaration))) {
+                superclass = std::get<AstNode<ClassStmt>*>(std::get<StmtPtr>(local->info->declaration));
             } else {
                 emit_message(Logger::Level::error, "superclass must be of class type", "does not point to class type");
             }
@@ -389,8 +393,11 @@ void bite::Analyzer::while_expr(AstNode<WhileExpr>& expr) {
 }
 
 void bite::Analyzer::for_expr(AstNode<ForExpr>& expr) {
-    // TODO: implement
-    std::unreachable();
+    with_scope([this, &expr] {
+        declare(expr->name.string, &expr);
+        visit_expr(expr->iterable);
+        block(expr->body);
+    });
 }
 
 void bite::Analyzer::return_expr(AstNode<ReturnExpr>& expr) {
@@ -429,14 +436,16 @@ void bite::Analyzer::object_expr(AstNode<ObjectExpr>& expr) {
         auto binding = resolve_without_upvalues(expr->super_class->string);
         expr->superclass_binding = resolve(expr->super_class->string);
         if (auto* global = std::get_if<GlobalBinding>(&binding)) {
-            if (std::holds_alternative<AstNode<ClassStmt>*>(global->info->declaration)) {
-                superclass = std::get<AstNode<ClassStmt>*>(global->info->declaration);
+            if (std::holds_alternative<StmtPtr>(global->info->declaration) && std::holds_alternative<AstNode<ClassStmt>
+                *>(std::get<StmtPtr>(global->info->declaration))) {
+                superclass = std::get<AstNode<ClassStmt>*>(std::get<StmtPtr>(global->info->declaration));
             } else {
                 emit_message(Logger::Level::error, "superclass must be of class type", "does not point to class type");
             }
         } else if (auto* local = std::get_if<LocalBinding>(&binding)) {
-            if (std::holds_alternative<AstNode<ClassStmt>*>(local->info->declaration)) {
-                superclass = std::get<AstNode<ClassStmt>*>(local->info->declaration);
+            if (std::holds_alternative<StmtPtr>(local->info->declaration) && std::holds_alternative<AstNode<ClassStmt>
+                *>(std::get<StmtPtr>(local->info->declaration))) {
+                superclass = std::get<AstNode<ClassStmt>*>(std::get<StmtPtr>(local->info->declaration));
             } else {
                 emit_message(Logger::Level::error, "superclass must be of class type", "does not point to class type");
             }
@@ -461,7 +470,7 @@ void bite::Analyzer::object_expr(AstNode<ObjectExpr>& expr) {
         emit_message(Logger::Level::error, "no superclass constructor to call", "");
     }
 
-      // TODO: is this good ordering?
+    // TODO: is this good ordering?
     // TODO: overlap with trait
     unordered_dense::set<StringTable::Handle> requirements; // TODO: should contain attr as well i guess?
     for (auto& using_stmt : expr->body.using_statements) {
@@ -472,8 +481,9 @@ void bite::Analyzer::object_expr(AstNode<ObjectExpr>& expr) {
             item.binding = resolve(item.name.string);
             AstNode<TraitStmt>* item_trait = nullptr;
             if (auto* global = std::get_if<GlobalBinding>(&binding)) {
-                if (std::holds_alternative<AstNode<TraitStmt>*>(global->info->declaration)) {
-                    item_trait = std::get<AstNode<TraitStmt>*>(global->info->declaration);
+                if (std::holds_alternative<StmtPtr>(global->info->declaration) && std::holds_alternative<AstNode<
+                    TraitStmt>*>(std::get<StmtPtr>(global->info->declaration))) {
+                    item_trait = std::get<AstNode<TraitStmt>*>(std::get<StmtPtr>(global->info->declaration));
                 } else {
                     emit_message(
                         Logger::Level::error,
@@ -482,8 +492,9 @@ void bite::Analyzer::object_expr(AstNode<ObjectExpr>& expr) {
                     );
                 }
             } else if (auto* local = std::get_if<LocalBinding>(&binding)) {
-                if (std::holds_alternative<AstNode<TraitStmt>*>(local->info->declaration)) {
-                    item_trait = std::get<AstNode<TraitStmt>*>(local->info->declaration);
+                if (std::holds_alternative<StmtPtr>(global->info->declaration) && std::holds_alternative<AstNode<
+                    TraitStmt>*>(std::get<StmtPtr>(local->info->declaration))) {
+                    item_trait = std::get<AstNode<TraitStmt>*>(std::get<StmtPtr>(local->info->declaration));
                 } else {
                     emit_message(
                         Logger::Level::error,
@@ -662,8 +673,9 @@ void bite::Analyzer::trait_declaration(AstNode<TraitStmt>& stmt) {
             item.binding = resolve(item.name.string);
             AstNode<TraitStmt>* item_trait = nullptr;
             if (auto* global = std::get_if<GlobalBinding>(&binding)) {
-                if (std::holds_alternative<AstNode<TraitStmt>*>(global->info->declaration)) {
-                    item_trait = std::get<AstNode<TraitStmt>*>(global->info->declaration);
+                if (std::holds_alternative<StmtPtr>(global->info->declaration) && std::holds_alternative<AstNode<
+                    TraitStmt>*>(std::get<StmtPtr>(global->info->declaration))) {
+                    item_trait = std::get<AstNode<TraitStmt>*>(std::get<StmtPtr>(global->info->declaration));
                 } else {
                     emit_message(
                         Logger::Level::error,
@@ -672,8 +684,9 @@ void bite::Analyzer::trait_declaration(AstNode<TraitStmt>& stmt) {
                     );
                 }
             } else if (auto* local = std::get_if<LocalBinding>(&binding)) {
-                if (std::holds_alternative<AstNode<TraitStmt>*>(local->info->declaration)) {
-                    item_trait = std::get<AstNode<TraitStmt>*>(local->info->declaration);
+                if (std::holds_alternative<StmtPtr>(local->info->declaration) && std::holds_alternative<AstNode<
+                    TraitStmt>*>(std::get<StmtPtr>(local->info->declaration))) {
+                    item_trait = std::get<AstNode<TraitStmt>*>(std::get<StmtPtr>(local->info->declaration));
                 } else {
                     emit_message(
                         Logger::Level::error,
@@ -757,9 +770,7 @@ void bite::Analyzer::visit_stmt(Stmt& statement) {
             [this](AstNode<NativeStmt>& stmt) { native_declaration(stmt); },
             [this](AstNode<ObjectStmt>& stmt) { object_declaration(stmt); },
             [this](AstNode<TraitStmt>& stmt) { trait_declaration(stmt); },
-            // TODO: implement
             [this](AstNode<UsingStmt>&) {},
-            // TODO: implement
             [](AstNode<InvalidStmt>&) {},
         },
         statement
@@ -786,7 +797,6 @@ void bite::Analyzer::visit_expr(Expr& expression) {
             [this](AstNode<ContinueExpr>& expr) { continue_expr(expr); },
             [this](AstNode<WhileExpr>& expr) { while_expr(expr); },
             [this](AstNode<ForExpr>& expr) { for_expr(expr); },
-            // TODO: implement
             [this](AstNode<ReturnExpr>& expr) { return_expr(expr); },
             [this](AstNode<ThisExpr>& expr) { this_expr(expr); },
             [this](AstNode<ObjectExpr>& expr) { object_expr(expr); },
