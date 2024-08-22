@@ -7,6 +7,11 @@ made to be fun and easy to use and embed into other applications.
 Made to be used in bite-100 fantasy console (soon™) but is versatile enough that
 can be used in other applications as well.
 
+## Photos
+![image](https://github.com/user-attachments/assets/714ffb79-d40f-44c5-bac9-0f17cab3efae)
+![image](https://github.com/user-attachments/assets/71c3830c-ab7f-4a6d-a9d7-959e6f76bb0b)
+
+
 ## Features 🤯
 
 - Easy to embed into c++ applications
