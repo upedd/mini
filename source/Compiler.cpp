@@ -65,7 +65,7 @@ void Compiler::start_context(Function* function, FunctionType type) {
     current_context().on_stack = function->get_arity() + 1; // plus one for reserved receiver slot!
 }
 
-#define COMPILER_PRINT_BYTECODE
+//#define COMPILER_PRINT_BYTECODE
 
 void Compiler::end_context() {
     #ifdef COMPILER_PRINT_BYTECODE
@@ -301,7 +301,7 @@ void Compiler::for_expr(const AstNode<ForExpr>& expr) {
     // TODO: desugaring step!
     with_expression_scope(
         BlockScope(),
-        [&expr, this](const ExpressionScope&) {
+        [&expr, this](const ExpressionScope& scope) {
             visit_expr(expr->iterable);
             int iterator_constant = current_function()->add_constant("iterator");
             emit(OpCode::GET_PROPERTY, iterator_constant);
@@ -326,13 +326,13 @@ void Compiler::for_expr(const AstNode<ForExpr>& expr) {
 
                     emit(OpCode::JUMP_IF_FALSE, end_idx);
                     emit(OpCode::POP); // pop evaluation condition result
-                    current_context().on_stack--;
 
                     // begin item
                     emit(OpCode::GET, iterator_slot);
                     int item_constant = current_function()->add_constant("next");
                     emit(OpCode::GET_PROPERTY, item_constant);
                     emit(OpCode::CALL, 0);
+                    current_context().on_stack++;
                     define_variable(expr->info);
                     // end item
 
@@ -353,6 +353,7 @@ void Compiler::for_expr(const AstNode<ForExpr>& expr) {
             current_function()->patch_jump_destination(end_idx, current_program().size());
             emit(OpCode::POP); // pop evalutaion condition result
             current_function()->patch_jump_destination(break_idx, current_program().size());
+            emit(OpCode::SET, get_return_slot(scope));
         }
     );
 

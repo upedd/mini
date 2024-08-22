@@ -51,6 +51,7 @@ public:
 
     template <class T>
     T* allocate(T* ptr);
+    void allocate(std::vector<Object*> ptr);
 
     void adopt_objects(std::vector<Object*> objects);
 
@@ -134,6 +135,20 @@ T* VM::allocate(T* ptr) {
     }
 
     return ptr;
+}
+
+inline void VM::allocate(std::vector<Object*> ptr) {
+    for (auto* p : ptr) {
+        gc.add_object(p);
+    }
+    #ifdef DEBUG_STRESS_GC
+    run_gc();
+    #endif
+    if (gc.get_memory_used() > next_gc) {
+        mark_roots_for_gc();
+        gc.collect();
+        next_gc = gc.get_memory_used() * HEAP_GROWTH_FACTOR;
+    }
 }
 
 #endif //VM_H

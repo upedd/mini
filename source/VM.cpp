@@ -570,8 +570,8 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 }
 
                 if (instance) {
-                    pop();
                     bool is_computed_property = false;
+                    pop();
                     std::expected<Value, RuntimeError> property = get_instance_property(
                         instance,
                         name,
@@ -580,14 +580,11 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                     if (!property) {
                         return std::unexpected(property.error());
                     }
-
                     push(*property);
                     // this will wait for gc refactoring
                     if (property->is<Object*>()) {
                         if (auto* bound = dynamic_cast<BoundMethod*>(property->get<Object*>())) {
-                            allocate(bound);
-                            allocate<Receiver>(dynamic_cast<Receiver*>(bound->receiver.get<Object*>()));
-
+                            allocate({bound, bound->receiver.get<Object*>()});
                             if (is_computed_property) {
                                 if (auto error = call_value(bound, 0)) {
                                     return std::unexpected(*error);
@@ -630,8 +627,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                         // gc rewrite!
                         if (property.is<Object*>()) {
                             if (auto* bound = dynamic_cast<BoundMethod*>(property.get<Object*>())) {
-                                allocate(bound);
-                                allocate<Receiver>(dynamic_cast<Receiver*>(bound->receiver.get<Object*>()));
+                                allocate({bound, bound->receiver.get<Object*>()});
                             }
                         }
                         pop(); // pop bound for now
@@ -729,8 +725,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 push(*property);
                 if (property->is<Object*>()) {
                     if (auto* bound = dynamic_cast<BoundMethod*>(property->get<Object*>())) {
-                        allocate(bound);
-                        allocate<Receiver>(dynamic_cast<Receiver*>(bound->receiver.get<Object*>()));
+                        allocate({bound, bound->receiver.get<Object*>()});
 
                         if (is_computed_property) {
                             if (auto error = call_value(bound, 0)) {
@@ -758,8 +753,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                     // gc rewrite!
                     if (property.is<Object*>()) {
                         if (auto* bound = dynamic_cast<BoundMethod*>(property.get<Object*>())) {
-                            allocate(bound);
-                            allocate<Receiver>(dynamic_cast<Receiver*>(bound->receiver.get<Object*>()));
+                            allocate({bound, bound->receiver.get<Object*>()});
                         }
                     }
                     pop(); // pop bound for now
@@ -829,8 +823,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 // TODO: temp fix
                 // work around gc and fix duplicate function returns
                 if (auto* bound_ptr = dynamic_cast<BoundMethod*>(bound.get<Object*>())) {
-                    allocate(bound_ptr);
-                    allocate<Receiver>(dynamic_cast<Receiver*>(bound_ptr->receiver.get<Object*>()));
+                    allocate({bound_ptr, bound_ptr->receiver.get<Object*>()});
                 }
 
                 std::swap(stack[stack_index - 1], stack[stack_index - 2]);
@@ -943,10 +936,10 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 break;
             }
         }
-        for (int i = 0; i < stack_index; ++i) {
-            std::cout << '[' << stack[i].to_string() << "] ";
-        }
-        std::cout << '\n';
+        // for (int i = 0; i < stack_index; ++i) {
+        //     std::cout << '[' << stack[i].to_string() << "] ";
+        // }
+        // std::cout << '\n';
     }
     #undef BINARY_OPERATION
 }

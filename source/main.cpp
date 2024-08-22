@@ -6,6 +6,7 @@
 #include "VM.h"
 #include "shared/SharedContext.h"
 
+// TODO: investigate fun in class infinite loop?
 int main(int argc, char** argv) {
     // TODO error handling
     if (argc != 2) {
@@ -18,8 +19,8 @@ int main(int argc, char** argv) {
         return 1;
     }
     auto& func = compiler.get_main();
-    Disassembler disassembler(func);
-    disassembler.disassemble("main");
+    // Disassembler disassembler(func);
+    // disassembler.disassemble("main");
     auto& functions = compiler.get_functions();
     GarbageCollector gc;
     for (auto* function : functions) {

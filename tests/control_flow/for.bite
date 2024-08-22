@@ -1,18 +1,17 @@
 class Ten {
     iterator() {
         class TenIterator {
+            cnt = 0;
             next() {
-                this.cnt += 1;
-                return this.cnt;
+                cnt += 1;
+                return cnt;
             }
 
             has_next() {
-                return this.cnt < 10;
+                return cnt < 10;
             }
         }
-        let iter = TenIterator();
-        iter.cnt = 0;
-        return iter;
+        return TenIterator();
     }
 }
 
