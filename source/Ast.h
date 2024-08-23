@@ -191,21 +191,7 @@ public:
     }
 };
 
-inline bite::SourceSpan get_span(const Stmt& statment) {
-    return std::visit(overloaded {[](const auto& stmt) {return stmt.span;}}, statment);
-}
 
-inline bite::SourceSpan get_span(const Expr& expression) {
-    return std::visit(overloaded {[](const auto& expr) {return expr.span;}}, expression);
-}
-
-inline bite::SourceSpan get_span(const StmtPtr& statment) {
-    return std::visit(overloaded {[](const auto* stmt) {return stmt->span;}}, statment);
-}
-
-inline bite::SourceSpan get_span(const ExprPtr& expression) {
-    return std::visit(overloaded {[](const auto* expr) {return expr->span;}}, expression);
-}
 
 struct UnaryExpr {
     Expr expr;
@@ -315,17 +301,21 @@ struct ExprStmt {
 struct Field {
     AstNode<VarStmt> variable;
     bitflags<ClassAttributes> attributes;
+    bite::SourceSpan span;
 };
 
 struct Method {
     AstNode<FunctionStmt> function;
     bitflags<ClassAttributes> attributes;
+    bite::SourceSpan decl_span;
 };
 
 struct Constructor {
     bool has_super;
     std::vector<Expr> super_arguments;
     AstNode<FunctionStmt> function;
+    bite::SourceSpan superconstructor_call_span;
+    bite::SourceSpan decl_span;
 };
 
 /**
@@ -349,7 +339,9 @@ struct ObjectExpr {
 
 struct ClassStmt {
     Token name;
+    bite::SourceSpan name_span; // TODO: temp
     std::optional<Token> super_class;
+    bite::SourceSpan super_class_span; // TODO: temp
     StructureBody body;
     bool is_abstract = false;
     DeclarationInfo info;
@@ -388,6 +380,7 @@ struct UsingStmtMemeberDeclaration {
 
 struct UsingStmtItem {
     Token name;
+    bite::SourceSpan span;
     std::vector<Token> exclusions;
     std::vector<std::pair<Token, Token>> aliases;
     std::vector<UsingStmtMemeberDeclaration> declarations; // TODO
@@ -402,6 +395,22 @@ struct UsingStmt {
 struct InvalidExpr {};
 
 struct InvalidStmt {};
+
+inline bite::SourceSpan get_span(const Stmt& statment) {
+    return std::visit(overloaded {[](const auto& stmt) {return stmt.span;}}, statment);
+}
+
+inline bite::SourceSpan get_span(const Expr& expression) {
+    return std::visit(overloaded {[](const auto& expr) {return expr.span;}}, expression);
+}
+
+inline bite::SourceSpan get_span(const StmtPtr& statment) {
+    return std::visit(overloaded {[](const auto* stmt) {return stmt->span;}}, statment);
+}
+
+inline bite::SourceSpan get_span(const ExprPtr& expression) {
+    return std::visit(overloaded {[](const auto* expr) {return expr->span;}}, expression);
+}
 
 // inline std::string expr_to_string(const Expr& expr, std::string_view source);
 //

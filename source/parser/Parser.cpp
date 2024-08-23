@@ -220,28 +220,32 @@ std::optional<Stmt> Parser::statement() {
 }
 
 std::optional<Stmt> Parser::control_flow_expression_statement() {
-    std::optional<Expr> expr;
-    if (match(Token::Type::IF)) {
-        expr = if_expression();
-    } else if (match(Token::Type::LOOP)) {
-        expr = loop_expression();
-    } else if (match(Token::Type::WHILE)) {
-        expr = while_expression();
-    } else if (match(Token::Type::FOR)) {
-        expr = for_expression();
-    } else if (match(Token::Type::LABEL)) {
-        expr = labeled_expression();
-    } else if (match(Token::Type::RETURN)) {
-        expr = return_expression();
-    } else if (match(Token::Type::LEFT_BRACE)) {
-        expr = block();
-    }
-    // There is an optional semicolon after control flow expressions statements
-    match(Token::Type::SEMICOLON);
-    if (!expr) {
-        return {};
-    }
-    return ast.make_node<ExprStmt>(make_span(), std::move(*expr));
+    return with_source_span(
+        [this] -> std::optional<Stmt> {
+            std::optional<Expr> expr;
+            if (match(Token::Type::IF)) {
+                expr = if_expression();
+            } else if (match(Token::Type::LOOP)) {
+                expr = loop_expression();
+            } else if (match(Token::Type::WHILE)) {
+                expr = while_expression();
+            } else if (match(Token::Type::FOR)) {
+                expr = for_expression();
+            } else if (match(Token::Type::LABEL)) {
+                expr = labeled_expression();
+            } else if (match(Token::Type::RETURN)) {
+                expr = return_expression();
+            } else if (match(Token::Type::LEFT_BRACE)) {
+                expr = block();
+            }
+            // There is an optional semicolon after control flow expressions statements
+            match(Token::Type::SEMICOLON);
+            if (!expr) {
+                return {};
+            }
+            return ast.make_node<ExprStmt>(make_span(), std::move(*expr));
+        }
+    );
 }
 
 Stmt Parser::expr_statement() {
@@ -337,18 +341,10 @@ StructureBody Parser::structure_body(const Token& class_token) {
     consume(Token::Type::LEFT_BRACE, "missing body");
     while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
         // Using declarataions
-        if (with_source_span(
-            [this, &body] {
-                if (match(Token::Type::USING)) {
-                    body.using_statements.push_back(using_statement());
-                    return true;
-                }
-                return false;
-            }
-        )) {
+        if (match(Token::Type::USING)) {
+            body.using_statements.push_back(using_statement());
             continue;
         }
-
 
         // Object definition
         if (match(Token::Type::OBJECT)) {
@@ -401,17 +397,20 @@ AstNode<UsingStmt> Parser::using_statement() {
 }
 
 UsingStmtItem Parser::using_stmt_item() {
-    consume(Token::Type::IDENTIFIER, "Identifier expected");
-    Token item_name = current;
-    if (match(Token::Type::LEFT_PAREN)) {
-        return using_stmt_item_with_params(item_name);
-    }
-    return { .name = item_name };
+    return with_source_span([this] -> UsingStmtItem {
+        consume(Token::Type::IDENTIFIER, "Identifier expected");
+        Token item_name = current;
+        auto span = make_span();
+        if (match(Token::Type::LEFT_PAREN)) {
+            return using_stmt_item_with_params(item_name, span);
+        }
+        return { .name = item_name, .span = span };
+    });
 }
 
 
-UsingStmtItem Parser::using_stmt_item_with_params(const Token& name) {
-    UsingStmtItem item { .name = name };
+UsingStmtItem Parser::using_stmt_item_with_params(const Token& name, const bite::SourceSpan& span) {
+    UsingStmtItem item { .name = name, .span = span };
     do {
         if (match(Token::Type::EXCLUDE)) {
             consume(Token::Type::IDENTIFIER, "invalid exclusion item");
@@ -426,6 +425,7 @@ UsingStmtItem Parser::using_stmt_item_with_params(const Token& name) {
         }
     } while (match(Token::Type::COMMA));
     consume(Token::Type::RIGHT_PAREN, "unmatched ')'");
+
     return item;
 }
 

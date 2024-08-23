@@ -106,7 +106,7 @@ private:
 
     AstNode<UsingStmt> using_statement();
     UsingStmtItem using_stmt_item();
-    UsingStmtItem using_stmt_item_with_params(const Token& name);
+    UsingStmtItem using_stmt_item_with_params(const Token& name, const bite::SourceSpan& span);
 
     bitflags<ClassAttributes> member_attributes();
 
