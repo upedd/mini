@@ -61,7 +61,6 @@ private:
     bite::SourceSpan no_span() {
         return bite::SourceSpan {.start_offset = 0, .end_offset = 0, .file_path = "unknown"};
     }
-
     auto with_source_span(const auto& fn) {
         span_stack.emplace_back(next.source_start_offset, next.source_end_offset, lexer.get_filepath());
         auto res = fn();

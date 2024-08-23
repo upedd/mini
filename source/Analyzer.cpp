@@ -308,6 +308,8 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
     if (stmt->body.constructor) { // TODO: always must have constructor!
         if (superclass && (*superclass)->body.constructor) {
             if (!(*superclass)->body.constructor->function->params.empty() && !stmt->body.constructor->has_super) {
+                // TODO: better diagnostic in default constructor
+                // TODO: better constructor declspan
                 context->diagnostics.add(
                     {
                         .level = DiagnosticLevel::ERROR,
@@ -335,6 +337,7 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
             }
             if (stmt->body.constructor->super_arguments.size() != (*superclass)->body.constructor->function->params.
                 size()) {
+                // TODO: not safe?
                 context->diagnostics.add(
                     {
                         .level = DiagnosticLevel::ERROR,
@@ -382,7 +385,6 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
         // visit in this env to support upvalues!
         for (auto& field : stmt->body.fields) {
             if (field.attributes[ClassAttributes::ABSTRACT] && !stmt->is_abstract) {
-                //emit_message(Logger::Level::error, "abstract member inside of non-abstract class", "here");
                 context->diagnostics.add(
                     {
                         .level = DiagnosticLevel::ERROR,
@@ -484,6 +486,7 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
                 method_attr[ClassAttributes::GETTER]) || (member_attr.attributes[ClassAttributes::SETTER] && method_attr
                 [ClassAttributes::SETTER]))) {
                 // TODO: maybe point to original method
+                // TODO: fixme!
                 context->diagnostics.add(
                     {
                         .level = DiagnosticLevel::ERROR,
@@ -540,7 +543,7 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
                 context->diagnostics.add(
                     {
                         .level = DiagnosticLevel::ERROR,
-                        .message = std::format("abstract member {} not overriden", name),
+                        .message = std::format("abstract member {} not overriden", *name),
                         .inline_hints = {
                             InlineHint {
                                 .location = stmt->name_span,
@@ -579,11 +582,11 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
             context->diagnostics.add(
                 {
                     .level = DiagnosticLevel::ERROR,
-                    .message = std::format("trait requirement not satisifed: {}", requirement),
+                    .message = std::format("trait requirement not satisifed: {}", *requirement),
                     .inline_hints = {
                         InlineHint {
                             .location = stmt->name_span,
-                            .message = std::format("add member {} in this class", requirement),
+                            .message = std::format("add member {} in this class", *requirement),
                             .level = DiagnosticLevel::ERROR
                         },
                         InlineHint {
@@ -627,7 +630,17 @@ void bite::Analyzer::binary(AstNode<BinaryExpr>& expr) {
         } else if (std::holds_alternative<AstNode<SuperExpr>>(expr->left)) {
             expr->binding = SuperBinding(std::get<AstNode<SuperExpr>>(expr->left)->method.string);
         } else {
-            emit_message(Logger::Level::error, "Expected lvalue", "here");
+            context->diagnostics.add({
+                .level = DiagnosticLevel::ERROR,
+                .message = "expected lvalue",
+                .inline_hints = {
+                    InlineHint {
+                        .location = get_span(expr->left),
+                        .message = "is not an lvalue",
+                        .level = DiagnosticLevel::ERROR
+                    }
+                }
+            });
         }
     }
 }
@@ -658,7 +671,17 @@ void bite::Analyzer::loop_expression(AstNode<LoopExpr>& expr) {
 void bite::Analyzer::break_expr(AstNode<BreakExpr>& expr) {
     // TODO better break expr analyzing!
     if (expr->label && !is_there_matching_label(expr->label->string)) {
-        emit_message(Logger::Level::error, "no matching label found.", "referenced here");
+        context->diagnostics.add({
+            .level = DiagnosticLevel::ERROR,
+            .message = "unresolved label",
+            .inline_hints = {
+                InlineHint {
+                    .location = expr.label_span,
+                    .message = "no matching label found",
+                    .level = DiagnosticLevel::ERROR
+                }
+            }
+        });
     }
     if (expr->expr) {
         visit_expr(*expr->expr);
@@ -667,10 +690,30 @@ void bite::Analyzer::break_expr(AstNode<BreakExpr>& expr) {
 
 void bite::Analyzer::continue_expr(AstNode<ContinueExpr>& expr) {
     if (!is_in_loop()) {
-        emit_message(Logger::Level::error, "continue expression outside of loop", "here");
+        context->diagnostics.add({
+            .level = DiagnosticLevel::ERROR,
+            .message = "continue expression outside of loop",
+            .inline_hints = {
+                InlineHint {
+                    .location = expr.span,
+                    .message = "here",
+                    .level = DiagnosticLevel::ERROR
+                }
+            }
+        });
     }
     if (expr->label && !is_there_matching_label(expr->label->string)) {
-        emit_message(Logger::Level::error, "no matching label found.", "referenced here");
+        context->diagnostics.add({
+            .level = DiagnosticLevel::ERROR,
+            .message = "unresolved label",
+            .inline_hints = {
+                InlineHint {
+                    .location = expr.label_span,
+                    .message = "no matching label found",
+                    .level = DiagnosticLevel::ERROR
+                }
+            }
+        });
     }
 }
 
@@ -691,22 +734,52 @@ void bite::Analyzer::for_expr(AstNode<ForExpr>& expr) {
 
 void bite::Analyzer::return_expr(AstNode<ReturnExpr>& expr) {
     if (!is_in_function()) {
-        emit_message(Logger::Level::error, "return expression outside of function", "here");
+        context->diagnostics.add({
+            .level = DiagnosticLevel::ERROR,
+            .message = "return expression outside of function",
+            .inline_hints = {
+                InlineHint {
+                    .location = expr.span,
+                    .message = "here",
+                    .level = DiagnosticLevel::ERROR
+                }
+            }
+        });
     }
     if (expr->value) {
         visit_expr(*expr->value);
     }
 }
 
-void bite::Analyzer::this_expr(AstNode<ThisExpr>& /*unused*/) {
+void bite::Analyzer::this_expr(AstNode<ThisExpr>& expr) {
     if (!is_in_class()) {
-        emit_message(Logger::Level::error, "'this' outside of class member", "here");
+        context->diagnostics.add({
+            .level = DiagnosticLevel::ERROR,
+            .message = "'this' outside of class member",
+            .inline_hints = {
+                InlineHint {
+                    .location = expr.span,
+                    .message = "here",
+                    .level = DiagnosticLevel::ERROR
+                }
+            }
+        });
     }
 }
 
-void bite::Analyzer::super_expr(const AstNode<SuperExpr>& /*unused*/) {
+void bite::Analyzer::super_expr(const AstNode<SuperExpr>& expr) {
     if (!is_in_class_with_superclass()) {
-        emit_message(Logger::Level::error, "'super' outside of class with superclass", "here");
+        context->diagnostics.add({
+            .level = DiagnosticLevel::ERROR,
+            .message = "'super' outside of class with superclass",
+            .inline_hints = {
+                InlineHint {
+                    .location = expr.span,
+                    .message = "here",
+                    .level = DiagnosticLevel::ERROR
+                }
+            }
+        });
     }
 }
 
@@ -715,7 +788,18 @@ void bite::Analyzer::object_expr(AstNode<ObjectExpr>& expr) {
     auto* env = current_class_enviroment(); // assert non-null
     // TODO: refactor!
     if (expr->body.class_object) {
-        emit_message(Logger::Level::error, "nested object", "here");
+        // TODO: better error message
+        context->diagnostics.add({
+            .level = DiagnosticLevel::ERROR,
+            .message = "object cannot contain another object",
+            .inline_hints = {
+                InlineHint {
+                    .location = expr->body.class_object->span,
+                    .message = "",
+                    .level = DiagnosticLevel::ERROR
+                }
+            }
+        });
     }
     // TODO: init should be an reserved keyword
     unordered_dense::map<StringTable::Handle, MemberInfo> overrideable_members;
@@ -1176,7 +1260,7 @@ void bite::Analyzer::object_expr(AstNode<ObjectExpr>& expr) {
                 context->diagnostics.add(
                     {
                         .level = DiagnosticLevel::ERROR,
-                        .message = std::format("abstract member {} not overriden", name),
+                        .message = std::format("abstract member {} not overriden", *name),
                         .inline_hints = {
                             InlineHint {
                                 .location = expr->name_span,
@@ -1214,11 +1298,11 @@ void bite::Analyzer::object_expr(AstNode<ObjectExpr>& expr) {
             context->diagnostics.add(
                 {
                     .level = DiagnosticLevel::ERROR,
-                    .message = std::format("trait requirement not satisifed: {}", requirement),
+                    .message = std::format("trait requirement not satisifed: {}", *requirement),
                     .inline_hints = {
                         InlineHint {
                             .location = expr->name_span,
-                            .message = std::format("add member {} in this class", requirement),
+                            .message = std::format("add member {} in this class", *requirement),
                             .level = DiagnosticLevel::ERROR
                         },
                         InlineHint {
