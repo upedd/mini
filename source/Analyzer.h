@@ -118,18 +118,18 @@ namespace bite {
         void declare_in_class_enviroment(
             ClassEnviroment& env,
             StringTable::Handle name,
-            const bitflags<ClassAttributes>& attributes
+            const MemberInfo& attributes
         ) {
             if (env.members.contains(name)) {
                 auto& member_attr = env.members[name];
-                if (member_attr[ClassAttributes::SETTER] && !member_attr[ClassAttributes::GETTER] && !attributes[
-                    ClassAttributes::SETTER] && attributes[ClassAttributes::GETTER]) {
-                    member_attr += ClassAttributes::GETTER;
+                if (member_attr.attributes[ClassAttributes::SETTER] && !member_attr.attributes[ClassAttributes::GETTER] && !attributes.attributes[
+                    ClassAttributes::SETTER] && attributes.attributes[ClassAttributes::GETTER]) {
+                    member_attr.attributes += ClassAttributes::GETTER;
                     return;
                 }
-                if (member_attr[ClassAttributes::GETTER] && !member_attr[ClassAttributes::SETTER] && !attributes[
-                    ClassAttributes::GETTER] && attributes[ClassAttributes::SETTER]) {
-                    member_attr += ClassAttributes::SETTER;
+                if (member_attr.attributes[ClassAttributes::GETTER] && !member_attr.attributes[ClassAttributes::SETTER] && !attributes.attributes[
+                    ClassAttributes::GETTER] && attributes.attributes[ClassAttributes::SETTER]) {
+                    member_attr.attributes += ClassAttributes::SETTER;
                     return;
                 }
                 emit_message(Logger::Level::error, "member name conflict", "here");
@@ -141,18 +141,18 @@ namespace bite {
         void declare_in_trait_enviroment(
             TraitEnviroment& env,
             StringTable::Handle name,
-            const bitflags<ClassAttributes>& attributes
+            const MemberInfo& attributes
         ) {
             if (env.members.contains(name)) {
                 auto& member_attr = env.members[name];
-                if (member_attr[ClassAttributes::SETTER] && !member_attr[ClassAttributes::GETTER] && !attributes[
-                    ClassAttributes::SETTER] && attributes[ClassAttributes::GETTER]) {
-                    member_attr += ClassAttributes::GETTER;
+                if (member_attr.attributes[ClassAttributes::SETTER] && !member_attr.attributes[ClassAttributes::GETTER] && !attributes.attributes[
+                    ClassAttributes::SETTER] && attributes.attributes[ClassAttributes::GETTER]) {
+                    member_attr.attributes += ClassAttributes::GETTER;
                     return;
                     }
-                if (member_attr[ClassAttributes::GETTER] && !member_attr[ClassAttributes::SETTER] && !attributes[
-                    ClassAttributes::GETTER] && attributes[ClassAttributes::SETTER]) {
-                    member_attr += ClassAttributes::SETTER;
+                if (member_attr.attributes[ClassAttributes::GETTER] && !member_attr.attributes[ClassAttributes::SETTER] && !attributes.attributes[
+                    ClassAttributes::GETTER] && attributes.attributes[ClassAttributes::SETTER]) {
+                    member_attr.attributes += ClassAttributes::SETTER;
                     return;
                     }
                 emit_message(Logger::Level::error, "member name conflict", "here");

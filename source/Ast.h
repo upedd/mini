@@ -165,17 +165,21 @@ enum class ClassAttributes: std::uint8_t {
     size // tracks ClassAttributes size. Must be at end!
 };
 
+struct MemberInfo {
+    bitflags<ClassAttributes> attributes;
+    bite::SourceSpan decl_span;
+};
 
 struct ClassEnviroment {
     StringTable::Handle class_name; // TODO: temporary!
-    bite::unordered_dense::map<StringTable::Handle, bitflags<ClassAttributes>> members;
+    bite::unordered_dense::map<StringTable::Handle, MemberInfo> members;
     ClassEnviroment* class_object_enviroment = nullptr;
 };
 
 // Could it be just an class enviroment?
 // Then it could easily support object for traits if we wanted it?
 struct TraitEnviroment {
-    bite::unordered_dense::map<StringTable::Handle, bitflags<ClassAttributes>> members;
+    bite::unordered_dense::map<StringTable::Handle, MemberInfo> members;
     std::vector<StringTable::Handle> requirements;
 };
 
@@ -333,6 +337,8 @@ struct ObjectExpr {
     StructureBody body;
     std::optional<Token> super_class;
     std::vector<Expr> superclass_arguments;
+    bite::SourceSpan name_span; // TODO: temp
+    bite::SourceSpan super_class_span; // TODO: temp
     ClassEnviroment class_enviroment;
     Binding superclass_binding = NoBinding();
 };
