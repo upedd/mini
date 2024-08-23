@@ -1,6 +1,7 @@
 #ifndef CONTEXT_H
 #define CONTEXT_H
 #include "StringTable.h"
+#include "../Diagnostics.h"
 #include "../base/logger.h"
 
 
@@ -16,6 +17,7 @@ public:
     }
 
     bite::Logger logger;
+    bite::DiagnosticManager diagnostics;
 private:
     StringTable string_table;
 };

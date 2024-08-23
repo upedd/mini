@@ -19,6 +19,7 @@ bool Compiler::compile() {
         }
     }
     if (parser.has_errors()) {
+        shared_context->diagnostics.print(std::cout, true);
         shared_context->logger.log(
             bite::Logger::Level::error,
             "compiliation aborted because of above errors",

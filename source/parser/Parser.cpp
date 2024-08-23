@@ -20,20 +20,42 @@ void Parser::emit_message(const bite::Message& message) {
 }
 
 void Parser::error(const Token& token, const std::string& message, const std::string& inline_message) {
-    emit_message(
-        bite::Message {
-            .level = bite::Logger::Level::error,
-            .content = message,
-            .inline_msg = bite::InlineMessage {
-                .location = bite::SourceLocation {
-                    .file_path = lexer.get_filepath(),
-                    .start_offset = token.source_start_offset,
-                    .end_offset = token.source_end_offset
+    // TODO: temporary
+    if (panic_mode) {
+        return;
+    }
+    panic_mode = true;
+    m_has_errors = true;
+    context->diagnostics.add(bite::Diagnostic {
+        .level = bite::DiagnosticLevel::ERROR,
+        .message = message,
+        .inline_hints = {
+            bite::InlineHint {
+                .location = bite::SourceSpan {
+                    .start_offset = static_cast<std::int64_t>(token.source_start_offset),
+                    .end_offset = static_cast<std::int64_t>(token.source_end_offset),
+                    .file_path = lexer.get_filepath()
                 },
-                .content = inline_message
+                .message = inline_message,
+                .level = bite::DiagnosticLevel::ERROR
             }
         }
-    );
+    });
+
+    // emit_message(
+    //     bite::Message {
+    //         .level = bite::Logger::Level::error,
+    //         .content = message,
+    //         .inline_msg = bite::InlineMessage {
+    //             .location = bite::SourceLocation {
+    //                 .file_path = lexer.get_filepath(),
+    //                 .start_offset = token.source_start_offset,
+    //                 .end_offset = token.source_end_offset
+    //             },
+    //             .content = inline_message
+    //         }
+    //     }
+    // );
 }
 
 void Parser::warning(const Token& token, const std::string& message, const std::string& inline_message) {

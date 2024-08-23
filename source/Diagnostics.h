@@ -15,17 +15,20 @@ namespace bite {
         std::filesystem::path file_path;
     };
 
+    enum class DiagnosticLevel : std::uint8_t {
+        WARNING,
+        ERROR,
+    };
+
     struct InlineHint {
         SourceSpan location;
         std::string message;
+        DiagnosticLevel level;
     };
 
+
     struct Diagnostic {
-        enum class Level {
-            WARNING,
-            ERROR,
-        };
-        Level level;
+        DiagnosticLevel level;
         std::string message;
         std::vector<InlineHint> inline_hints;
     };
@@ -35,10 +38,12 @@ namespace bite {
         void add(const Diagnostic& diagnostic) {
             diagnostics.push_back(diagnostic);
         }
+
         void print(std::ostream& output, bool is_terminal = false);
+
     private:
         std::vector<Diagnostic> diagnostics;
     };
-}
+}  // namespace bite
 
 #endif //DIAGNOSTICS_H
