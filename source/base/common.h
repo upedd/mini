@@ -13,8 +13,3 @@
 #else
 #    define BITE_NOINLINE [[gnu::noinline]]
 #endif
-
-
-#include <stdexcept>
-
-#define BITE_ASSERT(condition) !(condition) && (throw std::runtime_error());

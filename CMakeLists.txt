@@ -54,7 +54,10 @@ add_executable(bite source/main.cpp
         source/base/bitflags.h
         source/Analyzer.cpp
         source/Analyzer.h
+        source/base/debug.h
 )
 
+# TODO: disable in release builds
+target_compile_definitions(bite PRIVATE BITE_ENABLE_ASSERT)
 # workaround (or not?) to make std::print work on gcc
 target_link_libraries(bite "-lstdc++exp")
