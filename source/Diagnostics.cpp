@@ -80,9 +80,9 @@ CompiledInlineHint compile_inline_hint(const InlineHint& hint) {
     std::int64_t line_number = 0;
     while (std::getline(file, line)) {
         line_number++;
-        file_offset += static_cast<std::int64_t>(line.size());
-        if (file_offset >= hint.location.start_offset) {
-            std::int64_t in_line_start = file_offset - hint.location.start_offset;
+        file_offset += static_cast<std::int64_t>(line.size()) + 1;
+        if (file_offset > hint.location.start_offset) {
+            std::int64_t in_line_start = hint.location.start_offset - file_offset + static_cast<std::int64_t>(line.size()) + 1;
             return CompiledInlineHint {
                     .line_number = line_number,
                     .line = line,
@@ -139,15 +139,26 @@ void print_line_number(
     bool is_terminal
 ) {
     if (is_terminal) {
-        bite::print(emphasis::bold, output, "{}{} ", line_number, repeated(" ", max_line_number_width - line_number));
+        bite::print(
+            emphasis::bold,
+            output,
+            "{}{} ",
+            line_number,
+            repeated(" ", max_line_number_width - std::to_string(line_number).size())
+        );
     } else {
-        bite::print(output, "{}{} ", line_number, repeated(" ", max_line_number_width - line_number));
+        bite::print(
+            output,
+            "{}{} ",
+            line_number,
+            repeated(" ", max_line_number_width - std::to_string(line_number).size())
+        );
     }
 }
 
 void print_inline_hint(const CompiledInlineHint& hint, std::ostream& output, bool is_terminal) {
     // padding
-    bite::print(output, "{} ", repeated(" ", hint.in_line_location.first));
+    bite::print(output, "{}", repeated(" ", hint.in_line_location.first));
     if (is_terminal) {
         bite::println(
             foreground(diagnostic_level_color(hint.level)),

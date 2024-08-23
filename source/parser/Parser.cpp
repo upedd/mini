@@ -41,38 +41,25 @@ void Parser::error(const Token& token, const std::string& message, const std::st
             }
         }
     });
-
-    // emit_message(
-    //     bite::Message {
-    //         .level = bite::Logger::Level::error,
-    //         .content = message,
-    //         .inline_msg = bite::InlineMessage {
-    //             .location = bite::SourceLocation {
-    //                 .file_path = lexer.get_filepath(),
-    //                 .start_offset = token.source_start_offset,
-    //                 .end_offset = token.source_end_offset
-    //             },
-    //             .content = inline_message
-    //         }
-    //     }
-    // );
 }
 
 void Parser::warning(const Token& token, const std::string& message, const std::string& inline_message) {
-    emit_message(
-        bite::Message {
-            .level = bite::Logger::Level::warn,
-            .content = message,
-            .inline_msg = bite::InlineMessage {
-                .location = bite::SourceLocation {
-                    .file_path = lexer.get_filepath(),
-                    .start_offset = token.source_start_offset,
-                    .end_offset = token.source_end_offset
+    // TODO: temporary
+    context->diagnostics.add(bite::Diagnostic {
+        .level = bite::DiagnosticLevel::ERROR,
+        .message = message,
+        .inline_hints = {
+            bite::InlineHint {
+                .location = bite::SourceSpan {
+                    .start_offset = static_cast<std::int64_t>(token.source_start_offset),
+                    .end_offset = static_cast<std::int64_t>(token.source_end_offset),
+                    .file_path = lexer.get_filepath()
                 },
-                .content = inline_message
+                .message = inline_message,
+                .level = bite::DiagnosticLevel::ERROR
             }
         }
-    );
+    });
 }
 
 
@@ -104,6 +91,10 @@ Token Parser::advance() {
     while (true) {
         if (auto token = lexer.next_token()) {
             next = *token;
+            if (current_span_start == -1) {
+                current_span_start = next.source_start_offset;
+            }
+            current_span_end = next.source_end_offset;
             break;
         } else {
             emit_message(token.error());
@@ -240,11 +231,11 @@ std::optional<Stmt> Parser::control_flow_expression_statement() {
     if (!expr) {
         return {};
     }
-    return ast.make_node<ExprStmt>(std::move(*expr));
+    return ast.make_node<ExprStmt>(make_span(), std::move(*expr));
 }
 
 Stmt Parser::expr_statement() {
-    Stmt stmt = ast.make_node<ExprStmt>(expression());
+    Stmt stmt = ast.make_node<ExprStmt>(make_span(), expression());
     consume(Token::Type::SEMICOLON, "missing semicolon after expression");
     return stmt;
 }
@@ -253,13 +244,13 @@ Stmt Parser::native_declaration() {
     consume(Token::Type::IDENTIFIER, "invalid native statement");
     Token name = current;
     consume(Token::Type::SEMICOLON, "missing semicolon");
-    return ast.make_node<NativeStmt>(name);
+    return ast.make_node<NativeStmt>(make_span(), name);
 }
 
 Stmt Parser::object_declaration() {
     consume(Token::Type::IDENTIFIER, "missing object name");
     Token name = current;
-    return ast.make_node<ObjectStmt>(name, object_expression());
+    return ast.make_node<ObjectStmt>(make_span(), name, object_expression());
 }
 
 Stmt Parser::var_declaration() {
@@ -270,9 +261,9 @@ Stmt Parser::var_declaration() {
 
 // The part after name
 AstNode<VarStmt> Parser::var_declaration_body(const Token& name) {
-    Expr expr = match(Token::Type::EQUAL) ? expression() : ast.make_node<LiteralExpr>(nil_t);
+    Expr expr = match(Token::Type::EQUAL) ? expression() : ast.make_node<LiteralExpr>(make_span(), nil_t);
     consume(Token::Type::SEMICOLON, "missing semicolon");
-    return ast.make_node<VarStmt>(name, std::move(expr));
+    return ast.make_node<VarStmt>(make_span(), name, std::move(expr));
 }
 
 AstNode<FunctionStmt> Parser::function_declaration() {
@@ -286,7 +277,7 @@ AstNode<FunctionStmt> Parser::function_declaration_body(const Token& name, const
     std::vector<Token> parameters = skip_params ? std::vector<Token>() : functions_parameters();
     consume(Token::Type::LEFT_BRACE, "Expected '{' before function body");
     auto body = block();
-    return ast.make_node<FunctionStmt>(name, std::move(parameters), std::move(body));
+    return ast.make_node<FunctionStmt>(make_span(), name, std::move(parameters), std::move(body));
 }
 
 std::vector<Token> Parser::functions_parameters() {
@@ -324,7 +315,7 @@ Stmt Parser::class_declaration(const bool is_abstract) {
     }
     StructureBody body = structure_body(class_name);
 
-    return ast.make_node<ClassStmt>(class_name, superclass, std::move(body), is_abstract);
+    return ast.make_node<ClassStmt>(make_span(), class_name, superclass, std::move(body), is_abstract);
 }
 
 StructureBody Parser::structure_body(const Token& class_token) {
@@ -384,7 +375,7 @@ AstNode<UsingStmt> Parser::using_statement() {
         items.push_back(using_stmt_item());
     } while (match(Token::Type::COMMA));
     consume(Token::Type::SEMICOLON, "missing semicolon after statement");
-    return ast.make_node<UsingStmt>(std::move(items));
+    return ast.make_node<UsingStmt>(make_span(), std::move(items));
 }
 
 UsingStmtItem Parser::using_stmt_item() {
@@ -465,7 +456,7 @@ Constructor Parser::constructor_statement() {
     return {
             has_super,
             std::move(super_arguments),
-            ast.make_node<FunctionStmt>(init_token, std::move(parameters), block())
+            ast.make_node<FunctionStmt>(make_span(), init_token, std::move(parameters), block())
         };
 }
 
@@ -473,19 +464,19 @@ Constructor Parser::default_constructor(const Token& class_token) {
     return {
             .has_super = false,
             .super_arguments = {},
-            .function = ast.make_node<FunctionStmt>(class_token, std::vector<Token>(), std::optional<Expr>())
+            .function = ast.make_node<FunctionStmt>(make_span(), class_token, std::vector<Token>(), std::optional<Expr>())
         };
 }
 
 AstNode<FunctionStmt> Parser::abstract_method(const Token& name, const bool skip_params) {
     std::vector<Token> parameters = skip_params ? std::vector<Token>() : functions_parameters();
     consume(Token::Type::SEMICOLON, "missing semicolon after declaration");
-    return ast.make_node<FunctionStmt>(name, std::move(parameters)); // CHECK
+    return ast.make_node<FunctionStmt>(make_span(), name, std::move(parameters)); // CHECK
 }
 
 AstNode<VarStmt> Parser::abstract_field(const Token& name) {
     consume(Token::Type::SEMICOLON, "missing semicolon after declaration");
-    return ast.make_node<VarStmt>(name);
+    return ast.make_node<VarStmt>(make_span(), name);
 }
 
 Stmt Parser::trait_declaration() {
@@ -521,7 +512,7 @@ Stmt Parser::trait_declaration() {
 
     consume(Token::Type::RIGHT_BRACE, "missing '}' after trait body");
 
-    return ast.make_node<TraitStmt>(trait_name, std::move(methods), std::move(fields), std::move(using_statements));
+    return ast.make_node<TraitStmt>(make_span(), trait_name, std::move(methods), std::move(fields), std::move(using_statements));
 }
 
 AstNode<FunctionStmt> Parser::in_trait_function(
@@ -538,7 +529,7 @@ AstNode<FunctionStmt> Parser::in_trait_function(
         attributes += ClassAttributes::ABSTRACT;
         consume(Token::Type::SEMICOLON, "missing semicolon after declaration");
     }
-    return ast.make_node<FunctionStmt>(name, std::move(parameters), std::move(body));
+    return ast.make_node<FunctionStmt>(make_span(), name, std::move(parameters), std::move(body));
 }
 
 Parser::Precedence Parser::get_precendece(const Token::Type token) {
@@ -592,7 +583,7 @@ Expr Parser::expression(const Precedence precedence) {
     auto left = prefix();
     if (!left) {
         error(current, "expression expected", "here");
-        return ast.make_node<InvalidExpr>();
+        return ast.make_node<InvalidExpr>(make_span());
     }
     while (precedence < get_precendece(next.type)) {
         advance();
@@ -636,7 +627,7 @@ Expr Parser::integer() {
     if (!result) {
         error(current, result.error().what());
     }
-    return ast.make_node<LiteralExpr>(*result);
+    return ast.make_node<LiteralExpr>(make_span(), *result);
 }
 
 Expr Parser::number() {
@@ -645,25 +636,25 @@ Expr Parser::number() {
     if (!result) {
         error(current, result.error().what());
     }
-    return ast.make_node<LiteralExpr>(*result);
+    return ast.make_node<LiteralExpr>(make_span(), *result);
 }
 
 Expr Parser::keyword() {
     switch (current.type) {
-        case Token::Type::NIL: return ast.make_node<LiteralExpr>(nil_t);
-        case Token::Type::FALSE: return ast.make_node<LiteralExpr>(false);
-        case Token::Type::TRUE: return ast.make_node<LiteralExpr>(true);
-        case Token::Type::THIS: return ast.make_node<ThisExpr>();
+        case Token::Type::NIL: return ast.make_node<LiteralExpr>(make_span(), nil_t);
+        case Token::Type::FALSE: return ast.make_node<LiteralExpr>(make_span(), false);
+        case Token::Type::TRUE: return ast.make_node<LiteralExpr>(make_span(), true);
+        case Token::Type::THIS: return ast.make_node<ThisExpr>(make_span());
         default: std::unreachable();
     }
 }
 
 Expr Parser::identifier() {
-    return ast.make_node<VariableExpr>(current);
+    return ast.make_node<VariableExpr>(make_span(), current);
 }
 
 Expr Parser::string() {
-    return ast.make_node<StringLiteral>(*current.string);
+    return ast.make_node<StringLiteral>(make_span(), *current.string);
 }
 
 Expr Parser::grouping() {
@@ -673,19 +664,19 @@ Expr Parser::grouping() {
 }
 
 Expr Parser::unary(const Token::Type operator_type) {
-    return ast.make_node<UnaryExpr>(expression(Precedence::UNARY), operator_type);
+    return ast.make_node<UnaryExpr>(make_span(), expression(Precedence::UNARY), operator_type);
 }
 
 Expr Parser::super_() {
     consume(Token::Type::DOT, "missing '.' after 'super'");
     consume(Token::Type::IDENTIFIER, "missing superclass member identifier after 'super'");
-    return ast.make_node<SuperExpr>(current);
+    return ast.make_node<SuperExpr>(make_span(), current);
 }
 
 Expr Parser::if_expression() {
     auto condition = expression();
     if (current.type != Token::Type::LEFT_BRACE) {
-        error(current, "missing 'if' expression body");
+        error(current, "missing 'if' expression body", "expected '{' here");
     }
     auto then_stmt = block();
     std::optional<Expr> else_stmt = {};
@@ -697,14 +688,14 @@ Expr Parser::if_expression() {
             else_stmt = block();
         }
     }
-    return ast.make_node<IfExpr>(std::move(condition), std::move(then_stmt), std::move(else_stmt));
+    return ast.make_node<IfExpr>(make_span(), std::move(condition), std::move(then_stmt), std::move(else_stmt));
 }
 
 Expr Parser::continue_expression() {
     if (match(Token::Type::LABEL)) {
-        return ast.make_node<ContinueExpr>(current);
+        return ast.make_node<ContinueExpr>(make_span(), current);
     }
-    return ast.make_node<ContinueExpr>();
+    return ast.make_node<ContinueExpr>(make_span());
 }
 
 Expr Parser::break_expression() {
@@ -713,9 +704,9 @@ Expr Parser::break_expression() {
         label = current;
     }
     if (!is_expression_start(next.type)) {
-        return ast.make_node<BreakExpr>(std::optional<Expr> {}, label);
+        return ast.make_node<BreakExpr>(make_span(), std::optional<Expr> {}, label);
     }
-    return ast.make_node<BreakExpr>(expression(), label);
+    return ast.make_node<BreakExpr>(make_span(), expression(), label);
 }
 
 Expr Parser::return_expression() {
@@ -723,7 +714,7 @@ Expr Parser::return_expression() {
     if (is_expression_start(next.type)) {
         expr = expression();
     }
-    return ast.make_node<ReturnExpr>(std::move(expr));
+    return ast.make_node<ReturnExpr>(make_span(), std::move(expr));
 }
 
 AstNode<ObjectExpr> Parser::object_expression() {
@@ -745,7 +736,7 @@ AstNode<ObjectExpr> Parser::object_expression() {
     body.constructor->has_super = static_cast<bool>(superclass);
     body.constructor->super_arguments = std::move(superclass_arguments);
 
-    return ast.make_node<ObjectExpr>(std::move(body), superclass, std::move(superclass_arguments));
+    return ast.make_node<ObjectExpr>(make_span(), std::move(body), superclass, std::move(superclass_arguments));
 }
 
 Expr Parser::labeled_expression() {
@@ -763,13 +754,13 @@ Expr Parser::labeled_expression() {
     if (match(Token::Type::LEFT_BRACE)) {
         return block(label);
     }
-    error(label, "expression cannot be labeled", "here");
-    return ast.make_node<InvalidExpr>();
+    error(next, "expression cannot be labeled", "must be either: 'loop', 'for', 'while' or '{'");
+    return ast.make_node<InvalidExpr>(make_span());
 }
 
 Expr Parser::loop_expression(const std::optional<Token>& label) {
     consume(Token::Type::LEFT_BRACE, "missing 'loop' expression body");
-    return ast.make_node<LoopExpr>(block(), label);
+    return ast.make_node<LoopExpr>(make_span(), block(), label);
 }
 
 Expr Parser::while_expression(const std::optional<Token>& label) {
@@ -778,19 +769,19 @@ Expr Parser::while_expression(const std::optional<Token>& label) {
         error(current, "missing 'while' loop body", "expected '{' here");
     }
     auto body = block();
-    return ast.make_node<WhileExpr>(std::move(condition), std::move(body), label);
+    return ast.make_node<WhileExpr>(make_span(), std::move(condition), std::move(body), label);
 }
 
 Expr Parser::for_expression(const std::optional<Token>& label) {
-    consume(Token::Type::IDENTIFIER, "invalid 'for' item declaration.");
+    consume(Token::Type::IDENTIFIER, "invalid 'for' item declaration");
     Token name = current;
-    consume(Token::Type::IN, "invalid 'for' loop range expression.");
+    consume(Token::Type::IN, "invalid 'for' loop range expression");
     Expr iterable = expression();
     if (current.type != Token::Type::LEFT_BRACE) {
-        error(current, "invalid 'for' loop body", "expected '{' here.");
+        error(current, "invalid 'for' loop body", "expected '{' here");
     }
     auto body = block();
-    return ast.make_node<ForExpr>(name, std::move(iterable), std::move(body), label);
+    return ast.make_node<ForExpr>(make_span(), name, std::move(iterable), std::move(body), label);
 }
 
 AstNode<BlockExpr> Parser::block(const std::optional<Token>& label) {
@@ -811,7 +802,7 @@ AstNode<BlockExpr> Parser::block(const std::optional<Token>& label) {
             bool expression_is_statement = is_cntrl_flow && (!check(Token::Type::RIGHT_BRACE) || current.type ==
                 Token::Type::SEMICOLON);
             if (match(Token::Type::SEMICOLON) || expression_is_statement) {
-                stmts.emplace_back(ast.make_node<ExprStmt>(std::move(expr)));
+                stmts.emplace_back(ast.make_node<ExprStmt>(make_span(), std::move(expr)));
             } else {
                 expr_at_end = std::move(expr);
                 break;
@@ -819,7 +810,7 @@ AstNode<BlockExpr> Parser::block(const std::optional<Token>& label) {
         }
     }
     consume(Token::Type::RIGHT_BRACE, "unmatched '}'");
-    return ast.make_node<BlockExpr>(std::move(stmts), std::move(expr_at_end), label);
+    return ast.make_node<BlockExpr>(make_span(), std::move(stmts), std::move(expr_at_end), label);
 }
 
 Expr Parser::infix(Expr left) {
@@ -863,14 +854,14 @@ Expr Parser::infix(Expr left) {
 
 
 Expr Parser::dot(Expr left) {
-    consume(Token::Type::IDENTIFIER, "missing identifier after dot"); // TODO: better error message
-    return ast.make_node<GetPropertyExpr>(std::move(left), current);
+    consume(Token::Type::IDENTIFIER, "missing property name");
+    return ast.make_node<GetPropertyExpr>(make_span(), std::move(left), current);
 }
 
 Expr Parser::binary(Expr left) {
     Token::Type op = current.type;
     Precedence precedence = get_precendece(op);
-    return ast.make_node<BinaryExpr>(std::move(left), expression(precedence), op);
+    return ast.make_node<BinaryExpr>(make_span(), std::move(left), expression(precedence), op);
 }
 
 Expr Parser::assigment(Expr left) {
@@ -879,10 +870,10 @@ Expr Parser::assigment(Expr left) {
     // lower our precedence to handle right associativity
     // common technique in pratt parsers
     precedence = static_cast<Precedence>(static_cast<int>(precedence) - 1);
-    return ast.make_node<BinaryExpr>(std::move(left), expression(precedence), op);
+    return ast.make_node<BinaryExpr>(make_span(), std::move(left), expression(precedence), op);
 }
 
 Expr Parser::call(Expr left) {
     std::vector<Expr> arguments = call_arguments();
-    return ast.make_node<CallExpr>(std::move(left), std::move(arguments));
+    return ast.make_node<CallExpr>(make_span(), std::move(left), std::move(arguments));
 }

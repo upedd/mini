@@ -5,10 +5,12 @@
 #include <vector>
 #include <algorithm>
 
+#include "Diagnostics.h"
 #include "parser/Token.h"
 #include "Value.h"
 #include "base/bitflags.h"
 #include "base/box.h"
+#include "base/overloaded.h"
 
 
 // Reference: https://lesleylai.info/en/ast-in-cpp-part-1-variant/
@@ -19,8 +21,9 @@
 template <typename T>
 class AstNode {
 public:
-    explicit AstNode(T&& value, const std::int64_t id) : id(id),
-                                                         ptr(new T(std::move(value))) {}
+    explicit AstNode(T&& value, const std::int64_t id, const bite::SourceSpan& span) : id(id),
+        span(span),
+        ptr(new T(std::move(value))) {}
 
     AstNode(const AstNode& value) = delete;
     AstNode& operator=(const AstNode&) = delete;
@@ -37,6 +40,7 @@ public:
     ~AstNode() = default;
 
     std::int64_t id;
+    bite::SourceSpan span;
 
 private:
     std::unique_ptr<T> ptr;
@@ -80,9 +84,9 @@ struct GlobalDeclarationInfo {
 using DeclarationInfo = std::variant<LocalDeclarationInfo, GlobalDeclarationInfo>;
 
 
-
-using Binding = std::variant<struct NoBinding, struct LocalBinding, struct GlobalBinding, struct UpvalueBinding, struct ParameterBinding, struct MemberBinding,
-                             struct PropertyBinding, struct SuperBinding, struct ClassObjectBinding>;
+using Binding = std::variant<struct NoBinding, struct LocalBinding, struct GlobalBinding, struct UpvalueBinding, struct
+                             ParameterBinding, struct MemberBinding, struct PropertyBinding, struct SuperBinding, struct
+                             ClassObjectBinding>;
 
 struct NoBinding {};
 
@@ -105,6 +109,7 @@ struct ParameterBinding {
 struct MemberBinding {
     StringTable::Handle name;
 };
+
 struct ClassObjectBinding {
     bite::box<Binding> class_binding; // performance overhead?
     StringTable::Handle name;
@@ -181,11 +186,26 @@ public:
     std::size_t current_id = 0;
 
     template <typename T, typename... Args>
-    AstNode<T> make_node(Args&&... args) {
-        return AstNode<T>(T(std::forward<Args>(args)...), current_id++);
+    AstNode<T> make_node(const bite::SourceSpan& span, Args&&... args) {
+        return AstNode<T>(T(std::forward<Args>(args)...), current_id++, span);
     }
 };
 
+inline bite::SourceSpan get_span(const Stmt& statment) {
+    return std::visit(overloaded {[](const auto& stmt) {return stmt.span;}}, statment);
+}
+
+inline bite::SourceSpan get_span(const Expr& expression) {
+    return std::visit(overloaded {[](const auto& expr) {return expr.span;}}, expression);
+}
+
+inline bite::SourceSpan get_span(const StmtPtr& statment) {
+    return std::visit(overloaded {[](const auto* stmt) {return stmt->span;}}, statment);
+}
+
+inline bite::SourceSpan get_span(const ExprPtr& expression) {
+    return std::visit(overloaded {[](const auto* expr) {return expr->span;}}, expression);
+}
 
 struct UnaryExpr {
     Expr expr;

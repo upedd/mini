@@ -5,6 +5,7 @@
 
 #include "Lexer.h"
 #include "../Ast.h"
+#include "../base/debug.h"
 #include "../shared/Message.h"
 
 /**
@@ -45,6 +46,18 @@ private:
     bool panic_mode = false;
     bool m_has_errors = false;
     std::vector<bite::Message> messages;
+
+    std::int64_t current_span_start = -1;
+    std::int64_t current_span_end = -1;
+
+    bite::SourceSpan make_span() {
+        BITE_ASSERT(current_span_start != -1);
+        BITE_ASSERT(current_span_end != -1);
+        bite::SourceSpan span {.start_offset = current_span_start, .end_offset = current_span_end, .file_path = lexer.get_filepath()};
+        current_span_start = -1;
+        current_span_end = -1;
+        return span;
+    }
 
     void emit_message(const bite::Message& message);
     void error(const Token& token, const std::string& message, const std::string& inline_message = "");
