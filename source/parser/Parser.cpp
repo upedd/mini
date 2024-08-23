@@ -355,10 +355,17 @@ StructureBody Parser::structure_body(const Token& class_token) {
         }
 
         // Object definition
-        if (match(Token::Type::OBJECT)) {
-            body.class_object = object_expression();
+        bool skip = with_source_span([this, &body] -> bool {
+            if (match(Token::Type::OBJECT)) {
+                body.class_object = object_expression();
+                return true;
+            }
+            return false;
+        });
+        if (skip) {
             continue;
         }
+
 
         // Member
         with_source_span(
@@ -766,21 +773,37 @@ Expr Parser::if_expression() {
 }
 
 Expr Parser::continue_expression() {
-    if (match(Token::Type::LABEL)) {
-        return ast.make_node<ContinueExpr>(make_span(), current);
-    }
-    return ast.make_node<ContinueExpr>(make_span());
+    std::optional<Token> label;
+    auto label_span = no_span();
+    with_source_span(
+        [this, &label, &label_span] -> int {
+            if (match(Token::Type::LABEL)) {
+                label = current;
+            }
+            label_span = make_span();
+            return 0; // TODO
+        }
+    );
+    return ast.make_node<ContinueExpr>(make_span(), label, label_span);
 }
 
 Expr Parser::break_expression() {
     std::optional<Token> label;
-    if (match(Token::Type::LABEL)) {
-        label = current;
-    }
+    auto label_span = no_span();
+    with_source_span(
+        [this, &label, &label_span] -> int {
+            if (match(Token::Type::LABEL)) {
+                label = current;
+            }
+            label_span = make_span();
+            return 0; // TODO
+        }
+    );
+
     if (!is_expression_start(next.type)) {
-        return ast.make_node<BreakExpr>(make_span(), std::optional<Expr> {}, label);
+        return ast.make_node<BreakExpr>(make_span(), std::optional<Expr> {}, label, label_span);
     }
-    return ast.make_node<BreakExpr>(make_span(), expression(), label);
+    return ast.make_node<BreakExpr>(make_span(), expression(), label, label_span);
 }
 
 Expr Parser::return_expression() {

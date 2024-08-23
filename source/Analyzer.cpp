@@ -42,7 +42,7 @@ void bite::Analyzer::variable_declarataion(AstNode<VarStmt>& stmt) {
 }
 
 void bite::Analyzer::variable_expression(AstNode<VariableExpr>& expr) {
-    expr->binding = resolve(expr->identifier.string);
+    expr->binding = resolve(expr->identifier.string, expr.span);
 }
 
 void bite::Analyzer::expression_statement(AstNode<ExprStmt>& stmt) {
@@ -85,8 +85,8 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
         for (auto& item : using_stmt->items) {
             // Overlap with class
             // TODO: better error messages, refactor?
-            auto binding = resolve_without_upvalues(item.name.string);
-            item.binding = resolve(item.name.string);
+            auto binding = resolve_without_upvalues(item.name.string, item.span);
+            item.binding = resolve(item.name.string, item.span);
             AstNode<TraitStmt>* item_trait = nullptr;
             if (auto* global = std::get_if<GlobalBinding>(&binding)) {
                 if (std::holds_alternative<StmtPtr>(global->info->declaration) && std::holds_alternative<AstNode<
@@ -200,8 +200,8 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
     AstNode<ClassStmt>* superclass = nullptr;
     if (stmt->super_class) {
         // TODO: refactor? better error message?
-        auto binding = resolve_without_upvalues(stmt->super_class->string);
-        stmt->superclass_binding = resolve(stmt->super_class->string);
+        auto binding = resolve_without_upvalues(stmt->super_class->string, stmt->super_class_span);
+        stmt->superclass_binding = resolve(stmt->super_class->string, stmt->super_class_span);
         if (auto* global = std::get_if<GlobalBinding>(&binding)) {
             if (std::holds_alternative<StmtPtr>(global->info->declaration) && std::holds_alternative<AstNode<ClassStmt>
                 *>(std::get<StmtPtr>(global->info->declaration))) {
@@ -641,6 +641,7 @@ void bite::Analyzer::binary(AstNode<BinaryExpr>& expr) {
                     }
                 }
             });
+            m_has_errors = true;
         }
     }
 }
@@ -676,12 +677,13 @@ void bite::Analyzer::break_expr(AstNode<BreakExpr>& expr) {
             .message = "unresolved label",
             .inline_hints = {
                 InlineHint {
-                    .location = expr.label_span,
+                    .location = expr->label_span,
                     .message = "no matching label found",
                     .level = DiagnosticLevel::ERROR
                 }
             }
         });
+        m_has_errors = true;
     }
     if (expr->expr) {
         visit_expr(*expr->expr);
@@ -701,6 +703,7 @@ void bite::Analyzer::continue_expr(AstNode<ContinueExpr>& expr) {
                 }
             }
         });
+        m_has_errors = true;
     }
     if (expr->label && !is_there_matching_label(expr->label->string)) {
         context->diagnostics.add({
@@ -708,12 +711,13 @@ void bite::Analyzer::continue_expr(AstNode<ContinueExpr>& expr) {
             .message = "unresolved label",
             .inline_hints = {
                 InlineHint {
-                    .location = expr.label_span,
+                    .location = expr->label_span,
                     .message = "no matching label found",
                     .level = DiagnosticLevel::ERROR
                 }
             }
         });
+        m_has_errors = true;
     }
 }
 
@@ -745,6 +749,7 @@ void bite::Analyzer::return_expr(AstNode<ReturnExpr>& expr) {
                 }
             }
         });
+        m_has_errors = true;
     }
     if (expr->value) {
         visit_expr(*expr->value);
@@ -764,6 +769,7 @@ void bite::Analyzer::this_expr(AstNode<ThisExpr>& expr) {
                 }
             }
         });
+        m_has_errors = true;
     }
 }
 
@@ -780,6 +786,7 @@ void bite::Analyzer::super_expr(const AstNode<SuperExpr>& expr) {
                 }
             }
         });
+        m_has_errors = true;
     }
 }
 
@@ -789,6 +796,7 @@ void bite::Analyzer::object_expr(AstNode<ObjectExpr>& expr) {
     // TODO: refactor!
     if (expr->body.class_object) {
         // TODO: better error message
+        // TODO: multiline error!
         context->diagnostics.add({
             .level = DiagnosticLevel::ERROR,
             .message = "object cannot contain another object",
@@ -800,14 +808,15 @@ void bite::Analyzer::object_expr(AstNode<ObjectExpr>& expr) {
                 }
             }
         });
+        m_has_errors = true;
     }
     // TODO: init should be an reserved keyword
     unordered_dense::map<StringTable::Handle, MemberInfo> overrideable_members;
     AstNode<ClassStmt>* superclass = nullptr;
     if (expr->super_class) {
         // TODO: refactor? better error message?
-        auto binding = resolve_without_upvalues(expr->super_class->string);
-        expr->superclass_binding = resolve(expr->super_class->string);
+        auto binding = resolve_without_upvalues(expr->super_class->string, expr->super_class_span);
+        expr->superclass_binding = resolve(expr->super_class->string, expr->super_class_span);
         if (auto* global = std::get_if<GlobalBinding>(&binding)) {
             if (std::holds_alternative<StmtPtr>(global->info->declaration) && std::holds_alternative<AstNode<ClassStmt>
                 *>(std::get<StmtPtr>(global->info->declaration))) {
@@ -918,8 +927,8 @@ void bite::Analyzer::object_expr(AstNode<ObjectExpr>& expr) {
         for (auto& item : using_stmt->items) {
             // Overlap with class
             // TODO: better error messages, refactor?
-            auto binding = resolve_without_upvalues(item.name.string);
-            item.binding = resolve(item.name.string);
+            auto binding = resolve_without_upvalues(item.name.string, item.span);
+            item.binding = resolve(item.name.string, item.span);
             AstNode<TraitStmt>* item_trait = nullptr;
             if (auto* global = std::get_if<GlobalBinding>(&binding)) {
                 if (std::holds_alternative<StmtPtr>(global->info->declaration) && std::holds_alternative<AstNode<
@@ -1326,8 +1335,8 @@ void bite::Analyzer::trait_declaration(AstNode<TraitStmt>& stmt) {
         for (auto& item : using_stmt->items) {
             // Overlap with class
             // TODO: better error messages, refactor?
-            auto binding = resolve_without_upvalues(item.name.string);
-            item.binding = resolve(item.name.string);
+            auto binding = resolve_without_upvalues(item.name.string, item.span);
+            item.binding = resolve(item.name.string, item.span);
             AstNode<TraitStmt>* item_trait = nullptr;
             if (auto* global = std::get_if<GlobalBinding>(&binding)) {
                 if (std::holds_alternative<StmtPtr>(global->info->declaration) && std::holds_alternative<AstNode<

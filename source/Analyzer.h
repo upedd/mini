@@ -2,6 +2,7 @@
 #define ANALYZER_H
 #include <string>
 #include <algorithm>
+#include <utility>
 
 #include "Ast.h"
 #include "base/logger.h"
@@ -91,13 +92,41 @@ namespace bite {
         void declare_in_function_enviroment(FunctionEnviroment& env, StringTable::Handle name, Node declaration) {
             if (env.locals.scopes.empty()) {
                 if (std::ranges::contains(env.parameters, name)) {
-                    emit_message(Logger::Level::error, "duplicate parameter name", "here");
+                    // TODO: better error message, point to original
+                    context->diagnostics.add({
+                        .level = DiagnosticLevel::ERROR,
+                        .message = "duplicate parameter name",
+                        .inline_hints = {
+                            InlineHint {
+                                .location = get_span(declaration),
+                                .message = "here",
+                                .level = DiagnosticLevel::ERROR
+                            }
+                        }
+                    });
+                    m_has_errors = true;
                 }
                 env.parameters.push_back(name);
             } else {
                 for (auto& local : env.locals.scopes.back()) {
                     if (local.name == name) {
-                        emit_message(Logger::Level::error, "variable redeclared in same scope", "redeclared here");
+                        context->diagnostics.add({
+                        .level = DiagnosticLevel::ERROR,
+                        .message = "variable redeclared in the same scope",
+                        .inline_hints = {
+                            InlineHint {
+                                .location = get_span(declaration),
+                                .message = "new declaration here",
+                                .level = DiagnosticLevel::ERROR
+                            },
+                            InlineHint {
+                                .location = get_span(local.declaration->declaration),
+                                .message = "originally declared here",
+                                .level = DiagnosticLevel::INFO
+                            }
+                        }
+                    });
+                        m_has_errors = true;
                     }
                 }
                 // assert not-null probably
@@ -132,7 +161,24 @@ namespace bite {
                     member_attr.attributes += ClassAttributes::SETTER;
                     return;
                 }
-                emit_message(Logger::Level::error, "member name conflict", "here");
+
+                context->diagnostics.add({
+                    .level = DiagnosticLevel::ERROR,
+                    .message = "class member name conflict",
+                    .inline_hints = {
+                        InlineHint {
+                            .location = attributes.decl_span,
+                            .message = "new declaration here",
+                            .level = DiagnosticLevel::ERROR
+                        },
+                        InlineHint {
+                            .location = env.members[name].decl_span,
+                            .message = "originally declared here",
+                            .level = DiagnosticLevel::INFO
+                        }
+                    }
+                });
+                m_has_errors = true;
             }
             env.members[name] = attributes;
         }
@@ -155,7 +201,23 @@ namespace bite {
                     member_attr.attributes += ClassAttributes::SETTER;
                     return;
                     }
-                emit_message(Logger::Level::error, "member name conflict", "here");
+                context->diagnostics.add({
+                    .level = DiagnosticLevel::ERROR,
+                    .message = "trait member name conflict",
+                    .inline_hints = {
+                        InlineHint {
+                            .location = attributes.decl_span,
+                            .message = "new declaration here",
+                            .level = DiagnosticLevel::ERROR
+                        },
+                        InlineHint {
+                            .location = env.members[name].decl_span,
+                            .message = "originally declared here",
+                            .level = DiagnosticLevel::INFO
+                        }
+                    }
+                });
+                m_has_errors = true;
             }
             env.members[name] = attributes;
         }
@@ -163,7 +225,23 @@ namespace bite {
         void declare_in_global_enviroment(GlobalEnviroment& env, StringTable::Handle name, Node declaration) {
             if (env.locals.scopes.empty()) {
                 if (env.globals.contains(name)) {
-                    emit_message(Logger::Level::error, "global variable redeclaration", "here");
+                        context->diagnostics.add({
+                        .level = DiagnosticLevel::ERROR,
+                        .message = "global variable name conflict",
+                        .inline_hints = {
+                            InlineHint {
+                                .location = get_span(declaration),
+                                .message = "new declaration here",
+                                .level = DiagnosticLevel::ERROR
+                            },
+                            InlineHint {
+                                .location = get_span(env.globals[name]->declaration),
+                                .message = "originally declared here",
+                                .level = DiagnosticLevel::INFO
+                            }
+                        }
+                    });
+                    m_has_errors = true;
                 }
                 DeclarationInfo* info = set_declaration_info(
                     declaration,
@@ -173,7 +251,23 @@ namespace bite {
             } else {
                 for (auto& local : env.locals.scopes.back()) {
                     if (local.name == name) {
-                        emit_message(Logger::Level::error, "variable redeclared in same scope", "redeclared here");
+                        context->diagnostics.add({
+                        .level = DiagnosticLevel::ERROR,
+                        .message = "variable redeclared in the same scope",
+                        .inline_hints = {
+                            InlineHint {
+                                .location = get_span(declaration),
+                                .message = "new declaration here",
+                                .level = DiagnosticLevel::ERROR
+                            },
+                            InlineHint {
+                                .location = get_span(local.declaration->declaration),
+                                .message = "originally declared here",
+                                .level = DiagnosticLevel::INFO
+                            }
+                        }
+                    });
+                        m_has_errors = true;
                     }
                 }
                 DeclarationInfo* info = set_declaration_info(
@@ -278,7 +372,7 @@ namespace bite {
             return {};
         }
 
-        std::optional<Binding> get_binding_in_class_enviroment(const ClassEnviroment& env, StringTable::Handle name) {
+        std::optional<Binding> get_binding_in_class_enviroment(const ClassEnviroment& env, StringTable::Handle name, const SourceSpan& source) {
             for (const auto& member : env.members | std::views::keys) {
                 if (member == name) {
                     return MemberBinding { member };
@@ -288,7 +382,7 @@ namespace bite {
                 for (const auto& member : env.class_object_enviroment->members | std::views::keys) {
                     if (member == name) {
                         // TODO: disallow defining anything with class name inside of class otherwise this will not work
-                        return ClassObjectBinding { .class_binding = resolve(env.class_name), .name = member };
+                        return ClassObjectBinding { .class_binding = resolve(env.class_name, source), .name = member };
                     }
                 }
             }
@@ -355,7 +449,7 @@ namespace bite {
         }
 
         // TODO: refactor?
-        Binding resolve_without_upvalues(StringTable::Handle name) {
+        Binding resolve_without_upvalues(StringTable::Handle name, const SourceSpan& span) {
             for (auto node : node_stack | std::views::reverse) {
                 if (std::holds_alternative<StmtPtr>(node)) {
                     auto stmt = std::get<StmtPtr>(node);
@@ -367,7 +461,7 @@ namespace bite {
                     }
                     if (std::holds_alternative<AstNode<ClassStmt>*>(stmt)) {
                         auto& klass = std::get<AstNode<ClassStmt>*>(stmt);
-                        if (auto binding = get_binding_in_class_enviroment((*klass)->enviroment, name)) {
+                        if (auto binding = get_binding_in_class_enviroment((*klass)->enviroment, name, span)) {
                             return std::move(binding.value());
                         }
                     }
@@ -376,12 +470,25 @@ namespace bite {
             if (auto binding = get_binding_in_global_enviroment(ast->enviroment, name)) {
                 return std::move(binding.value());
             }
-            emit_message(Logger::Level::error, "unresolved variable: " + std::string(*name), "here");
+
+            // TODO: better error
+            context->diagnostics.add({
+                .level = DiagnosticLevel::ERROR,
+                .message = std::format("unresolved variable: {}", *name),
+                .inline_hints = {
+                    InlineHint {
+                        .location = span,
+                        .message = "here",
+                        .level = DiagnosticLevel::ERROR
+                    }
+                }
+            });
+            m_has_errors = true;
             return NoBinding();
         }
 
         // TODO: refactor!
-        Binding resolve(StringTable::Handle name) {
+        Binding resolve(StringTable::Handle name, const SourceSpan& span) {
             std::vector<std::reference_wrapper<FunctionEnviroment>> function_enviroments_visited;
             for (auto node : node_stack | std::views::reverse) {
                 if (std::holds_alternative<StmtPtr>(node)) {
@@ -407,7 +514,7 @@ namespace bite {
                     }
                     if (std::holds_alternative<AstNode<ClassStmt>*>(stmt)) {
                         auto& klass = std::get<AstNode<ClassStmt>*>(stmt);
-                        if (auto binding = get_binding_in_class_enviroment((*klass)->enviroment, name)) {
+                        if (auto binding = get_binding_in_class_enviroment((*klass)->enviroment, name, span)) {
                             return std::move(binding.value());
                         }
                     }
@@ -421,7 +528,7 @@ namespace bite {
                     auto expr = std::get<ExprPtr>(node);
                     if (std::holds_alternative<AstNode<ObjectExpr>*>(expr)) {
                         auto& object = std::get<AstNode<ObjectExpr>*>(expr);
-                        if (auto binding = get_binding_in_class_enviroment((*object)->class_enviroment, name)) {
+                        if (auto binding = get_binding_in_class_enviroment((*object)->class_enviroment, name, span)) {
                             return std::move(binding.value());
                         }
                     }
@@ -441,7 +548,19 @@ namespace bite {
 
                 return std::move(binding.value());
             }
-            emit_message(Logger::Level::error, "unresolved variable: " + std::string(*name), "here");
+            // TODO: better error
+            context->diagnostics.add({
+                .level = DiagnosticLevel::ERROR,
+                .message = std::format("unresolved variable: {}", *name),
+                .inline_hints = {
+                    InlineHint {
+                        .location = span,
+                        .message = "here",
+                        .level = DiagnosticLevel::ERROR
+                    }
+                }
+            });
+            m_has_errors = true;
             return NoBinding();
         }
 

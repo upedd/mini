@@ -196,7 +196,6 @@ public:
 };
 
 
-
 struct UnaryExpr {
     Expr expr;
     Token::Type op;
@@ -262,10 +261,12 @@ struct WhileExpr {
 struct BreakExpr {
     std::optional<Expr> expr;
     std::optional<Token> label;
+    bite::SourceSpan label_span;
 };
 
 struct ContinueExpr {
     std::optional<Token> label;
+    bite::SourceSpan label_span;
 };
 
 struct ForExpr {
@@ -403,19 +404,25 @@ struct InvalidExpr {};
 struct InvalidStmt {};
 
 inline bite::SourceSpan get_span(const Stmt& statment) {
-    return std::visit(overloaded {[](const auto& stmt) {return stmt.span;}}, statment);
+    return std::visit(overloaded { [](const auto& stmt) { return stmt.span; } }, statment);
 }
 
 inline bite::SourceSpan get_span(const Expr& expression) {
-    return std::visit(overloaded {[](const auto& expr) {return expr.span;}}, expression);
+    return std::visit(overloaded { [](const auto& expr) { return expr.span; } }, expression);
 }
 
 inline bite::SourceSpan get_span(const StmtPtr& statment) {
-    return std::visit(overloaded {[](const auto* stmt) {return stmt->span;}}, statment);
+    return std::visit(overloaded { [](const auto* stmt) { return stmt->span; } }, statment);
 }
 
 inline bite::SourceSpan get_span(const ExprPtr& expression) {
-    return std::visit(overloaded {[](const auto* expr) {return expr->span;}}, expression);
+    return std::visit(overloaded { [](const auto* expr) { return expr->span; } }, expression);
+}
+
+inline bite::SourceSpan get_span(const Node& node) {
+    return std::holds_alternative<StmtPtr>(node)
+               ? get_span(std::get<StmtPtr>(node))
+               : get_span(std::get<ExprPtr>(node));
 }
 
 // inline std::string expr_to_string(const Expr& expr, std::string_view source);
