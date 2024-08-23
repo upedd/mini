@@ -16,6 +16,7 @@ namespace bite {
     };
 
     enum class DiagnosticLevel : std::uint8_t {
+        INFO,
         WARNING,
         ERROR,
     };

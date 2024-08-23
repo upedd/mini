@@ -51,13 +51,25 @@ private:
     std::int64_t current_span_end = -1;
 
     bite::SourceSpan make_span() {
-        BITE_ASSERT(current_span_start != -1);
-        BITE_ASSERT(current_span_end != -1);
-        bite::SourceSpan span {.start_offset = current_span_start, .end_offset = current_span_end, .file_path = lexer.get_filepath()};
-        current_span_start = -1;
-        current_span_end = -1;
-        return span;
+        BITE_ASSERT(!span_stack.empty());
+        BITE_ASSERT(span_stack.back().start_offset != -1);
+        BITE_ASSERT(span_stack.back().end_offset != -1);
+        return span_stack.back();
     }
+
+    // TODO: remove unsafe
+    bite::SourceSpan no_span() {
+        return bite::SourceSpan {.start_offset = 0, .end_offset = 0, .file_path = "unknown"};
+    }
+
+    auto with_source_span(const auto& fn) {
+        span_stack.emplace_back(next.source_start_offset, next.source_end_offset, lexer.get_filepath());
+        auto res = fn();
+        span_stack.pop_back();
+        return res;
+    }
+
+    std::vector<bite::SourceSpan> span_stack;
 
     void emit_message(const bite::Message& message);
     void error(const Token& token, const std::string& message, const std::string& inline_message = "");
@@ -99,6 +111,7 @@ private:
     bitflags<ClassAttributes> member_attributes();
 
     Constructor constructor_statement();
+
     Constructor default_constructor(const Token& class_token);
     AstNode<FunctionStmt> abstract_method(const Token& name, bool skip_params);
     AstNode<VarStmt> abstract_field(const Token& name);

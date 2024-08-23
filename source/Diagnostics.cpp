@@ -20,6 +20,7 @@ terminal_color diagnostic_level_color(const DiagnosticLevel level) {
     switch (level) {
         case DiagnosticLevel::WARNING: return terminal_color::yellow;
         case DiagnosticLevel::ERROR: return terminal_color::red;
+        case DiagnosticLevel::INFO: return terminal_color::cyan;
     }
     BITE_PANIC("diagnostic level out of range");
 }
@@ -32,14 +33,21 @@ void print_diagnostic_level(const DiagnosticLevel level, std::ostream& output, b
             } else {
                 bite::print(foreground(diagnostic_level_color(level)) | emphasis::bold, output, "warning");
             }
-        };
+        }
         case DiagnosticLevel::ERROR: {
             if (!is_terminal) {
                 bite::print(output, "error");
             } else {
                 bite::print(foreground(diagnostic_level_color(level)) | emphasis::bold, output, "error");
             }
-        };
+        }
+        case DiagnosticLevel::INFO: {
+            if (!is_terminal) {
+                bite::print(output, "info");
+            } else {
+                bite::print(foreground(diagnostic_level_color(level)) | emphasis::bold, output, "info");
+            }
+        }
     }
 }
 

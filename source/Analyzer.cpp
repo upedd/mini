@@ -93,29 +93,65 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
                     TraitStmt>*>(std::get<StmtPtr>(global->info->declaration))) {
                     item_trait = std::get<AstNode<TraitStmt>*>(std::get<StmtPtr>(global->info->declaration));
                 } else {
-                    emit_message(
-                        Logger::Level::error,
-                        "using item must be of trait type",
-                        "does not point to trait type"
-                    );
+                    context->diagnostics.add({
+                        .level = DiagnosticLevel::ERROR,
+                        .message = "using item must be trait",
+                        .inline_hints = {
+                            InlineHint {
+                                .location = using_stmt.span,
+                                .message = "does not point to trait type",
+                                .level = DiagnosticLevel::ERROR
+                            },
+                            InlineHint {
+                                .location = std::holds_alternative<StmtPtr>(global->info->declaration) ? get_span(std::get<StmtPtr>(global->info->declaration)) : get_span(std::get<ExprPtr>(global->info->declaration)),
+                                .message = "does not declare trait",
+                                .level = DiagnosticLevel::INFO
+                            }
+                        }
+                    });
+                    m_has_errors = true;
+                    // emit_message(
+                    //     Logger::Level::error,
+                    //     "using item must be of trait type",
+                    //     "does not point to trait type"
+                    // );
                 }
             } else if (auto* local = std::get_if<LocalBinding>(&binding)) {
                 if (std::holds_alternative<StmtPtr>(global->info->declaration) && std::holds_alternative<AstNode<
                     TraitStmt>*>(std::get<StmtPtr>(local->info->declaration))) {
                     item_trait = std::get<AstNode<TraitStmt>*>(std::get<StmtPtr>(local->info->declaration));
                 } else {
-                    emit_message(
-                        Logger::Level::error,
-                        "using item must be of trait type",
-                        "does not point to trait type"
-                    );
+                    context->diagnostics.add({
+                        .level = DiagnosticLevel::ERROR,
+                        .message = "using item must be trait",
+                        .inline_hints = {
+                            InlineHint {
+                                .location = using_stmt.span,
+                                .message = "does not point to trait type",
+                                .level = DiagnosticLevel::ERROR
+                            },
+                            InlineHint {
+                                .location = std::holds_alternative<StmtPtr>(global->info->declaration) ? get_span(std::get<StmtPtr>(global->info->declaration)) : get_span(std::get<ExprPtr>(global->info->declaration)),
+                                .message = "does not declare trait",
+                                .level = DiagnosticLevel::INFO
+                            }
+                        }
+                    });
+                    m_has_errors = true;
                 }
             } else {
-                emit_message(
-                    Logger::Level::error,
-                    "Trait must be a local or global variable",
-                    "is not a local or global variable"
-                );
+                context->diagnostics.add({
+                        .level = DiagnosticLevel::ERROR,
+                        .message = "using item must be an local or global variable",
+                        .inline_hints = {
+                            InlineHint {
+                                .location = using_stmt.span,
+                                .message = "is not an local or global variable",
+                                .level = DiagnosticLevel::ERROR
+                            }
+                        }
+                    });
+                m_has_errors = true;
             }
 
             if (!item_trait) {

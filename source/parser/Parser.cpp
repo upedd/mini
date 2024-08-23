@@ -26,40 +26,44 @@ void Parser::error(const Token& token, const std::string& message, const std::st
     }
     panic_mode = true;
     m_has_errors = true;
-    context->diagnostics.add(bite::Diagnostic {
-        .level = bite::DiagnosticLevel::ERROR,
-        .message = message,
-        .inline_hints = {
-            bite::InlineHint {
-                .location = bite::SourceSpan {
-                    .start_offset = static_cast<std::int64_t>(token.source_start_offset),
-                    .end_offset = static_cast<std::int64_t>(token.source_end_offset),
-                    .file_path = lexer.get_filepath()
-                },
-                .message = inline_message,
-                .level = bite::DiagnosticLevel::ERROR
+    context->diagnostics.add(
+        bite::Diagnostic {
+            .level = bite::DiagnosticLevel::ERROR,
+            .message = message,
+            .inline_hints = {
+                bite::InlineHint {
+                    .location = bite::SourceSpan {
+                        .start_offset = static_cast<std::int64_t>(token.source_start_offset),
+                        .end_offset = static_cast<std::int64_t>(token.source_end_offset),
+                        .file_path = lexer.get_filepath()
+                    },
+                    .message = inline_message,
+                    .level = bite::DiagnosticLevel::ERROR
+                }
             }
         }
-    });
+    );
 }
 
 void Parser::warning(const Token& token, const std::string& message, const std::string& inline_message) {
     // TODO: temporary
-    context->diagnostics.add(bite::Diagnostic {
-        .level = bite::DiagnosticLevel::ERROR,
-        .message = message,
-        .inline_hints = {
-            bite::InlineHint {
-                .location = bite::SourceSpan {
-                    .start_offset = static_cast<std::int64_t>(token.source_start_offset),
-                    .end_offset = static_cast<std::int64_t>(token.source_end_offset),
-                    .file_path = lexer.get_filepath()
-                },
-                .message = inline_message,
-                .level = bite::DiagnosticLevel::ERROR
+    context->diagnostics.add(
+        bite::Diagnostic {
+            .level = bite::DiagnosticLevel::ERROR,
+            .message = message,
+            .inline_hints = {
+                bite::InlineHint {
+                    .location = bite::SourceSpan {
+                        .start_offset = static_cast<std::int64_t>(token.source_start_offset),
+                        .end_offset = static_cast<std::int64_t>(token.source_end_offset),
+                        .file_path = lexer.get_filepath()
+                    },
+                    .message = inline_message,
+                    .level = bite::DiagnosticLevel::ERROR
+                }
             }
         }
-    });
+    );
 }
 
 
@@ -88,13 +92,15 @@ void Parser::synchronize() {
 
 Token Parser::advance() {
     current = next;
+    for (auto& span : span_stack) {
+        if (span.start_offset == -1) {
+            span.start_offset = next.source_start_offset;
+        }
+        span.end_offset = next.source_end_offset;
+    }
     while (true) {
         if (auto token = lexer.next_token()) {
             next = *token;
-            if (current_span_start == -1) {
-                current_span_start = next.source_start_offset;
-            }
-            current_span_end = next.source_end_offset;
             break;
         } else {
             emit_message(token.error());
@@ -184,29 +190,33 @@ Stmt Parser::statement_or_expression() {
 }
 
 std::optional<Stmt> Parser::statement() {
-    if (match(Token::Type::LET)) {
-        return var_declaration();
-    }
-    if (match(Token::Type::FUN)) {
-        return function_declaration();
-    }
-    if (match(Token::Type::CLASS)) {
-        return class_declaration();
-    }
-    if (match(Token::Type::ABSTRACT)) {
-        consume(Token::Type::CLASS, "missing 'class' keyword");
-        return class_declaration(true);
-    }
-    if (match(Token::Type::NATIVE)) {
-        return native_declaration();
-    }
-    if (match(Token::Type::OBJECT)) {
-        return object_declaration();
-    }
-    if (match(Token::Type::TRAIT)) {
-        return trait_declaration();
-    }
-    return {};
+    return with_source_span(
+        [this] -> std::optional<Stmt> {
+            if (match(Token::Type::LET)) {
+                return var_declaration();
+            }
+            if (match(Token::Type::FUN)) {
+                return function_declaration();
+            }
+            if (match(Token::Type::CLASS)) {
+                return class_declaration();
+            }
+            if (match(Token::Type::ABSTRACT)) {
+                consume(Token::Type::CLASS, "missing 'class' keyword");
+                return class_declaration(true);
+            }
+            if (match(Token::Type::NATIVE)) {
+                return native_declaration();
+            }
+            if (match(Token::Type::OBJECT)) {
+                return object_declaration();
+            }
+            if (match(Token::Type::TRAIT)) {
+                return trait_declaration();
+            }
+            return {};
+        }
+    );
 }
 
 std::optional<Stmt> Parser::control_flow_expression_statement() {
@@ -235,9 +245,13 @@ std::optional<Stmt> Parser::control_flow_expression_statement() {
 }
 
 Stmt Parser::expr_statement() {
-    Stmt stmt = ast.make_node<ExprStmt>(make_span(), expression());
-    consume(Token::Type::SEMICOLON, "missing semicolon after expression");
-    return stmt;
+    return with_source_span(
+        [this] {
+            Stmt stmt = ast.make_node<ExprStmt>(make_span(), expression());
+            consume(Token::Type::SEMICOLON, "missing semicolon after expression");
+            return stmt;
+        }
+    );
 }
 
 Stmt Parser::native_declaration() {
@@ -323,10 +337,18 @@ StructureBody Parser::structure_body(const Token& class_token) {
     consume(Token::Type::LEFT_BRACE, "missing body");
     while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
         // Using declarataions
-        if (match(Token::Type::USING)) {
-            body.using_statements.push_back(using_statement());
+        if (with_source_span(
+            [this, &body] {
+                if (match(Token::Type::USING)) {
+                    body.using_statements.push_back(using_statement());
+                    return true;
+                }
+                return false;
+            }
+        )) {
             continue;
         }
+
 
         // Object definition
         if (match(Token::Type::OBJECT)) {
@@ -464,7 +486,7 @@ Constructor Parser::default_constructor(const Token& class_token) {
     return {
             .has_super = false,
             .super_arguments = {},
-            .function = ast.make_node<FunctionStmt>(make_span(), class_token, std::vector<Token>(), std::optional<Expr>())
+            .function = ast.make_node<FunctionStmt>(no_span(), class_token, std::vector<Token>(), std::optional<Expr>())
         };
 }
 
@@ -512,7 +534,13 @@ Stmt Parser::trait_declaration() {
 
     consume(Token::Type::RIGHT_BRACE, "missing '}' after trait body");
 
-    return ast.make_node<TraitStmt>(make_span(), trait_name, std::move(methods), std::move(fields), std::move(using_statements));
+    return ast.make_node<TraitStmt>(
+        make_span(),
+        trait_name,
+        std::move(methods),
+        std::move(fields),
+        std::move(using_statements)
+    );
 }
 
 AstNode<FunctionStmt> Parser::in_trait_function(
