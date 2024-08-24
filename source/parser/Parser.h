@@ -100,7 +100,7 @@ private:
     std::vector<Token> functions_parameters();
     std::vector<std::unique_ptr<Expr>> call_arguments();
 
-    std::unique_ptr<Stmt> class_declaration(bool is_abstract = false);
+    std::unique_ptr<ClassDeclaration> class_declaration(bool is_abstract = false);
     StructureBody structure_body(const Token& class_token);
 
     AstNode<UsingStmt> using_statement();
@@ -115,7 +115,7 @@ private:
     AstNode<FunctionStmt> abstract_method(const Token& name, bool skip_params);
     AstNode<VarStmt> abstract_field(const Token& name);
 
-    Stmt trait_declaration();
+    std::unique_ptr<TraitDeclaration> trait_declaration();
     AstNode<FunctionStmt> in_trait_function(const Token& name, bitflags<ClassAttributes>& attributes, bool skip_params);
 
     /* C like precedence
@@ -142,22 +142,22 @@ private:
     };
     static Precedence get_precendece(Token::Type token);
 
-    Expr expression(Precedence precedence = Precedence::NONE);
+    std::unique_ptr<Expr> expression(Precedence precedence = Precedence::NONE);
 
-    std::optional<Expr> prefix();
+    std::optional<std::unique_ptr<Expr>> prefix();
 
-    Expr integer();
-    Expr number();
-    Expr keyword();
-    Expr string();
-    Expr identifier();
-    Expr grouping();
-    Expr unary(Token::Type op);
-    Expr super_();
-    Expr if_expression();
-    Expr break_expression();
-    Expr continue_expression();
-    Expr return_expression();
+    std::unique_ptr<Expr> integer();
+    std::unique_ptr<Expr> number();
+    std::unique_ptr<Expr> keyword();
+    std::unique_ptr<StringExpr> string();
+    std::unique_ptr<VariableExpr> identifier();
+    std::unique_ptr<Expr> grouping();
+    std::unique_ptr<UnaryExpr> unary(Token::Type op);
+    std::unique_ptr<SuperExpr> super_();
+    std::unique_ptr<IfExpr> if_expression();
+    std::unique_ptr<BreakExpr> break_expression();
+    std::unique_ptr<ContinueExpr> continue_expression();
+    std::unique_ptr<ReturnExpr> return_expression();
     AstNode<ObjectExpr> object_expression();
     Expr labeled_expression();
     Expr loop_expression(const std::optional<Token>& label = {});

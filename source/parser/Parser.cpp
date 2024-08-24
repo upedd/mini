@@ -3,6 +3,7 @@
 #include <experimental/scope>
 
 #include "conversions.h"
+#include "../Object.h"
 #include "../shared/SharedContext.h"
 
 
@@ -312,7 +313,7 @@ std::vector<Token> Parser::functions_parameters() {
 }
 
 std::vector<std::unique_ptr<Expr>> Parser::call_arguments() {
-    std::vector<Expr> arguments;
+    std::vector<std::unique_ptr<Expr>> arguments;
     if (!check(Token::Type::RIGHT_PAREN)) {
         do {
             arguments.emplace_back(expression());
@@ -322,7 +323,7 @@ std::vector<std::unique_ptr<Expr>> Parser::call_arguments() {
     return arguments;
 }
 
-std::unique_ptr<Stmt> Parser::class_declaration(const bool is_abstract) {
+std::unique_ptr<ClassDeclaration> Parser::class_declaration(const bool is_abstract) {
     consume(Token::Type::IDENTIFIER, "missing class name");
     Token class_name = current;
 
@@ -341,7 +342,7 @@ std::unique_ptr<Stmt> Parser::class_declaration(const bool is_abstract) {
     auto span = make_span();
     StructureBody body = structure_body(class_name);
 
-    return ast.make_node<ClassStmt>(make_span(), class_name, span, superclass, superspan, std::move(body), is_abstract);
+    return std::make_unique<ClassDeclaration>(make_span(), class_name, span, superclass, superspan, std::move(body), is_abstract);
 }
 
 StructureBody Parser::structure_body(const Token& class_token) {
@@ -417,13 +418,13 @@ StructureBody Parser::structure_body(const Token& class_token) {
     return body;
 }
 
-AstNode<UsingStmt> Parser::using_statement() {
+UsingStmt Parser::using_statement() {
     std::vector<UsingStmtItem> items;
     do {
         items.push_back(using_stmt_item());
     } while (match(Token::Type::COMMA));
     consume(Token::Type::SEMICOLON, "missing semicolon after statement");
-    return ast.make_node<UsingStmt>(make_span(), std::move(items));
+    return UsingStmt(std::move(items));
 }
 
 UsingStmtItem Parser::using_stmt_item() {
@@ -495,7 +496,7 @@ bitflags<ClassAttributes> Parser::member_attributes() {
 Constructor Parser::constructor_statement() {
     Token init_token = current;
     std::vector<Token> parameters = functions_parameters();
-    std::vector<Expr> super_arguments;
+    std::vector<std::unique_ptr<Expr>> super_arguments;
     bool has_super = false;
     bite::SourceSpan super_span;
     // init(parameters*) : super(arguments*) [block]
@@ -517,7 +518,7 @@ Constructor Parser::constructor_statement() {
     return {
             has_super,
             std::move(super_arguments),
-            ast.make_node<FunctionStmt>(make_span(), init_token, std::move(parameters), block()),
+            std::make_unique<FunctionDeclaration>(make_span(), init_token, std::move(parameters), block()),
             super_span,
             span
         };
@@ -527,35 +528,35 @@ Constructor Parser::default_constructor(const Token& class_token) {
     return {
             .has_super = false,
             .super_arguments = {},
-            .function = ast.make_node<FunctionStmt>(
+            .function = std::make_unique<FunctionDeclaration>(
                 no_span(),
                 class_token,
                 std::vector<Token>(),
-                std::optional<Expr>()
+                std::optional<std::unique_ptr<Expr>>()
             ),
             .superconstructor_call_span = no_span(),
             .decl_span = no_span()
         };
 }
 
-AstNode<FunctionStmt> Parser::abstract_method(const Token& name, const bool skip_params) {
+std::unique_ptr<FunctionDeclaration> Parser::abstract_method(const Token& name, const bool skip_params) {
     std::vector<Token> parameters = skip_params ? std::vector<Token>() : functions_parameters();
     consume(Token::Type::SEMICOLON, "missing semicolon after declaration");
-    return ast.make_node<FunctionStmt>(make_span(), name, std::move(parameters)); // CHECK
+    return std::make_unique<FunctionDeclaration>(make_span(), name, std::move(parameters)); // CHECK
 }
 
-AstNode<VarStmt> Parser::abstract_field(const Token& name) {
+std::unique_ptr<VariableDeclaration> Parser::abstract_field(const Token& name) {
     consume(Token::Type::SEMICOLON, "missing semicolon after declaration");
-    return ast.make_node<VarStmt>(make_span(), name);
+    return std::make_unique<VariableDeclaration>(make_span(), name);
 }
 
-Stmt Parser::trait_declaration() {
+std::unique_ptr<TraitDeclaration> Parser::trait_declaration() {
     consume(Token::Type::IDENTIFIER, "missing trait name");
     Token trait_name = current;
     consume(Token::Type::LEFT_BRACE, "missing trait body");
     std::vector<Field> fields;
     std::vector<Method> methods;
-    std::vector<AstNode<UsingStmt>> using_statements;
+    std::vector<UsingStmt> using_statements;
     while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
         if (match(Token::Type::USING)) {
             using_statements.push_back(using_statement());
@@ -587,7 +588,7 @@ Stmt Parser::trait_declaration() {
 
     consume(Token::Type::RIGHT_BRACE, "missing '}' after trait body");
 
-    return ast.make_node<TraitStmt>(
+    return std::make_unique<TraitDeclaration>(
         make_span(),
         trait_name,
         std::move(methods),
@@ -596,7 +597,7 @@ Stmt Parser::trait_declaration() {
     );
 }
 
-AstNode<FunctionStmt> Parser::in_trait_function(
+std::unique_ptr<FunctionDeclaration> Parser::in_trait_function(
     const Token& name,
     bitflags<ClassAttributes>& attributes,
     bool skip_params
@@ -610,7 +611,7 @@ AstNode<FunctionStmt> Parser::in_trait_function(
         attributes += ClassAttributes::ABSTRACT;
         consume(Token::Type::SEMICOLON, "missing semicolon after declaration");
     }
-    return ast.make_node<FunctionStmt>(make_span(), name, std::move(parameters), std::move(body));
+    return std::make_unique<FunctionDeclaration>(make_span(), name, std::move(parameters), std::move(body));
 }
 
 Parser::Precedence Parser::get_precendece(const Token::Type token) {
@@ -659,12 +660,12 @@ Parser::Precedence Parser::get_precendece(const Token::Type token) {
     }
 }
 
-Expr Parser::expression(const Precedence precedence) {
+std::unique_ptr<Expr> Parser::expression(const Precedence precedence) {
     advance();
-    auto left = prefix();
+    std::optional<std::unique_ptr<Expr>> left = prefix();
     if (!left) {
         error(current, "expression expected", "here");
-        return ast.make_node<InvalidExpr>(make_span());
+        return std::make_unique<InvalidExpr>(make_span());
     }
     while (precedence < get_precendece(next.type)) {
         advance();
@@ -673,7 +674,7 @@ Expr Parser::expression(const Precedence precedence) {
     return std::move(*left);
 }
 
-std::optional<Expr> Parser::prefix() {
+std::optional<std::unique_ptr<Expr>> Parser::prefix() {
     switch (current.type) {
         case Token::Type::INTEGER: return integer();
         case Token::Type::NUMBER: return number();
@@ -702,65 +703,65 @@ std::optional<Expr> Parser::prefix() {
     }
 }
 
-Expr Parser::integer() {
+std::unique_ptr<Expr> Parser::integer() {
     std::string literal = *current.string;
     std::expected<bite_int, ConversionError> result = string_to_int(literal);
     if (!result) {
         error(current, result.error().what());
     }
-    return ast.make_node<LiteralExpr>(make_span(), *result);
+    return std::make_unique<LiteralExpr>(make_span(), *result);
 }
 
-Expr Parser::number() {
+std::unique_ptr<Expr> Parser::number() {
     std::string literal = *current.string;
     std::expected<bite_float, ConversionError> result = string_to_floating(literal);
     if (!result) {
         error(current, result.error().what());
     }
-    return ast.make_node<LiteralExpr>(make_span(), *result);
+    return std::make_unique<LiteralExpr>(make_span(), *result);
 }
 
-Expr Parser::keyword() {
+std::unique_ptr<Expr> Parser::keyword() {
     switch (current.type) {
-        case Token::Type::NIL: return ast.make_node<LiteralExpr>(make_span(), nil_t);
-        case Token::Type::FALSE: return ast.make_node<LiteralExpr>(make_span(), false);
-        case Token::Type::TRUE: return ast.make_node<LiteralExpr>(make_span(), true);
-        case Token::Type::THIS: return ast.make_node<ThisExpr>(make_span());
+        case Token::Type::NIL: return std::make_unique<LiteralExpr>(make_span(), nil_t);
+        case Token::Type::FALSE: return std::make_unique<LiteralExpr>(make_span(), false);
+        case Token::Type::TRUE: return std::make_unique<LiteralExpr>(make_span(), true);
+        case Token::Type::THIS: return std::make_unique<ThisExpr>(make_span());
         default: std::unreachable();
     }
 }
 
-Expr Parser::identifier() {
-    return ast.make_node<VariableExpr>(make_span(), current);
+std::unique_ptr<VariableExpr> Parser::identifier() {
+    return std::make_unique<VariableExpr>(make_span(), current);
 }
 
-Expr Parser::string() {
-    return ast.make_node<StringLiteral>(make_span(), *current.string);
+std::unique_ptr<StringExpr> Parser::string() {
+    return std::make_unique<StringExpr>(make_span(), *current.string);
 }
 
-Expr Parser::grouping() {
+std::unique_ptr<Expr> Parser::grouping() {
     auto expr = expression();
     consume(Token::Type::RIGHT_PAREN, "unmatched ')'");
     return expr;
 }
 
-Expr Parser::unary(const Token::Type operator_type) {
-    return ast.make_node<UnaryExpr>(make_span(), expression(Precedence::UNARY), operator_type);
+std::unique_ptr<UnaryExpr> Parser::unary(const Token::Type operator_type) {
+    return std::make_unique<UnaryExpr>(make_span(), expression(Precedence::UNARY), operator_type);
 }
 
-Expr Parser::super_() {
+std::unique_ptr<SuperExpr> Parser::super_() {
     consume(Token::Type::DOT, "missing '.' after 'super'");
     consume(Token::Type::IDENTIFIER, "missing superclass member identifier after 'super'");
-    return ast.make_node<SuperExpr>(make_span(), current);
+    return std::make_unique<SuperExpr>(make_span(), current);
 }
 
-Expr Parser::if_expression() {
+std::unique_ptr<IfExpr> Parser::if_expression() {
     auto condition = expression();
     if (current.type != Token::Type::LEFT_BRACE) {
         error(current, "missing 'if' expression body", "expected '{' here");
     }
     auto then_stmt = block();
-    std::optional<Expr> else_stmt = {};
+    std::optional<std::unique_ptr<Expr>> else_stmt = {};
     if (match(Token::Type::ELSE)) {
         if (match(Token::Type::IF)) {
             else_stmt = if_expression();
@@ -769,10 +770,10 @@ Expr Parser::if_expression() {
             else_stmt = block();
         }
     }
-    return ast.make_node<IfExpr>(make_span(), std::move(condition), std::move(then_stmt), std::move(else_stmt));
+    return std::make_unique<IfExpr>(make_span(), std::move(condition), std::move(then_stmt), std::move(else_stmt));
 }
 
-Expr Parser::continue_expression() {
+std::unique_ptr<ContinueExpr> Parser::continue_expression() {
     std::optional<Token> label;
     auto label_span = no_span();
     with_source_span(
@@ -784,10 +785,10 @@ Expr Parser::continue_expression() {
             return 0; // TODO
         }
     );
-    return ast.make_node<ContinueExpr>(make_span(), label, label_span);
+    return std::make_unique<ContinueExpr>(make_span(), label, label_span);
 }
 
-Expr Parser::break_expression() {
+std::unique_ptr<BreakExpr> Parser::break_expression() {
     std::optional<Token> label;
     auto label_span = no_span();
     with_source_span(
@@ -801,23 +802,23 @@ Expr Parser::break_expression() {
     );
 
     if (!is_expression_start(next.type)) {
-        return ast.make_node<BreakExpr>(make_span(), std::optional<Expr> {}, label, label_span);
+        return std::make_unique<BreakExpr>(make_span(), std::optional<std::unique_ptr<Expr>> {}, label, label_span);
     }
-    return ast.make_node<BreakExpr>(make_span(), expression(), label, label_span);
+    return std::make_unique<BreakExpr>(make_span(), expression(), label, label_span);
 }
 
-Expr Parser::return_expression() {
-    std::optional<Expr> expr = {};
+std::unique_ptr<ReturnExpr> Parser::return_expression() {
+    std::optional<std::unique_ptr<Expr>> expr = {};
     if (is_expression_start(next.type)) {
         expr = expression();
     }
-    return ast.make_node<ReturnExpr>(make_span(), std::move(expr));
+    return std::make_unique<ReturnExpr>(make_span(), std::move(expr));
 }
 
 AstNode<ObjectExpr> Parser::object_expression() {
     Token object_token = current;
     std::optional<Token> superclass;
-    std::vector<Expr> superclass_arguments;
+    std::vector<std::unique_ptr<Expr>> superclass_arguments;
     bite::SourceSpan superspan = no_span();
     bite::SourceSpan supercall_span = no_span();
     auto span = make_span();
