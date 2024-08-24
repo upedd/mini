@@ -3,6 +3,7 @@
 #include "Ast.h"
 
 class AstVisitor {
+public:
     template <typename Self>
     // ReSharper disable once CppMemberFunctionMayBeStatic
     void visit(this Self&& self, const AstNode& node) { // NOLINT(*-function-cognitive-complexity, *-missing-std-forward)
@@ -18,6 +19,7 @@ class AstVisitor {
 };
 
 class MutatingAstVisitor {
+public:
     template <typename Self>
     // ReSharper disable once CppMemberFunctionMayBeStatic
     void visit(this Self&& self, AstNode& node) { // NOLINT(*-function-cognitive-complexity, *-missing-std-forward)

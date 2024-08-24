@@ -33,56 +33,56 @@ namespace bite {
         }
 
         void analyze(Ast& ast);
-        void block(AstNode<BlockExpr>& expr);
-        void variable_declarataion(AstNode<VarStmt>& stmt);
-        void variable_expr(AstNode<VariableExpr>& expr);
-        void expr_stmt(AstNode<ExprStmt>& stmt);
-        void function_declaration(AstNode<FunctionStmt>& box);
-        void function(AstNode<FunctionStmt>& stmt);
-        void native_declaration(AstNode<NativeStmt>& stmt);
-        void class_declaration(AstNode<ClassStmt>& box);
-        void object_declaration(AstNode<ObjectStmt>& stmt);
-        void unary_expr(AstNode<UnaryExpr>& expr);
-        void binary_expr(AstNode<BinaryExpr>& expr);
-        void call_expr(AstNode<CallExpr>& expr);
-        void get_property_expr(AstNode<GetPropertyExpr>& expr);
-        void if_expr(AstNode<IfExpr>& expr);
-        void loop_expr(AstNode<LoopExpr>& expr);
-        void break_expr(AstNode<BreakExpr>& expr);
-        void continue_expr(AstNode<ContinueExpr>& expr);
-        void while_expr(AstNode<WhileExpr>& expr);
-        void for_expr(AstNode<ForExpr>& expr);
-        void return_expr(AstNode<ReturnExpr>& expr);
-        void this_expr(AstNode<ThisExpr>& expr);
+        void block_expr(BlockExpr& expr);
+        void variable_declarataion(VariableDeclaration& stmt);
+        void variable_expr(VariableExpr& expr);
+        void expr_stmt(ExprStmt& stmt);
+        void function_declaration(FunctionDeclaration& box);
+        void function(FunctionDeclaration& stmt);
+        void native_declaration(NativeDeclaration& stmt);
+        void class_declaration(ClassDeclaration& box);
+        void object_declaration(ObjectDeclaration& stmt);
+        void unary_expr(UnaryExpr& expr);
+        void binary_expr(BinaryExpr& expr);
+        void call_expr(CallExpr& expr);
+        void get_property_expr(GetPropertyExpr& expr);
+        void if_expr(IfExpr& expr);
+        void loop_expr(LoopExpr& expr);
+        void break_expr(BreakExpr& expr);
+        void continue_expr(ContinueExpr& expr);
+        void while_expr(WhileExpr& expr);
+        void for_expr(ForExpr& expr);
+        void return_expr(ReturnExpr& expr);
+        void this_expr(ThisExpr& expr);
         void string_expr() {}
-        void super_expr(const AstNode<SuperExpr>& expr);
-        void object_expr(AstNode<ObjectExpr>& expr);
-        void trait_declaration(AstNode<TraitStmt>& stmt);
+        void super_expr( SuperExpr& expr);
+        void object_expr(ObjectExpr& expr);
+        void trait_declaration(TraitDeclaration& stmt);
         void invalid_stmt() {}
         void invalid_expr() {}
 
 
         // TODO: mess?
-        DeclarationInfo* set_declaration_info(Node node, DeclarationInfo info);
+        DeclarationInfo* set_declaration_info(AstNode* node, DeclarationInfo info);
 
-        void declare_in_function_enviroment(FunctionEnviroment& env, StringTable::Handle name, Node declaration);
+        void declare_in_function_enviroment(FunctionEnviroment& env, StringTable::Handle name, AstNode* declaration);
 
         void declare_in_class_enviroment(ClassEnviroment& env, StringTable::Handle name, const MemberInfo& attributes);
 
 
         void declare_in_trait_enviroment(TraitEnviroment& env, StringTable::Handle name, const MemberInfo& attributes);
 
-        void declare_in_global_enviroment(GlobalEnviroment& env, StringTable::Handle name, Node declaration);
+        void declare_in_global_enviroment(GlobalEnviroment& env, StringTable::Handle name, AstNode* declaration);
 
         // declare variable
-        void declare(StringTable::Handle name, Node declaration);
+        void declare(StringTable::Handle name, AstNode* declaration);
 
         ClassEnviroment* current_class_enviroment();
 
         TraitEnviroment* current_trait_enviroment();
 
         // TODO: refactor!
-        void declare_in_outer(StringTable::Handle name, StmtPtr declaration);
+        void declare_in_outer(StringTable::Handle name, AstNode* declaration);
 
 
         static std::optional<Binding> get_binding_in_function_enviroment(
@@ -122,10 +122,8 @@ namespace bite {
 
         bool is_in_loop();
 
-        static bool node_is_function(const Node& node) {
-            return std::holds_alternative<StmtPtr>(node) && std::holds_alternative<AstNode<FunctionStmt>*>(
-                std::get<StmtPtr>(node)
-            );
+        static bool node_is_function(const AstNode* node) {
+            return node->is_function_declaration();
         }
 
         bool is_in_function();
@@ -151,15 +149,15 @@ namespace bite {
             ast->enviroment.locals.scopes.pop_back();
         }
 
-        std::optional<Node> find_declaration(StringTable::Handle name, const SourceSpan& span);
+        std::optional<AstNode*> find_declaration(StringTable::Handle name, const SourceSpan& span);
 
-        template <typename T>
-        std::optional<T> stmt_from_node(Node node) {
-            if (std::holds_alternative<StmtPtr>(node) && std::holds_alternative<T>(std::get<StmtPtr>(node))) {
-                return std::get<T>(std::get<StmtPtr>(node));
-            }
-            return {};
-        }
+        // template <typename T>
+        // std::optional<T> stmt_from_node(AstNode* node) {
+        //     if (std::holds_alternative<StmtPtr>(node) && std::holds_alternative<T>(std::get<StmtPtr>(node))) {
+        //         return std::get<T>(std::get<StmtPtr>(node));
+        //     }
+        //     return {};
+        // }
 
         void using_stmt(
             AstNode<UsingStmt>& stmt,
@@ -249,7 +247,7 @@ namespace bite {
         void structure_body(StructureBody& body, std::optional<Token> super_class, Binding& superclass_binding, const SourceSpan& super_class_span, SourceSpan& name_span, ClassEnviroment* env, bool is_abstract);
 
     private:
-        std::vector<Node> node_stack;
+        std::vector<AstNode*> node_stack;
         Ast* ast;
 
         bool m_has_errors = false;

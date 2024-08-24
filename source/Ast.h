@@ -9,6 +9,7 @@
 #include "Diagnostics.h"
 #include "Value.h"
 #include "base/bitflags.h"
+#include "base/box.h"
 #include "parser/Token.h"
 
 
@@ -66,17 +67,134 @@
 enum class NodeKind : std::uint8_t {
     AST_NODES(DEFINE_TYPE_ENUM)
 };
+#define DECLARE_NODE(class_name, type_name) class class_name;
 
-struct Binding {};
-
+AST_NODES(DECLARE_NODE)
 
 class AstNode {
 public:
     [[nodiscard]] virtual NodeKind kind() const = 0;
     virtual ~AstNode() = default;
 
+    #define TYPE_METHODS(class_name, type_name) \
+        [[nodiscard]] virtual bool is_##type_name() const { return kind() == NodeKind::##type_name; } \
+        [[nodiscard]] class_name* as_##type_name();
+
+    AST_NODES(TYPE_METHODS)
+
     bite::SourceSpan span;
     explicit AstNode(bite::SourceSpan span) : span(std::move(span)) {}
+};
+
+struct LocalDeclarationInfo {
+    AstNode* declaration;
+    std::int64_t idx;
+    bool is_captured;
+};
+
+struct GlobalDeclarationInfo {
+    AstNode* declaration;
+    StringTable::Handle name;
+};
+
+using DeclarationInfo = std::variant<LocalDeclarationInfo, GlobalDeclarationInfo>;
+
+
+using Binding = std::variant<struct NoBinding, struct LocalBinding, struct GlobalBinding, struct UpvalueBinding, struct
+                             ParameterBinding, struct MemberBinding, struct PropertyBinding, struct SuperBinding, struct
+                             ClassObjectBinding>;
+
+struct NoBinding {};
+
+struct LocalBinding {
+    LocalDeclarationInfo* info;
+};
+
+struct GlobalBinding {
+    GlobalDeclarationInfo* info;
+};
+
+struct UpvalueBinding {
+    std::int64_t idx;
+};
+
+struct ParameterBinding {
+    std::int64_t idx;
+};
+
+struct MemberBinding {
+    StringTable::Handle name;
+};
+
+struct ClassObjectBinding {
+    bite::box<Binding> class_binding; // performance overhead?
+    StringTable::Handle name;
+};
+
+struct PropertyBinding {
+    StringTable::Handle property;
+};
+
+struct SuperBinding {
+    StringTable::Handle property;
+};
+
+
+struct Local {
+    LocalDeclarationInfo* declaration;
+    StringTable::Handle name;
+};
+
+struct Locals {
+    int64_t locals_count = 0;
+    std::vector<std::vector<Local>> scopes;
+};
+
+struct GlobalEnviroment {
+    bite::unordered_dense::map<StringTable::Handle, GlobalDeclarationInfo*> globals;
+    Locals locals;
+};
+
+struct UpValue {
+    int64_t idx;
+    bool local;
+
+    bool operator==(const UpValue& other) const {
+        return this->idx == other.idx && this->local == other.local;
+    }
+};
+
+struct FunctionEnviroment {
+    Locals locals;
+    std::vector<UpValue> upvalues;
+    std::vector<StringTable::Handle> parameters;
+};
+
+
+enum class ClassAttributes: std::uint8_t {
+    PRIVATE,
+    OVERRIDE,
+    ABSTRACT,
+    GETTER,
+    SETTER,
+    OPERATOR,
+    size // tracks ClassAttributes size. Must be at end!
+};
+
+struct MemberInfo {
+    bitflags<ClassAttributes> attributes;
+    bite::SourceSpan decl_span;
+};
+
+struct ClassEnviroment {
+    StringTable::Handle class_name; // TODO: temporary!
+    bite::unordered_dense::map<StringTable::Handle, MemberInfo> members;
+    ClassEnviroment* class_object_enviroment = nullptr;
+};
+
+struct TraitEnviroment {
+    bite::unordered_dense::map<StringTable::Handle, MemberInfo> members;
+    bite::unordered_dense::map<StringTable::Handle, MemberInfo> requirements;
 };
 
 
@@ -319,8 +437,6 @@ public:
         label_span(std::move(label_span)) {}
 };
 
-struct DeclarationInfo {};
-
 class ForExpr final : public Expr {
 public:
     [[nodiscard]] NodeKind kind() const override {
@@ -367,7 +483,6 @@ public:
     explicit ThisExpr(bite::SourceSpan span) : Expr(std::move(span)) {}
 };
 
-struct FunctionEnviroment {};
 
 class FunctionDeclaration final : public Stmt {
 public:
@@ -419,17 +534,6 @@ public:
     ExprStmt(bite::SourceSpan span, std::unique_ptr<Expr> expr) : Stmt(std::move(span)),
                                                                   value(std::move(expr)) {}
 };
-
-enum class ClassAttributes: std::uint8_t {
-    PRIVATE,
-    OVERRIDE,
-    ABSTRACT,
-    GETTER,
-    SETTER,
-    OPERATOR,
-    size // tracks ClassAttributes size. Must be at end!
-};
-
 
 // TODO: rethink those
 struct Field {
@@ -487,8 +591,6 @@ struct StructureBody {
     std::vector<UsingStmt> using_statements;
     std::optional<Constructor> constructor; // TODO: remove this optional
 };
-
-struct ClassEnviroment {};
 
 class ClassDeclaration final : public Stmt {
 public:
@@ -580,9 +682,6 @@ public:
         object(std::move(object)) {}
 };
 
-
-struct TraitEnviroment {};
-
 class TraitDeclaration final : public Stmt {
 public:
     [[nodiscard]] NodeKind kind() const override {
@@ -626,6 +725,9 @@ public:
 
     explicit InvalidExpr(bite::SourceSpan span) : Expr(std::move(span)) {}
 };
+
+#define DECLARE_AS_METHOD(class_name, type_name) class_name* AstNode::as_##type_name() { return static_cast<class_name*>(this);}
+AST_NODES(DECLARE_AS_METHOD)
 
 // template <typename T>
 // class AstNode {
