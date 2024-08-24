@@ -122,8 +122,6 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
         }
     }
 
-    // TODO: is this good ordering?
-    // TODO: overlap with trait
     // TODO: confilcts with superclass methods and overrides
     // TODO: disallow override in trait, and validate member attributes better through whole analyzer
     unordered_dense::map<StringTable::Handle, MemberInfo> requirements;
@@ -131,199 +129,39 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
         using_stmt(using_stmt_node, env, requirements);
     }
 
-    auto& constructor = *stmt->body.constructor; // TODO must always have an constructor
-
-    if (!superclass && constructor.has_super) {
-        emit_error_diagnostic(
-            "no superclass to call",
-            constructor.superconstructor_call_span,
-            "here",
-            {
-                InlineHint {
-                    .location = stmt->name_span,
-                    .message = "does not declare any superclass",
-                    .level = DiagnosticLevel::INFO
-                }
-            }
-        );
-    }
-
-    if (superclass && (*superclass)->body.constructor) {
-        auto& superconstructor = *(*superclass)->body.constructor;
-        if (!superconstructor.function->params.empty() && !constructor.has_super) {
-            // TODO: better diagnostic in default constructor
-            // TODO: better constructor declspan
-            emit_error_diagnostic(
-                "subclass must call it's superclass constructor",
-                constructor.decl_span,
-                "must add superconstructor call here",
-                {
-                    InlineHint {
-                        .location = stmt->name_span,
-                        .message = "declares superclass here",
-                        .level = DiagnosticLevel::INFO
-                    },
-                    InlineHint {
-                        .location = superconstructor.decl_span,
-                        .message = "superclass defines constructor here",
-                        .level = DiagnosticLevel::INFO
-                    }
-                }
-            );
-        }
-        if (constructor.super_arguments.size() != superconstructor.function->params.size()) {
-            // TODO: not safe?
-            emit_error_diagnostic(
-                std::format(
-                    "expected {} arguments, but got {} in superconstructor call",
-                    superconstructor.function->params.size(),
-                    constructor.super_arguments.size()
-                ),
-                constructor.superconstructor_call_span,
-                std::format("provides {} arguments", constructor.super_arguments.size()),
-                {
-                    InlineHint {
-                        .location = stmt->name_span,
-                        .message = "superclass declared here",
-                        .level = DiagnosticLevel::INFO
-                    },
-                    InlineHint {
-                        .location = superconstructor.decl_span,
-                        .message = std::format(
-                            "superclass constructor expected {} arguments",
-                            superconstructor.function->params.size()
-                        ),
-                        .level = DiagnosticLevel::INFO
-                    }
-                }
-            );
-        }
-    }
-    node_stack.emplace_back(&constructor.function);
-    for (const auto& param : constructor.function->params) {
-        declare(param.string, &constructor.function);
-    }
-    for (auto& super_arg : constructor.super_arguments) {
-        visit_expr(super_arg);
-    }
-    // visit in this env to support upvalues!
-    for (auto& field : stmt->body.fields) {
-        if (field.attributes[ClassAttributes::ABSTRACT] && !stmt->is_abstract) {
-            context->diagnostics.add(
-                {
-                    .level = DiagnosticLevel::ERROR,
-                    .message = "abstract member inside of non-abstract class",
-                    .inline_hints = {
-                        InlineHint {
-                            .location = field.span,
-                            .message = "is abstract",
-                            .level = DiagnosticLevel::ERROR
-                        },
-                        InlineHint {
-                            .location = stmt->name_span,
-                            .message = "is not abstract",
-                            .level = DiagnosticLevel::INFO
-                        },
-                    }
-                }
-            );
-            m_has_errors = true;
-        }
-
-        // TODO: better error messages!
-        if (overrideable_members.contains(field.variable->name.string)) {
-            if (!field.attributes[ClassAttributes::OVERRIDE]) {
-                // TODO: maybe point to original method
-                context->diagnostics.add(
-                    {
-                        .level = DiagnosticLevel::ERROR,
-                        .message = "memeber should override explicitly",
-                        .inline_hints = {
-                            InlineHint {
-                                .location = field.span,
-                                .message = "add 'override' attribute to this field",
-                                .level = DiagnosticLevel::ERROR
-                            }
-                        }
-                    }
-                );
-                m_has_errors = true;
-            }
-            overrideable_members.erase(field.variable->name.string);
-        } else if (field.attributes[ClassAttributes::OVERRIDE]) {
-            context->diagnostics.add(
-                {
-                    .level = DiagnosticLevel::ERROR,
-                    .message = "memeber does not override anything",
-                    .inline_hints = {
-                        InlineHint {
-                            .location = field.span,
-                            .message = "remove 'override' attribute from this field",
-                            .level = DiagnosticLevel::ERROR
-                        }
-                    }
-                }
-            );
-            m_has_errors = true;
-        }
-        declare_in_class_enviroment(*env, field.variable->name.string, MemberInfo(field.attributes, field.span));
-        if (field.variable->value) {
-            visit_expr(*field.variable->value);
-        }
-    }
-
-    if (constructor.function->body) {
-        visit_expr(*constructor.function->body);
-    }
-    node_stack.pop_back();
+    handle_constructor(stmt, env, overrideable_members, superclass);
 
     // hoist methods
     for (const auto& method : stmt->body.methods) {
-        // TODO: deduplicate
+        // TODO: overlap with field
         if (method.attributes[ClassAttributes::ABSTRACT] && !stmt->is_abstract) {
-            context->diagnostics.add(
+            emit_error_diagnostic(
+                .message = "abstract member inside of non-abstract class",
+                method.decl_span,
+                "is abstract",
                 {
-                    .level = DiagnosticLevel::ERROR,
-                    .message = "abstract member inside of non-abstract class",
-                    .inline_hints = {
-                        InlineHint {
-                            .location = method.decl_span,
-                            .message = "is abstract",
-                            .level = DiagnosticLevel::ERROR
-                        },
-                        InlineHint {
-                            .location = stmt->name_span,
-                            .message = "is not abstract",
-                            .level = DiagnosticLevel::INFO
-                        },
+                    InlineHint {
+                        .location = stmt->name_span,
+                        .message = "is not abstract",
+                        .level = DiagnosticLevel::INFO
                     }
                 }
             );
-            m_has_errors = true;
         }
         if (overrideable_members.contains(method.function->name.string)) {
             auto& member_attr = overrideable_members[method.function->name.string];
             auto& method_attr = method.attributes;
-            // TODO: refactor me pls
+            // TODO: replace with check member declaration
             if (!method.attributes[ClassAttributes::OVERRIDE] && ((member_attr.attributes[ClassAttributes::GETTER] &&
                 method_attr[ClassAttributes::GETTER]) || (member_attr.attributes[ClassAttributes::SETTER] && method_attr
                 [ClassAttributes::SETTER]))) {
                 // TODO: maybe point to original method
                 // TODO: fixme!
-                context->diagnostics.add(
-                    {
-                        .level = DiagnosticLevel::ERROR,
-                        .message = "memeber should override explicitly",
-                        .inline_hints = {
-                            InlineHint {
-                                .location = method.decl_span,
-                                .message = "add 'override' attribute to this field",
-                                .level = DiagnosticLevel::ERROR
-                            }
-                        }
-                    }
+                emit_error_diagnostic(
+                    "memeber should override explicitly",
+                    method.decl_span,
+                    "add 'override' attribute to this field"
                 );
-                m_has_errors = true;
             }
             if (member_attr.attributes[ClassAttributes::GETTER] && member_attr.attributes[ClassAttributes::SETTER] &&
                 method_attr[ClassAttributes::GETTER] && !method_attr[ClassAttributes::SETTER] && method_attr[
@@ -334,23 +172,16 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
                 ClassAttributes::SETTER] && method_attr[ClassAttributes::OVERRIDE]) {
                 member_attr.attributes -= ClassAttributes::SETTER;
             } else if (method_attr[ClassAttributes::OVERRIDE]) {
+                // TODO: performance?
                 overrideable_members.erase(method.function->name.string);
             }
         } else if (method.attributes[ClassAttributes::OVERRIDE]) {
-            context->diagnostics.add(
-                {
-                    .level = DiagnosticLevel::ERROR,
-                    .message = "memeber does not override anything",
-                    .inline_hints = {
-                        InlineHint {
-                            .location = method.decl_span,
-                            .message = "remove 'override' attribute from this field",
-                            .level = DiagnosticLevel::ERROR
-                        }
-                    }
-                }
+            // maybe should be a warning instead
+            emit_error_diagnostic(
+                "memeber does not override anything",
+                method.decl_span,
+                "remove 'override' attribute from this field"
             );
-            m_has_errors = true;
         }
         declare_in_class_enviroment(
             *env,
@@ -363,25 +194,18 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
     if (!stmt->is_abstract && superclass && (*superclass)->is_abstract) {
         for (const auto& [name, attr] : overrideable_members) {
             if (attr.attributes[ClassAttributes::ABSTRACT]) {
-                context->diagnostics.add(
+                emit_error_diagnostic(
+                    std::format("abstract member {} not overriden", *name),
+                    stmt->name_span,
+                    "override member in this class",
                     {
-                        .level = DiagnosticLevel::ERROR,
-                        .message = std::format("abstract member {} not overriden", *name),
-                        .inline_hints = {
-                            InlineHint {
-                                .location = stmt->name_span,
-                                .message = "override member in this class",
-                                .level = DiagnosticLevel::ERROR
-                            },
-                            InlineHint {
-                                .location = attr.decl_span,
-                                .message = "abstract member declared here",
-                                .level = DiagnosticLevel::INFO
-                            }
+                        InlineHint {
+                            .location = attr.decl_span,
+                            .message = "abstract member declared here",
+                            .level = DiagnosticLevel::INFO
                         }
                     }
                 );
-                m_has_errors = true;
             }
         }
     }
@@ -402,25 +226,18 @@ void bite::Analyzer::class_declaration(AstNode<ClassStmt>& stmt) {
         if (!env->members.contains(requirement)) {
             // TODO: better error
             // TODO: point to trait as well
-            context->diagnostics.add(
+            emit_error_diagnostic(
+                std::format("trait requirement not satisifed: {}", *requirement),
+                stmt->name_span,
+                std::format("add member {} in this class", *requirement),
                 {
-                    .level = DiagnosticLevel::ERROR,
-                    .message = std::format("trait requirement not satisifed: {}", *requirement),
-                    .inline_hints = {
-                        InlineHint {
-                            .location = stmt->name_span,
-                            .message = std::format("add member {} in this class", *requirement),
-                            .level = DiagnosticLevel::ERROR
-                        },
-                        InlineHint {
-                            .location = info.decl_span,
-                            .message = "requirement declared here",
-                            .level = DiagnosticLevel::INFO
-                        }
+                    InlineHint {
+                        .location = info.decl_span,
+                        .message = "requirement declared here",
+                        .level = DiagnosticLevel::INFO
                     }
                 }
             );
-            m_has_errors = true;
         }
     }
 }

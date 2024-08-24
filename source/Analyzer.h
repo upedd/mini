@@ -168,7 +168,11 @@ namespace bite {
             return node;
         }
 
-        void using_stmt(AstNode<UsingStmt>& stmt, ClassEnviroment* env, unordered_dense::map<StringTable::Handle, MemberInfo>& requirements) {
+        void using_stmt(
+            AstNode<UsingStmt>& stmt,
+            ClassEnviroment* env,
+            unordered_dense::map<StringTable::Handle, MemberInfo>& requirements
+        ) {
             for (auto& item : stmt->items) {
                 // Overlap with class
                 // TODO: better error messages, refactor?
@@ -203,7 +207,6 @@ namespace bite {
                     continue;
                 }
 
-                // TODO: prob refactor?
                 for (auto& [field_name, field_attr] : (*item_trait)->enviroment.members) {
                     //check if excluded
                     bool is_excluded = std::ranges::contains(item.exclusions, field_name, &Token::string);
@@ -225,6 +228,150 @@ namespace bite {
                     item.declarations.emplace_back(field_name, aliased_name, field_attr.attributes);
                 }
             }
+        }
+
+        // TODO: refactor
+        void check_member_declaration(
+            AstNode<ClassStmt>& stmt,
+            StringTable::Handle name,
+            MemberInfo& info,
+            unordered_dense::map<StringTable::Handle, MemberInfo>& overrideable_members
+        ) {
+            if (info.attributes[ClassAttributes::ABSTRACT] && !stmt->is_abstract) {
+                emit_error_diagnostic(
+                    .message = "abstract member inside of non-abstract class",
+                    info.decl_span,
+                    "is abstract",
+                    {
+                        InlineHint {
+                            .location = stmt->name_span,
+                            .message = "is not abstract",
+                            .level = DiagnosticLevel::INFO
+                        }
+                    }
+                );
+            }
+
+            if (overrideable_members.contains(name)) {
+                if (!info.attributes[ClassAttributes::OVERRIDE]) {
+                    // TODO: maybe point to original method
+                    emit_error_diagnostic(
+                        "memeber should override explicitly",
+                        info.decl_span,
+                        "add 'override' attribute to this field"
+                    );
+                }
+                overrideable_members.erase(name);
+            } else if (info.attributes[ClassAttributes::OVERRIDE]) {
+                emit_error_diagnostic(
+                    "memeber does not override anything",
+                    info.decl_span,
+                    "remove 'override' attribute from this field"
+                );
+            }
+        }
+
+        // TODO: refactor?
+        void handle_constructor(
+            AstNode<ClassStmt>& stmt,
+            ClassEnviroment* env,
+            unordered_dense::map<StringTable::Handle, MemberInfo>& overrideable_members,
+            AstNode<ClassStmt>* superclass
+        ) {
+            auto& constructor = *stmt->body.constructor; // TODO must always have an constructor
+
+            // TODO: we can maybe elimante has super from ClassStmt!
+            if (!superclass && constructor.has_super) {
+                emit_error_diagnostic(
+                    "no superclass to call",
+                    constructor.superconstructor_call_span,
+                    "here",
+                    {
+                        InlineHint {
+                            .location = stmt->name_span,
+                            .message = "does not declare any superclass",
+                            .level = DiagnosticLevel::INFO
+                        }
+                    }
+                );
+            }
+
+            if (superclass && (*superclass)->body.constructor) {
+                auto& superconstructor = *(*superclass)->body.constructor;
+                if (!superconstructor.function->params.empty() && !constructor.has_super) {
+                    // TODO: better diagnostic in default constructor
+                    // TODO: better constructor declspan
+                    emit_error_diagnostic(
+                        "subclass must call it's superclass constructor",
+                        constructor.decl_span,
+                        "must add superconstructor call here",
+                        {
+                            InlineHint {
+                                .location = stmt->name_span,
+                                .message = "declares superclass here",
+                                .level = DiagnosticLevel::INFO
+                            },
+                            InlineHint {
+                                .location = superconstructor.decl_span,
+                                .message = "superclass defines constructor here",
+                                .level = DiagnosticLevel::INFO
+                            }
+                        }
+                    );
+                }
+                if (constructor.super_arguments.size() != superconstructor.function->params.size()) {
+                    // TODO: not safe?
+                    emit_error_diagnostic(
+                        std::format(
+                            "expected {} arguments, but got {} in superconstructor call",
+                            superconstructor.function->params.size(),
+                            constructor.super_arguments.size()
+                        ),
+                        constructor.superconstructor_call_span,
+                        std::format("provides {} arguments", constructor.super_arguments.size()),
+                        {
+                            InlineHint {
+                                .location = stmt->name_span,
+                                .message = "superclass declared here",
+                                .level = DiagnosticLevel::INFO
+                            },
+                            InlineHint {
+                                .location = superconstructor.decl_span,
+                                .message = std::format(
+                                    "superclass constructor expected {} arguments",
+                                    superconstructor.function->params.size()
+                                ),
+                                .level = DiagnosticLevel::INFO
+                            }
+                        }
+                    );
+                }
+            }
+            node_stack.emplace_back(&constructor.function);
+            for (const auto& param : constructor.function->params) {
+                declare(param.string, &constructor.function);
+            }
+            for (auto& super_arg : constructor.super_arguments) {
+                visit_expr(super_arg);
+            }
+            // visit in this env to support upvalues!
+            for (auto& field : stmt->body.fields) {
+                MemberInfo info = MemberInfo(field.attributes, field.span);
+                check_member_declaration(stmt, field.variable->name.string, info, overrideable_members);
+                declare_in_class_enviroment(
+                    *env,
+                    field.variable->name.string,
+                    MemberInfo(field.attributes, field.span)
+                );
+                if (field.variable->value) {
+                    visit_expr(*field.variable->value);
+                }
+            }
+
+            if (constructor.function->body) {
+                visit_expr(*constructor.function->body);
+            }
+            node_stack.pop_back();
         }
 
     private:
