@@ -84,23 +84,23 @@ private:
 
     StringTable::Handle context_keyword(const std::string& keyword) const;
 
-    Stmt statement_or_expression();
-    std::optional<Stmt> statement();
-    std::optional<Stmt> control_flow_expression_statement();
-    Stmt expr_statement();
+    std::unique_ptr<Stmt> statement_or_expression();
+    std::optional<std::unique_ptr<Stmt>> statement();
+    std::optional<std::unique_ptr<Stmt>> control_flow_expression_statement();
+    std::unique_ptr<Stmt> expr_statement();
 
-    Stmt native_declaration();
-    Stmt object_declaration();
+    std::unique_ptr<NativeDeclaration> native_declaration();
+    std::unique_ptr<ObjectDeclaration> object_declaration();
 
-    Stmt var_declaration();
+    std::unique_ptr<VariableDeclaration> var_declaration();
     AstNode<VarStmt> var_declaration_body(const Token& name);
 
     AstNode<FunctionStmt> function_declaration();
     AstNode<FunctionStmt> function_declaration_body(const Token& name, bool skip_params = false);
     std::vector<Token> functions_parameters();
-    std::vector<Expr> call_arguments();
+    std::vector<std::unique_ptr<Expr>> call_arguments();
 
-    Stmt class_declaration(bool is_abstract = false);
+    std::unique_ptr<Stmt> class_declaration(bool is_abstract = false);
     StructureBody structure_body(const Token& class_token);
 
     AstNode<UsingStmt> using_statement();

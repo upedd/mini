@@ -1,6 +1,7 @@
 #ifndef EXPR_H
 #define EXPR_H
 #include <format>
+#include <utility>
 #include <variant>
 #include <vector>
 #include <algorithm>
@@ -24,6 +25,9 @@
 // ###
 // Big refactor!
 // ###
+
+// TODO: switch to forward lists
+// TODO: rethink optionl of unique ptrs
 
 // ### Definitions ###
 // AST - abstract syntax tree
@@ -60,26 +64,40 @@
     V(trait_declaration) \
     V(object_declaration) \
     V(invalid_stmt) \
-    V(invalid_expr) \
-
+    V(invalid_expr)
 #define DEFINE_TYPE_ENUM(type) ##type,
+
 enum class NodeKind : std::uint8_t {
     AST_NODES(DEFINE_TYPE_ENUM)
 };
 
-struct Binding{};
+struct Binding {};
+
 
 class AstNode {
 public:
     virtual NodeKind kind() = 0;
     virtual ~AstNode() = default;
+
+    bite::SourceSpan span;
+    explicit AstNode(bite::SourceSpan span) : span(std::move(span)) {}
 };
 
+
 class Stmt : public AstNode {
+public:
+    explicit Stmt(bite::SourceSpan span) : AstNode(std::move(span)) {}
 };
 
 class Expr : public AstNode {
+    explicit Expr(bite::SourceSpan span) : AstNode(std::move(span)) {}
 };
+
+class Ast {
+public:
+    std::vector<std::unique_ptr<Stmt>> stmts;
+};
+
 
 class UnaryExpr final : public Expr {
 public:
@@ -120,6 +138,9 @@ public:
     }
 
     Value value;
+
+    LiteralExpr(bite::SourceSpan span, Value value) : Expr(std::move(span)),
+                                                      value(std::move(value)) {}
 };
 
 class StringExpr final : public Expr {
@@ -130,6 +151,7 @@ public:
 
     std::string string;
 };
+
 class VariableExpr final : public Expr {
 public:
     NodeKind kind() override {
@@ -139,6 +161,7 @@ public:
     Token identifier;
     Binding binding;
 };
+
 class GetPropertyExpr final : public Expr {
 public:
     NodeKind kind() override {
@@ -148,6 +171,7 @@ public:
     std::unique_ptr<Expr> left;
     Token property;
 };
+
 class SuperExpr final : public Expr {
 public:
     NodeKind kind() override {
@@ -156,6 +180,7 @@ public:
 
     Token method;
 };
+
 class BlockExpr final : public Expr {
 public:
     NodeKind kind() override {
@@ -181,110 +206,245 @@ public:
 class WhileExpr final : public Expr {
 public:
     NodeKind kind() override {
-        return NodeKind::literal_expr;
+        return NodeKind::while_expr;
     }
 
     std::unique_ptr<Expr> condition;
     BlockExpr body;
     std::optional<Token> label;
 };
-class LiteralExpr final : public Expr {
+
+class BreakExpr final : public Expr {
 public:
     NodeKind kind() override {
-        return NodeKind::literal_expr;
+        return NodeKind::break_expr;
     }
 
-    Value value;
-};
-class LiteralExpr final : public Expr {
-public:
-    NodeKind kind() override {
-        return NodeKind::literal_expr;
-    }
-
-    Value value;
-};
-class LiteralExpr final : public Expr {
-public:
-    NodeKind kind() override {
-        return NodeKind::literal_expr;
-    }
-
-    Value value;
-};
-class LiteralExpr final : public Expr {
-public:
-    NodeKind kind() override {
-        return NodeKind::literal_expr;
-    }
-
-    Value value;
-};
-class LiteralExpr final : public Expr {
-public:
-    NodeKind kind() override {
-        return NodeKind::literal_expr;
-    }
-
-    Value value;
-};
-class LiteralExpr final : public Expr {
-public:
-    NodeKind kind() override {
-        return NodeKind::literal_expr;
-    }
-
-    Value value;
-};
-class LiteralExpr final : public Expr {
-public:
-    NodeKind kind() override {
-        return NodeKind::literal_expr;
-    }
-
-    Value value;
-};class LiteralExpr final : public Expr {
-public:
-    NodeKind kind() override {
-        return NodeKind::literal_expr;
-    }
-
-    Value value;
-};
-class LiteralExpr final : public Expr {
-public:
-    NodeKind kind() override {
-        return NodeKind::literal_expr;
-    }
-
-    Value value;
-};
-class LiteralExpr final : public Expr {
-public:
-    NodeKind kind() override {
-        return NodeKind::literal_expr;
-    }
-
-    Value value;
-};
-class LiteralExpr final : public Expr {
-public:
-    NodeKind kind() override {
-        return NodeKind::literal_expr;
-    }
-
-    Value value;
-};
-class LiteralExpr final : public Expr {
-public:
-    NodeKind kind() override {
-        return NodeKind::literal_expr;
-    }
-
-    Value value;
+    std::optional<std::unique_ptr<Expr>> expr;
+    std::optional<Token> label;
+    bite::SourceSpan label_span;
 };
 
+class ContinueExpr final : public Expr {
+public:
+    NodeKind kind() override {
+        return NodeKind::continue_expr;
+    }
 
+    std::optional<Token> label;
+    bite::SourceSpan label_span;
+};
+
+struct DeclarationInfo {};
+
+class ForExpr final : public Expr {
+public:
+    NodeKind kind() override {
+        return NodeKind::for_expr;
+    }
+
+    Token name;
+    std::unique_ptr<Expr> iterable;
+    BlockExpr body;
+    std::optional<Token> label;
+    DeclarationInfo info; // For iterator variable
+};
+
+class ReturnExpr final : public Expr {
+public:
+    NodeKind kind() override {
+        return NodeKind::return_expr;
+    }
+
+    std::optional<Value> value;
+};
+
+class ThisExpr final : public Expr {
+public:
+    NodeKind kind() override {
+        return NodeKind::this_expr;
+    }
+};
+
+struct FunctionEnviroment {};
+
+class FunctionDeclaration final : public Stmt {
+public:
+    NodeKind kind() override {
+        return NodeKind::function_declaration;
+    }
+
+    Token name;
+    std::vector<Token> params;
+    std::optional<std::unique_ptr<Expr>> body;
+    DeclarationInfo info;
+    FunctionEnviroment enviroment {};
+
+    FunctionDeclaration(bite::SourceSpan span, const Token& name, std::vector<Token> params, std::optional<std::unique_ptr<Expr>> body) : Stmt(std::move(span)), name(name), params(std::move(params)), body(std::move(body)) {}
+};
+
+class VariableDeclaration final : public Stmt {
+public:
+    NodeKind kind() override {
+        return NodeKind::variable_declaration;
+    }
+
+    Token name;
+    std::optional<std::unique_ptr<Expr>> value;
+    DeclarationInfo info;
+
+    VariableDeclaration(bite::SourceSpan span, const Token& name, std::optional<std::unique_ptr<Expr>> value) :
+        Stmt(std::move(span)),
+        name(name),
+        value(std::move(value)) {}
+};
+
+class ExprStmt final : public Stmt {
+public:
+    NodeKind kind() override {
+        return NodeKind::expr_stmt;
+    }
+
+    std::unique_ptr<Expr> value;
+
+    ExprStmt(bite::SourceSpan span, std::unique_ptr<Expr> expr) : Stmt(std::move(span)),
+                                                                  value(std::move(expr)) {}
+};
+
+enum ClassAttributes {
+    size
+};
+
+// TODO: rethink those
+struct Field {
+    VariableDeclaration variable;
+    bitflags<ClassAttributes> attributes;
+    bite::SourceSpan span;
+};
+
+struct Method {
+    FunctionDeclaration function;
+    bitflags<ClassAttributes> attributes;
+    bite::SourceSpan decl_span;
+};
+
+struct Constructor {
+    bool has_super;
+    std::vector<Expr> super_arguments;
+    FunctionDeclaration function;
+    bite::SourceSpan superconstructor_call_span;
+    bite::SourceSpan decl_span;
+};
+
+/**
+ * Shared fields between ObjectExpr and ClassStmt
+ */
+struct StructureBody {
+    // std::vector<Method> methods;
+    // std::vector<Field> fields;
+    // std::optional<ObjectExpr> class_object;
+    // std::vector<AstNode<UsingStmt>> using_statements;
+    // std::optional<Constructor> constructor; // TODO: remove this optional
+};
+
+struct ClassEnviroment {};
+
+class ClassDeclaration final : public Stmt {
+public:
+    NodeKind kind() override {
+        return NodeKind::class_declaration;
+    }
+
+    Token name;
+    bite::SourceSpan name_span; // TODO: temp
+    std::optional<Token> super_class;
+    bite::SourceSpan super_class_span; // TODO: temp
+    StructureBody body;
+    bool is_abstract = false;
+    DeclarationInfo info;
+    ClassEnviroment enviroment;
+    Binding superclass_binding;
+};
+
+class NativeDeclaration final : public Stmt {
+public:
+    NodeKind kind() override {
+        return NodeKind::native_declaration;
+    }
+
+    Token name;
+    DeclarationInfo info;
+
+    NativeDeclaration(bite::SourceSpan span, const Token& name) : Stmt(std::move(span)),
+                                                                  name(name) {}
+};
+
+class ObjectDeclaration final : public Stmt {
+public:
+    NodeKind kind() override {
+        return NodeKind::object_declaration;
+    }
+
+    Token name;
+    std::unique_ptr<Expr> object;
+    DeclarationInfo info;
+
+    ObjectDeclaration(bite::SourceSpan& span, const Token& name, std::unique_ptr<Expr> object) : Stmt(std::move(span)),
+        name(name),
+        object(std::move(object)) {}
+};
+
+// TODO: rethink:
+// TODO: insane...
+// find a better way to write this
+struct UsingStmtMemeberDeclaration {
+    StringTable::Handle original_name;
+    StringTable::Handle aliased_name;
+    bitflags<ClassAttributes> attributes;
+};
+
+struct UsingStmtItem {
+    Token name;
+    bite::SourceSpan span;
+    std::vector<Token> exclusions;
+    std::vector<std::pair<Token, Token>> aliases;
+    std::vector<UsingStmtMemeberDeclaration> declarations; // TODO
+    Binding binding;
+};
+
+struct UsingStmt {
+    std::vector<UsingStmtItem> items;
+};
+
+struct TraitEnviroment {};
+
+class TraitDeclaration final : public Stmt {
+public:
+    NodeKind kind() override {
+        return NodeKind::trait_declaration;
+    }
+
+    Token name;
+    std::vector<Method> methods;
+    std::vector<Field> fields;
+    std::vector<UsingStmt> using_stmts;
+    DeclarationInfo info;
+    TraitEnviroment enviroment;
+};
+
+class InvalidStmt final : public Stmt {
+public:
+    NodeKind kind() override {
+        return NodeKind::invalid_stmt;
+    }
+};
+
+class InvalidExpr final : public Expr {
+public:
+    NodeKind kind() override {
+        return NodeKind::invalid_stmt;
+    }
+};
 
 // template <typename T>
 // class AstNode {
