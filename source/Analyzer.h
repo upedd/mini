@@ -20,18 +20,16 @@ namespace bite {
     public:
         explicit Analyzer(SharedContext* context) : context(context) {}
 
-        // TODOs: class analysis, tratis analysis
-        // refactor: overlap with parser
-        void emit_message(Logger::Level level, const std::string& content, const std::string& inline_content);
+        void emit_error_diagnostic(
+            const std::string& message,
+            const SourceSpan& inline_errror_location,
+            const std::string& inline_error_message,
+            std::vector<InlineHint>&& additonal_hints = {}
+        );
 
         [[nodiscard]] bool has_errors() const {
             return m_has_errors;
         }
-
-        [[nodiscard]] const std::vector<Message>& get_messages() const {
-            return messages;
-        }
-
 
         void analyze(Ast& ast);
         void block(AstNode<BlockExpr>& expr);
@@ -63,520 +61,64 @@ namespace bite {
 
 
         // TODO: mess?
-        DeclarationInfo* set_declaration_info(Node node, DeclarationInfo info) {
-            if (std::holds_alternative<StmtPtr>(node)) {
-                auto statement = std::get<StmtPtr>(node);
-                return std::visit(
-                overloaded {
-                    [info](AstNode<VarStmt>* stmt) -> DeclarationInfo* { return &((*stmt)->info = info); },
-                    [](AstNode<ExprStmt>*) -> DeclarationInfo* { return nullptr; },
-                    [info](AstNode<FunctionStmt>* stmt) -> DeclarationInfo* { return &((*stmt)->info = info); },
-                    [info](AstNode<ClassStmt>* stmt) -> DeclarationInfo* { return &((*stmt)->info = info); },
-                    [info](AstNode<NativeStmt>* stmt) -> DeclarationInfo* { return &((*stmt)->info = info); },
-                    [info](AstNode<ObjectStmt>* stmt) -> DeclarationInfo* { return &((*stmt)->info = info); },
-                    [info](AstNode<TraitStmt>* stmt) -> DeclarationInfo* { return &((*stmt)->info = info); },
-                    [](AstNode<UsingStmt>*) -> DeclarationInfo* { return nullptr; },
-                    [](AstNode<InvalidStmt>*) -> DeclarationInfo* { return nullptr; }
-                },
-                statement
-            );
-            }
-            auto expr = std::get<ExprPtr>(node);
-            if (std::holds_alternative<AstNode<ForExpr>*>(expr)) {
-                return &((*std::get<AstNode<ForExpr>*>(expr))->info = info);
-            }
-            return nullptr;
-        }
+        DeclarationInfo* set_declaration_info(Node node, DeclarationInfo info);
 
-        // Or just store everything in ast should be smarter
-        void declare_in_function_enviroment(FunctionEnviroment& env, StringTable::Handle name, Node declaration) {
-            if (env.locals.scopes.empty()) {
-                if (std::ranges::contains(env.parameters, name)) {
-                    // TODO: better error message, point to original
-                    context->diagnostics.add({
-                        .level = DiagnosticLevel::ERROR,
-                        .message = "duplicate parameter name",
-                        .inline_hints = {
-                            InlineHint {
-                                .location = get_span(declaration),
-                                .message = "here",
-                                .level = DiagnosticLevel::ERROR
-                            }
-                        }
-                    });
-                    m_has_errors = true;
-                }
-                env.parameters.push_back(name);
-            } else {
-                for (auto& local : env.locals.scopes.back()) {
-                    if (local.name == name) {
-                        context->diagnostics.add({
-                        .level = DiagnosticLevel::ERROR,
-                        .message = "variable redeclared in the same scope",
-                        .inline_hints = {
-                            InlineHint {
-                                .location = get_span(declaration),
-                                .message = "new declaration here",
-                                .level = DiagnosticLevel::ERROR
-                            },
-                            InlineHint {
-                                .location = get_span(local.declaration->declaration),
-                                .message = "originally declared here",
-                                .level = DiagnosticLevel::INFO
-                            }
-                        }
-                    });
-                        m_has_errors = true;
-                    }
-                }
-                // assert not-null probably
-                DeclarationInfo* info = set_declaration_info(
-                    declaration,
-                    LocalDeclarationInfo {
-                        .declaration = declaration,
-                        .idx = env.locals.locals_count++,
-                        .is_captured = false
-                    }
-                );
-                env.locals.scopes.back().push_back(
-                    Local { .declaration = reinterpret_cast<LocalDeclarationInfo*>(info), .name = name }
-                );
-            }
-        }
+        void declare_in_function_enviroment(FunctionEnviroment& env, StringTable::Handle name, Node declaration);
 
-        void declare_in_class_enviroment(
-            ClassEnviroment& env,
-            StringTable::Handle name,
-            const MemberInfo& attributes
-        ) {
-            if (env.members.contains(name)) {
-                auto& member_attr = env.members[name];
-                if (member_attr.attributes[ClassAttributes::SETTER] && !member_attr.attributes[ClassAttributes::GETTER] && !attributes.attributes[
-                    ClassAttributes::SETTER] && attributes.attributes[ClassAttributes::GETTER]) {
-                    member_attr.attributes += ClassAttributes::GETTER;
-                    return;
-                }
-                if (member_attr.attributes[ClassAttributes::GETTER] && !member_attr.attributes[ClassAttributes::SETTER] && !attributes.attributes[
-                    ClassAttributes::GETTER] && attributes.attributes[ClassAttributes::SETTER]) {
-                    member_attr.attributes += ClassAttributes::SETTER;
-                    return;
-                }
-
-                context->diagnostics.add({
-                    .level = DiagnosticLevel::ERROR,
-                    .message = "class member name conflict",
-                    .inline_hints = {
-                        InlineHint {
-                            .location = attributes.decl_span,
-                            .message = "new declaration here",
-                            .level = DiagnosticLevel::ERROR
-                        },
-                        InlineHint {
-                            .location = env.members[name].decl_span,
-                            .message = "originally declared here",
-                            .level = DiagnosticLevel::INFO
-                        }
-                    }
-                });
-                m_has_errors = true;
-            }
-            env.members[name] = attributes;
-        }
+        void declare_in_class_enviroment(ClassEnviroment& env, StringTable::Handle name, const MemberInfo& attributes);
 
 
-        void declare_in_trait_enviroment(
-            TraitEnviroment& env,
-            StringTable::Handle name,
-            const MemberInfo& attributes
-        ) {
-            if (env.members.contains(name)) {
-                auto& member_attr = env.members[name];
-                if (member_attr.attributes[ClassAttributes::SETTER] && !member_attr.attributes[ClassAttributes::GETTER] && !attributes.attributes[
-                    ClassAttributes::SETTER] && attributes.attributes[ClassAttributes::GETTER]) {
-                    member_attr.attributes += ClassAttributes::GETTER;
-                    return;
-                    }
-                if (member_attr.attributes[ClassAttributes::GETTER] && !member_attr.attributes[ClassAttributes::SETTER] && !attributes.attributes[
-                    ClassAttributes::GETTER] && attributes.attributes[ClassAttributes::SETTER]) {
-                    member_attr.attributes += ClassAttributes::SETTER;
-                    return;
-                    }
-                context->diagnostics.add({
-                    .level = DiagnosticLevel::ERROR,
-                    .message = "trait member name conflict",
-                    .inline_hints = {
-                        InlineHint {
-                            .location = attributes.decl_span,
-                            .message = "new declaration here",
-                            .level = DiagnosticLevel::ERROR
-                        },
-                        InlineHint {
-                            .location = env.members[name].decl_span,
-                            .message = "originally declared here",
-                            .level = DiagnosticLevel::INFO
-                        }
-                    }
-                });
-                m_has_errors = true;
-            }
-            env.members[name] = attributes;
-        }
+        void declare_in_trait_enviroment(TraitEnviroment& env, StringTable::Handle name, const MemberInfo& attributes);
 
-        void declare_in_global_enviroment(GlobalEnviroment& env, StringTable::Handle name, Node declaration) {
-            if (env.locals.scopes.empty()) {
-                if (env.globals.contains(name)) {
-                        context->diagnostics.add({
-                        .level = DiagnosticLevel::ERROR,
-                        .message = "global variable name conflict",
-                        .inline_hints = {
-                            InlineHint {
-                                .location = get_span(declaration),
-                                .message = "new declaration here",
-                                .level = DiagnosticLevel::ERROR
-                            },
-                            InlineHint {
-                                .location = get_span(env.globals[name]->declaration),
-                                .message = "originally declared here",
-                                .level = DiagnosticLevel::INFO
-                            }
-                        }
-                    });
-                    m_has_errors = true;
-                }
-                DeclarationInfo* info = set_declaration_info(
-                    declaration,
-                    GlobalDeclarationInfo { .declaration = declaration, .name = name }
-                );
-                env.globals[name] = reinterpret_cast<GlobalDeclarationInfo*>(info);
-            } else {
-                for (auto& local : env.locals.scopes.back()) {
-                    if (local.name == name) {
-                        context->diagnostics.add({
-                        .level = DiagnosticLevel::ERROR,
-                        .message = "variable redeclared in the same scope",
-                        .inline_hints = {
-                            InlineHint {
-                                .location = get_span(declaration),
-                                .message = "new declaration here",
-                                .level = DiagnosticLevel::ERROR
-                            },
-                            InlineHint {
-                                .location = get_span(local.declaration->declaration),
-                                .message = "originally declared here",
-                                .level = DiagnosticLevel::INFO
-                            }
-                        }
-                    });
-                        m_has_errors = true;
-                    }
-                }
-                DeclarationInfo* info = set_declaration_info(
-                    declaration,
-                    LocalDeclarationInfo {
-                        .declaration = declaration,
-                        .idx = env.locals.locals_count++,
-                        .is_captured = false
-                    }
-                );
-                env.locals.scopes.back().push_back(
-                    Local { .declaration = reinterpret_cast<LocalDeclarationInfo*>(info), .name = name }
-                );
-            }
-        }
+        void declare_in_global_enviroment(GlobalEnviroment& env, StringTable::Handle name, Node declaration);
 
         // declare variable
-        void declare(StringTable::Handle name, Node declaration) {
-            for (auto node : node_stack | std::views::reverse) {
-                if (std::holds_alternative<StmtPtr>(node)) {
-                    auto stmt = std::get<StmtPtr>(node);
-                    if (std::holds_alternative<AstNode<FunctionStmt>*>(stmt)) {
-                        auto* function = std::get<AstNode<FunctionStmt>*>(stmt);
-                        declare_in_function_enviroment((*function)->enviroment, name, declaration);
-                        return;
-                    }
-                }
-            }
-            declare_in_global_enviroment(ast->enviroment, name, declaration);
-        }
+        void declare(StringTable::Handle name, Node declaration);
 
-        ClassEnviroment* current_class_enviroment() {
-            for (auto node : node_stack | std::views::reverse) {
-                if (std::holds_alternative<StmtPtr>(node)) {
-                    auto stmt = std::get<StmtPtr>(node);
-                    if (std::holds_alternative<AstNode<ClassStmt>*>(stmt)) {
-                        auto* klass = std::get<AstNode<ClassStmt>*>(stmt);
-                        return &(*klass)->enviroment;
-                    }
-                }
-                if (std::holds_alternative<ExprPtr>(node)) {
-                    auto expr = std::get<ExprPtr>(node);
-                    if (std::holds_alternative<AstNode<ObjectExpr>*>(expr)) {
-                        auto* object = std::get<AstNode<ObjectExpr>*>(expr);
-                        return &(*object)->class_enviroment;
-                    }
-                }
-            }
-            return nullptr;
-        }
+        ClassEnviroment* current_class_enviroment();
 
-        TraitEnviroment* current_trait_enviroment() {
-            for (auto node : node_stack | std::views::reverse) {
-                if (std::holds_alternative<StmtPtr>(node)) {
-                    auto stmt = std::get<StmtPtr>(node);
-                    if (std::holds_alternative<AstNode<TraitStmt>*>(stmt)) {
-                        auto* klass = std::get<AstNode<TraitStmt>*>(stmt);
-                        return &(*klass)->enviroment;
-                    }
-                }
-            }
-            return nullptr;
-        }
+        TraitEnviroment* current_trait_enviroment();
 
         // TODO: refactor!
-        void declare_in_outer(StringTable::Handle name, StmtPtr declaration) {
-            bool skipped = false;
-            for (auto node : node_stack | std::views::reverse) {
-                if (std::holds_alternative<StmtPtr>(node)) {
-                    auto stmt = std::get<StmtPtr>(node);
-                    if (std::holds_alternative<AstNode<FunctionStmt>*>(stmt)) {
-                        if (!skipped) {
-                            skipped = true;
-                            continue;
-                        }
-                        auto* function = std::get<AstNode<FunctionStmt>*>(stmt);
-                        declare_in_function_enviroment((*function)->enviroment, name, declaration);
-                        return;
-                    }
-                }
-            }
-            declare_in_global_enviroment(ast->enviroment, name, declaration);
-        }
+        void declare_in_outer(StringTable::Handle name, StmtPtr declaration);
 
 
         static std::optional<Binding> get_binding_in_function_enviroment(
             const FunctionEnviroment& env,
             StringTable::Handle name
-        ) {
-            for (const auto& [idx, param] : env.parameters | std::views::enumerate) {
-                if (param == name) {
-                    return ParameterBinding { idx };
-                }
-            }
-            for (const auto& scope : env.locals.scopes | std::views::reverse) {
-                for (const auto& local : scope) {
-                    if (local.name == name) {
-                        return LocalBinding { .info = local.declaration };
-                    }
-                }
-            }
-            return {};
-        }
+        );
 
-        std::optional<Binding> get_binding_in_class_enviroment(const ClassEnviroment& env, StringTable::Handle name, const SourceSpan& source) {
-            for (const auto& member : env.members | std::views::keys) {
-                if (member == name) {
-                    return MemberBinding { member };
-                }
-            }
-            if (env.class_object_enviroment) {
-                for (const auto& member : env.class_object_enviroment->members | std::views::keys) {
-                    if (member == name) {
-                        // TODO: disallow defining anything with class name inside of class otherwise this will not work
-                        return ClassObjectBinding { .class_binding = resolve(env.class_name, source), .name = member };
-                    }
-                }
-            }
-            return {};
-        }
+        std::optional<Binding> get_binding_in_class_enviroment(
+            const ClassEnviroment& env,
+            StringTable::Handle name,
+            const SourceSpan& source
+        );
 
-        std::optional<Binding> get_binding_in_trait_enviroment(const TraitEnviroment& env, StringTable::Handle name) {
-            for (const auto& member : env.members | std::views::keys) {
-                if (member == name) {
-                    return MemberBinding { member };
-                }
-            }
-            return {};
-        }
+        std::optional<Binding> get_binding_in_trait_enviroment(const TraitEnviroment& env, StringTable::Handle name);
 
 
         static std::optional<Binding> get_binding_in_global_enviroment(
             const GlobalEnviroment& env,
             StringTable::Handle name
-        ) {
-            for (const auto& [global_name, declaration] : env.globals) {
-                if (global_name == name) {
-                    return GlobalBinding { declaration };
-                }
-            }
-            for (const auto& scope : env.locals.scopes | std::views::reverse) {
-                for (const auto& local : scope) {
-                    if (local.name == name) {
-                        return LocalBinding { .info = local.declaration };
-                    }
-                }
-            }
-            return {};
-        }
+        );
 
-        void capture_local(LocalDeclarationInfo* info) {
-            info->is_captured = true;
-        }
+        void capture_local(LocalDeclarationInfo* info);
 
-        int64_t add_upvalue(FunctionEnviroment& enviroment, const UpValue& upvalue) {
-            auto found = std::ranges::find(enviroment.upvalues, upvalue);
-            if (found != enviroment.upvalues.end()) {
-                return std::distance(enviroment.upvalues.begin(), found);
-            }
-            enviroment.upvalues.push_back(upvalue);
-            return enviroment.upvalues.size() - 1;
-        }
+        int64_t add_upvalue(FunctionEnviroment& enviroment, const UpValue& upvalue);
 
         int64_t handle_closure(
             const std::vector<std::reference_wrapper<FunctionEnviroment>>& enviroments_visited,
             StringTable::Handle name,
             int64_t local_index
-        ) {
-            bool is_local = true;
-            int64_t value = local_index;
-            for (const auto& enviroment : enviroments_visited | std::views::reverse) {
-                value = add_upvalue(enviroment, UpValue { .idx = value, .local = is_local });
-                if (is_local) {
-                    // Only top level can be pointing to an local variable
-                    is_local = false;
-                }
-            }
-            return value;
-        }
+        );
 
         // TODO: refactor?
-        Binding resolve_without_upvalues(StringTable::Handle name, const SourceSpan& span) {
-            for (auto node : node_stack | std::views::reverse) {
-                if (std::holds_alternative<StmtPtr>(node)) {
-                    auto stmt = std::get<StmtPtr>(node);
-                    if (std::holds_alternative<AstNode<FunctionStmt>*>(stmt)) {
-                        auto* function = std::get<AstNode<FunctionStmt>*>(stmt);
-                        if (auto binding = get_binding_in_function_enviroment((*function)->enviroment, name)) {
-                            return std::move(binding.value());
-                        }
-                    }
-                    if (std::holds_alternative<AstNode<ClassStmt>*>(stmt)) {
-                        auto& klass = std::get<AstNode<ClassStmt>*>(stmt);
-                        if (auto binding = get_binding_in_class_enviroment((*klass)->enviroment, name, span)) {
-                            return std::move(binding.value());
-                        }
-                    }
-                }
-            }
-            if (auto binding = get_binding_in_global_enviroment(ast->enviroment, name)) {
-                return std::move(binding.value());
-            }
-
-            // TODO: better error
-            context->diagnostics.add({
-                .level = DiagnosticLevel::ERROR,
-                .message = std::format("unresolved variable: {}", *name),
-                .inline_hints = {
-                    InlineHint {
-                        .location = span,
-                        .message = "here",
-                        .level = DiagnosticLevel::ERROR
-                    }
-                }
-            });
-            m_has_errors = true;
-            return NoBinding();
-        }
+        Binding resolve_without_upvalues(StringTable::Handle name, const SourceSpan& span);
 
         // TODO: refactor!
-        Binding resolve(StringTable::Handle name, const SourceSpan& span) {
-            std::vector<std::reference_wrapper<FunctionEnviroment>> function_enviroments_visited;
-            for (auto node : node_stack | std::views::reverse) {
-                if (std::holds_alternative<StmtPtr>(node)) {
-                    auto stmt = std::get<StmtPtr>(node);
-                    if (std::holds_alternative<AstNode<FunctionStmt>*>(stmt)) {
-                        auto* function = std::get<AstNode<FunctionStmt>*>(stmt);
-                        if (auto binding = get_binding_in_function_enviroment((*function)->enviroment, name)) {
-                            if (std::holds_alternative<LocalBinding>(*binding) && !function_enviroments_visited.
-                                empty()) {
-                                capture_local(std::get<LocalBinding>(*binding).info);
-                                return UpvalueBinding {
-                                        handle_closure(
-                                            function_enviroments_visited,
-                                            name,
-                                            std::get<LocalBinding>(*binding).info->idx
-                                        )
-                                    };
-                            }
+        Binding resolve(StringTable::Handle name, const SourceSpan& span);
 
-                            return std::move(binding.value());
-                        }
-                        function_enviroments_visited.emplace_back((*function)->enviroment);
-                    }
-                    if (std::holds_alternative<AstNode<ClassStmt>*>(stmt)) {
-                        auto& klass = std::get<AstNode<ClassStmt>*>(stmt);
-                        if (auto binding = get_binding_in_class_enviroment((*klass)->enviroment, name, span)) {
-                            return std::move(binding.value());
-                        }
-                    }
-                    if (std::holds_alternative<AstNode<TraitStmt>*>(stmt)) {
-                        auto& trait = std::get<AstNode<TraitStmt>*>(stmt);
-                        if (auto binding = get_binding_in_trait_enviroment((*trait)->enviroment, name)) {
-                            return std::move(binding.value());
-                        }
-                    }
-                } else if (std::holds_alternative<ExprPtr>(node)) {
-                    auto expr = std::get<ExprPtr>(node);
-                    if (std::holds_alternative<AstNode<ObjectExpr>*>(expr)) {
-                        auto& object = std::get<AstNode<ObjectExpr>*>(expr);
-                        if (auto binding = get_binding_in_class_enviroment((*object)->class_enviroment, name, span)) {
-                            return std::move(binding.value());
-                        }
-                    }
-                }
-            }
-            if (auto binding = get_binding_in_global_enviroment(ast->enviroment, name)) {
-                if (std::holds_alternative<LocalBinding>(*binding) && !function_enviroments_visited.empty()) {
-                    capture_local(std::get<LocalBinding>(*binding).info);
-                    return UpvalueBinding {
-                            handle_closure(
-                                function_enviroments_visited,
-                                name,
-                                std::get<LocalBinding>(*binding).info->idx
-                            )
-                        };
-                }
-
-                return std::move(binding.value());
-            }
-            // TODO: better error
-            context->diagnostics.add({
-                .level = DiagnosticLevel::ERROR,
-                .message = std::format("unresolved variable: {}", *name),
-                .inline_hints = {
-                    InlineHint {
-                        .location = span,
-                        .message = "here",
-                        .level = DiagnosticLevel::ERROR
-                    }
-                }
-            });
-            m_has_errors = true;
-            return NoBinding();
-        }
-
-        bool is_in_loop() {
-            for (auto node : node_stack) {
-                if (std::holds_alternative<ExprPtr>(node)) {
-                    auto expr = std::get<ExprPtr>(node);
-                    if (std::holds_alternative<AstNode<LoopExpr>*>(expr) || std::holds_alternative<AstNode<WhileExpr>*>(
-                        expr
-                    ) || std::holds_alternative<AstNode<ForExpr>*>(expr)) {
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
+        bool is_in_loop();
 
         static bool node_is_function(const Node& node) {
             return std::holds_alternative<StmtPtr>(node) && std::holds_alternative<AstNode<FunctionStmt>*>(
@@ -584,75 +126,13 @@ namespace bite {
             );
         }
 
-        bool is_in_function() {
-            for (auto node : node_stack) {
-                if (node_is_function(node)) {
-                    return true;
-                }
-            }
-            return false;
-        }
+        bool is_in_function();
 
-        bool is_there_matching_label(StringTable::Handle label_name) {
-            for (auto node : node_stack | std::views::reverse) {
-                // labels do not cross functions
-                if (node_is_function(node)) {
-                    break;
-                }
-                if (std::holds_alternative<ExprPtr>(node)) {
-                    auto expr = std::get<ExprPtr>(node);
-                    if (std::holds_alternative<AstNode<BlockExpr>*>(expr)) {
-                        auto label = (*std::get<AstNode<BlockExpr>*>(expr))->label;
-                        if (label && label->string == label_name) {
-                            return true;
-                        }
-                    } else if (std::holds_alternative<AstNode<WhileExpr>*>(expr)) {
-                        auto label = (*std::get<AstNode<WhileExpr>*>(expr))->label;
-                        if (label && label->string == label_name) {
-                            return true;
-                        }
-                    } else if (std::holds_alternative<AstNode<LoopExpr>*>(expr)) {
-                        auto label = (*std::get<AstNode<LoopExpr>*>(expr))->label;
-                        if (label && label->string == label_name) {
-                            return true;
-                        }
-                    } else if (std::holds_alternative<AstNode<ForExpr>*>(expr)) {
-                        auto label = (*std::get<AstNode<ForExpr>*>(expr))->label;
-                        if (label && label->string == label_name) {
-                            return true;
-                        }
-                    }
-                }
-            }
-            return false;
-        }
+        bool is_there_matching_label(StringTable::Handle label_name);
 
-        bool is_in_class() {
-            for (auto node : node_stack) {
-                if (std::holds_alternative<StmtPtr>(node) && std::holds_alternative<AstNode<ClassStmt>*>(
-                    std::get<StmtPtr>(node)
-                ) || (std::holds_alternative<ExprPtr>(node) && std::holds_alternative<AstNode<ObjectExpr>*>(
-                    std::get<ExprPtr>(node)
-                ))) {
-                    return true;
-                }
-            }
-            return false;
-        }
+        bool is_in_class();
 
-        bool is_in_class_with_superclass() {
-            for (auto node : node_stack) {
-                if ((std::holds_alternative<StmtPtr>(node) && std::holds_alternative<AstNode<ClassStmt>
-                        *>(std::get<StmtPtr>(node)) && (*std::get<AstNode<ClassStmt>*>(std::get<StmtPtr>(node)))->
-                    super_class) || (std::holds_alternative<ExprPtr>(node) && std::holds_alternative<AstNode<ObjectExpr>
-                    *>(
-                    std::get<ExprPtr>(node)
-                ) && (*std::get<AstNode<ObjectExpr>*>(std::get<ExprPtr>(node)))->super_class)) {
-                    return true;
-                }
-            }
-            return false;
-        }
+        bool is_in_class_with_superclass();
 
         void with_scope(const auto& fn) {
             for (auto node : node_stack | std::views::reverse) {
@@ -669,6 +149,84 @@ namespace bite {
             ast->enviroment.locals.scopes.pop_back();
         }
 
+        std::optional<Node> find_declaration(StringTable::Handle name, const SourceSpan& span) {
+            auto binding = resolve_without_upvalues(name, span);
+            if (std::holds_alternative<GlobalBinding>(binding)) {
+                return std::get<GlobalBinding>(binding).info->declaration;
+            }
+            if (std::holds_alternative<LocalBinding>(binding)) {
+                return std::get<LocalBinding>(binding).info->declaration;
+            }
+            return {};
+        }
+
+        template <typename T>
+        std::optional<T> stmt_from_node(Node node) {
+            if (std::holds_alternative<StmtPtr>(node) && std::holds_alternative<T>(std::get<StmtPtr>(node))) {
+                return std::get<T>(std::get<StmtPtr>(node));
+            }
+            return node;
+        }
+
+        void using_stmt(AstNode<UsingStmt>& stmt, ClassEnviroment* env, unordered_dense::map<StringTable::Handle, MemberInfo>& requirements) {
+            for (auto& item : stmt->items) {
+                // Overlap with class
+                // TODO: better error messages, refactor?
+                AstNode<TraitStmt>* item_trait = nullptr;
+                item.binding = resolve(item.name.string, item.span);
+                if (auto declaration = find_declaration(item.name.string, item.span)) {
+                    if (auto item_trait_stmt = stmt_from_node<AstNode<TraitStmt>*>(*declaration)) {
+                        item_trait = *item_trait_stmt;
+                    } else {
+                        emit_error_diagnostic(
+                            "using item must be a trait",
+                            item.span,
+                            "does not point to trait type",
+                            {
+                                InlineHint {
+                                    .location = get_span(*declaration),
+                                    .message = "defined here",
+                                    .level = DiagnosticLevel::INFO
+                                }
+                            }
+                        );
+                    }
+                } else {
+                    emit_error_diagnostic(
+                        "using item must be an local or global variable",
+                        item.span,
+                        "is not an local or global variable"
+                    );
+                }
+
+                if (!item_trait) {
+                    continue;
+                }
+
+                // TODO: prob refactor?
+                for (auto& [field_name, field_attr] : (*item_trait)->enviroment.members) {
+                    //check if excluded
+                    bool is_excluded = std::ranges::contains(item.exclusions, field_name, &Token::string);
+
+                    if (is_excluded || field_attr.attributes[ClassAttributes::ABSTRACT]) {
+                        requirements[field_name] = field_attr;
+                        // warn about useless exclude?
+                        continue;
+                    }
+                    // should aliasing methods that are requierments be allowed?
+                    StringTable::Handle aliased_name = field_name;
+                    for (auto& [before, after] : item.aliases) {
+                        if (before.string == field_name) {
+                            aliased_name = after.string;
+                            break;
+                        }
+                    }
+                    declare_in_class_enviroment(*env, aliased_name, field_attr);
+                    item.declarations.emplace_back(field_name, aliased_name, field_attr.attributes);
+                }
+            }
+        }
+
     private:
         std::vector<Node> node_stack;
         Ast* ast;
@@ -676,8 +234,6 @@ namespace bite {
         void visit_expr(Expr& expression);
 
         bool m_has_errors = false;
-        std::vector<Message> messages;
-        std::string file_path;
         SharedContext* context;
     };
 } // namespace bite
