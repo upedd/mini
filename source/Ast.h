@@ -4,6 +4,8 @@
 #include <variant>
 #include <vector>
 #include <algorithm>
+#include <forward_list>
+#include <list>
 
 #include "Diagnostics.h"
 #include "parser/Token.h"
@@ -18,412 +20,676 @@
 /**
 * Container to attach additional metadata to ast nodes
 */
-template <typename T>
+
+// ###
+// Big refactor!
+// ###
+
+// ### Definitions ###
+// AST - abstract syntax tree
+// Expr - expression
+// Stmt - statment
+
+// Inspiration: https://github.com/v8/v8/blob/main/src/ast/ast.h
+
+
+#define AST_NODES(V) \
+    V(unary_expr) \
+    V(binary_expr) \
+    V(call_expr) \
+    V(literal_expr) \
+    V(string_expr) \
+    V(variable_expr) \
+    V(get_property_expr) \
+    V(super_expr) \
+    V(block_expr) \
+    V(if_expr) \
+    V(loop_expr) \
+    V(while_expr) \
+    V(for_expr) \
+    V(continue_expr) \
+    V(break_expr) \
+    V(return_expr) \
+    V(this_expr) \
+    V(object_expr) \
+    V(function_declaration) \
+    V(variable_declaration) \
+    V(expr_stmt) \
+    V(class_declaration) \
+    V(native_declaration) \
+    V(trait_declaration) \
+    V(object_declaration) \
+    V(invalid_stmt) \
+    V(invalid_expr) \
+
+#define DEFINE_TYPE_ENUM(type) ##type,
+enum class NodeKind : std::uint8_t {
+    AST_NODES(DEFINE_TYPE_ENUM)
+};
+
+struct Binding{};
+
 class AstNode {
 public:
-    explicit AstNode(T&& value, const std::int64_t id, const bite::SourceSpan& span) : id(id),
-        span(span),
-        ptr(new T(std::move(value))) {}
-
-    AstNode(const AstNode& value) = delete;
-    AstNode& operator=(const AstNode&) = delete;
-
-    T& operator*() { return *ptr; }
-    const T& operator*() const { return *ptr; }
-
-    T* operator->() { return ptr.get(); }
-    const T* operator->() const { return ptr.get(); }
-
-    AstNode(AstNode&& other) noexcept = default;
-    AstNode& operator=(AstNode&& other) noexcept = default;
-
-    ~AstNode() = default;
-
-    std::int64_t id;
-    bite::SourceSpan span;
-
-private:
-    std::unique_ptr<T> ptr;
+    virtual NodeKind kind() = 0;
+    virtual ~AstNode() = default;
 };
 
-using Expr = std::variant<AstNode<struct LiteralExpr>, AstNode<struct StringLiteral>, AstNode<struct UnaryExpr>, AstNode
-                          <struct BinaryExpr>, AstNode<struct VariableExpr>, AstNode<struct CallExpr>, AstNode<struct
-                              GetPropertyExpr>, AstNode<struct SuperExpr>, AstNode<struct BlockExpr>, AstNode<struct
-                              IfExpr>, AstNode<struct LoopExpr>, AstNode<struct BreakExpr>, AstNode<struct ContinueExpr>
-                          , AstNode<struct WhileExpr>, AstNode<struct ForExpr>, AstNode<struct ReturnExpr>, AstNode<
-                              struct ThisExpr>, AstNode<struct ObjectExpr>, AstNode<struct InvalidExpr>>;
-
-using Stmt = std::variant<AstNode<struct VarStmt>, AstNode<struct ExprStmt>, AstNode<struct FunctionStmt>, AstNode<
-                              struct ClassStmt>, AstNode<struct NativeStmt>, AstNode<struct ObjectStmt>, AstNode<struct
-                              TraitStmt>, AstNode<struct UsingStmt>, AstNode<struct InvalidStmt>>;
-
-// TODO: this feels wrong...
-using ExprPtr = std::variant<AstNode<LiteralExpr>*, AstNode<StringLiteral>*, AstNode<UnaryExpr>*, AstNode<BinaryExpr>*,
-                             AstNode<VariableExpr>*, AstNode<CallExpr>*, AstNode<GetPropertyExpr>*, AstNode<SuperExpr>*,
-                             AstNode<BlockExpr>*, AstNode<IfExpr>*, AstNode<LoopExpr>*, AstNode<BreakExpr>*, AstNode<
-                                 ContinueExpr>*, AstNode<WhileExpr>*, AstNode<ForExpr>*, AstNode<ReturnExpr>*, AstNode<
-                                 ThisExpr>*, AstNode<ObjectExpr>*, AstNode<InvalidExpr>*>;
-
-using StmtPtr = std::variant<AstNode<VarStmt>*, AstNode<ExprStmt>*, AstNode<FunctionStmt>*, AstNode<ClassStmt>*, AstNode
-                             <NativeStmt>*, AstNode<ObjectStmt>*, AstNode<TraitStmt>*, AstNode<UsingStmt>*, AstNode<
-                                 InvalidStmt>*>;
-
-using Node = std::variant<StmtPtr, ExprPtr>;
-
-struct LocalDeclarationInfo {
-    Node declaration;
-    std::int64_t idx;
-    bool is_captured;
+class Stmt : public AstNode {
 };
 
-struct GlobalDeclarationInfo {
-    Node declaration;
-    StringTable::Handle name;
+class Expr : public AstNode {
 };
 
-using DeclarationInfo = std::variant<LocalDeclarationInfo, GlobalDeclarationInfo>;
-
-
-using Binding = std::variant<struct NoBinding, struct LocalBinding, struct GlobalBinding, struct UpvalueBinding, struct
-                             ParameterBinding, struct MemberBinding, struct PropertyBinding, struct SuperBinding, struct
-                             ClassObjectBinding>;
-
-struct NoBinding {};
-
-struct LocalBinding {
-    LocalDeclarationInfo* info;
-};
-
-struct GlobalBinding {
-    GlobalDeclarationInfo* info;
-};
-
-struct UpvalueBinding {
-    std::int64_t idx;
-};
-
-struct ParameterBinding {
-    std::int64_t idx;
-};
-
-struct MemberBinding {
-    StringTable::Handle name;
-};
-
-struct ClassObjectBinding {
-    bite::box<Binding> class_binding; // performance overhead?
-    StringTable::Handle name;
-};
-
-struct PropertyBinding {
-    StringTable::Handle property;
-};
-
-struct SuperBinding {
-    StringTable::Handle property;
-};
-
-
-struct Local {
-    LocalDeclarationInfo* declaration;
-    StringTable::Handle name;
-};
-
-struct Locals {
-    int64_t locals_count = 0;
-    std::vector<std::vector<Local>> scopes;
-};
-
-struct GlobalEnviroment {
-    bite::unordered_dense::map<StringTable::Handle, GlobalDeclarationInfo*> globals;
-    Locals locals;
-};
-
-struct UpValue {
-    int64_t idx;
-    bool local;
-
-    bool operator==(const UpValue& other) const {
-        return this->idx == other.idx && this->local == other.local;
-    }
-};
-
-struct FunctionEnviroment {
-    Locals locals;
-    std::vector<UpValue> upvalues;
-    std::vector<StringTable::Handle> parameters;
-};
-
-
-enum class ClassAttributes: std::uint8_t {
-    PRIVATE,
-    OVERRIDE,
-    ABSTRACT,
-    GETTER,
-    SETTER,
-    OPERATOR,
-    size // tracks ClassAttributes size. Must be at end!
-};
-
-struct MemberInfo {
-    bitflags<ClassAttributes> attributes;
-    bite::SourceSpan decl_span;
-};
-
-struct ClassEnviroment {
-    StringTable::Handle class_name; // TODO: temporary!
-    bite::unordered_dense::map<StringTable::Handle, MemberInfo> members;
-    ClassEnviroment* class_object_enviroment = nullptr;
-};
-
-// Could it be just an class enviroment?
-// Then it could easily support object for traits if we wanted it?
-struct TraitEnviroment {
-    bite::unordered_dense::map<StringTable::Handle, MemberInfo> members;
-    std::vector<StringTable::Handle> requirements;
-};
-
-class Ast {
+class UnaryExpr final : public Expr {
 public:
-    std::vector<Stmt> statements;
-    GlobalEnviroment enviroment;
-    std::size_t current_id = 0;
-
-    template <typename T, typename... Args>
-    AstNode<T> make_node(const bite::SourceSpan& span, Args&&... args) {
-        return AstNode<T>(T(std::forward<Args>(args)...), current_id++, span);
+    NodeKind kind() override {
+        return NodeKind::unary_expr;
     }
-};
 
-
-struct UnaryExpr {
-    Expr expr;
+    std::unique_ptr<Expr> expr;
     Token::Type op;
 };
 
-struct BinaryExpr {
-    Expr left;
-    Expr right;
+class BinaryExpr final : public Expr {
+public:
+    NodeKind kind() override {
+        return NodeKind::binary_expr;
+    }
+
+    std::unique_ptr<Expr> left;
+    std::unique_ptr<Expr> right;
     Token::Type op;
-    Binding binding; // TODO: temp
+    Binding binding;
 };
 
-struct CallExpr {
-    Expr callee;
-    std::vector<Expr> arguments;
+class CallExpr final : public Expr {
+public:
+    NodeKind kind() override {
+        return NodeKind::call_expr;
+    }
+
+    std::unique_ptr<Expr> callee;
+    std::forward_list<std::unique_ptr<Expr>> arguments;
 };
 
-struct LiteralExpr {
-    Value literal;
+class LiteralExpr final : public Expr {
+public:
+    NodeKind kind() override {
+        return NodeKind::literal_expr;
+    }
+
+    Value value;
 };
 
-struct StringLiteral {
+class StringExpr final : public Expr {
+public:
+    NodeKind kind() override {
+        return NodeKind::string_expr;
+    }
+
     std::string string;
 };
+class VariableExpr final : public Expr {
+public:
+    NodeKind kind() override {
+        return NodeKind::variable_expr;
+    }
 
-struct VariableExpr {
     Token identifier;
-    Binding binding = NoBinding();
+    Binding binding;
 };
+class GetPropertyExpr final : public Expr {
+public:
+    NodeKind kind() override {
+        return NodeKind::get_property_expr;
+    }
 
-struct GetPropertyExpr {
-    Expr left; // Todo: better name?
+    std::unique_ptr<Expr> left;
     Token property;
 };
+class SuperExpr final : public Expr {
+public:
+    NodeKind kind() override {
+        return NodeKind::super_expr;
+    }
 
-struct SuperExpr {
     Token method;
 };
+class BlockExpr final : public Expr {
+public:
+    NodeKind kind() override {
+        return NodeKind::block_expr;
+    }
 
-struct BlockExpr {
-    std::vector<Stmt> stmts;
-    std::optional<Expr> expr;
+    std::forward_list<std::unique_ptr<Stmt>> stmts;
+    std::unique_ptr<Expr> expr = nullptr;
     std::optional<Token> label;
 };
 
-struct IfExpr {
-    Expr condition;
-    Expr then_expr;
+class IfExpr final : public Expr {
+public:
+    NodeKind kind() override {
+        return NodeKind::if_expr;
+    }
+
+    std::unique_ptr<Expr> condition;
+    std::unique_ptr<Expr> then_expr;
     std::optional<Expr> else_expr;
 };
 
-struct LoopExpr {
-    AstNode<BlockExpr> body;
+class WhileExpr final : public Expr {
+public:
+    NodeKind kind() override {
+        return NodeKind::literal_expr;
+    }
+
+    std::unique_ptr<Expr> condition;
+    BlockExpr body;
     std::optional<Token> label;
 };
+class LiteralExpr final : public Expr {
+public:
+    NodeKind kind() override {
+        return NodeKind::literal_expr;
+    }
 
-struct WhileExpr {
-    Expr condition;
-    AstNode<BlockExpr> body;
-    std::optional<Token> label;
+    Value value;
 };
+class LiteralExpr final : public Expr {
+public:
+    NodeKind kind() override {
+        return NodeKind::literal_expr;
+    }
 
-struct BreakExpr {
-    std::optional<Expr> expr;
-    std::optional<Token> label;
-    bite::SourceSpan label_span;
+    Value value;
 };
+class LiteralExpr final : public Expr {
+public:
+    NodeKind kind() override {
+        return NodeKind::literal_expr;
+    }
 
-struct ContinueExpr {
-    std::optional<Token> label;
-    bite::SourceSpan label_span;
+    Value value;
 };
+class LiteralExpr final : public Expr {
+public:
+    NodeKind kind() override {
+        return NodeKind::literal_expr;
+    }
 
-struct ForExpr {
-    Token name;
-    Expr iterable;
-    AstNode<BlockExpr> body;
-    std::optional<Token> label;
-    DeclarationInfo info; // For iterator variable
+    Value value;
 };
+class LiteralExpr final : public Expr {
+public:
+    NodeKind kind() override {
+        return NodeKind::literal_expr;
+    }
 
-struct ReturnExpr {
-    std::optional<Expr> value;
+    Value value;
 };
+class LiteralExpr final : public Expr {
+public:
+    NodeKind kind() override {
+        return NodeKind::literal_expr;
+    }
 
-
-struct ThisExpr {};
-
-
-struct FunctionStmt {
-    Token name;
-    std::vector<Token> params;
-    std::optional<Expr> body;
-    DeclarationInfo info;
-    FunctionEnviroment enviroment {};
+    Value value;
 };
+class LiteralExpr final : public Expr {
+public:
+    NodeKind kind() override {
+        return NodeKind::literal_expr;
+    }
 
-struct VarStmt {
-    Token name;
-    std::optional<Expr> value;
-    DeclarationInfo info;
+    Value value;
+};class LiteralExpr final : public Expr {
+public:
+    NodeKind kind() override {
+        return NodeKind::literal_expr;
+    }
+
+    Value value;
 };
+class LiteralExpr final : public Expr {
+public:
+    NodeKind kind() override {
+        return NodeKind::literal_expr;
+    }
 
-struct ExprStmt {
-    Expr expr;
+    Value value;
 };
+class LiteralExpr final : public Expr {
+public:
+    NodeKind kind() override {
+        return NodeKind::literal_expr;
+    }
 
-struct Field {
-    AstNode<VarStmt> variable;
-    bitflags<ClassAttributes> attributes;
-    bite::SourceSpan span;
+    Value value;
 };
+class LiteralExpr final : public Expr {
+public:
+    NodeKind kind() override {
+        return NodeKind::literal_expr;
+    }
 
-struct Method {
-    AstNode<FunctionStmt> function;
-    bitflags<ClassAttributes> attributes;
-    bite::SourceSpan decl_span;
+    Value value;
 };
+class LiteralExpr final : public Expr {
+public:
+    NodeKind kind() override {
+        return NodeKind::literal_expr;
+    }
 
-struct Constructor {
-    bool has_super;
-    std::vector<Expr> super_arguments;
-    AstNode<FunctionStmt> function;
-    bite::SourceSpan superconstructor_call_span;
-    bite::SourceSpan decl_span;
-};
-
-/**
- * Shared fields between ObjectExpr and ClassStmt
- */
-struct StructureBody {
-    std::vector<Method> methods;
-    std::vector<Field> fields;
-    std::optional<AstNode<ObjectExpr>> class_object;
-    std::vector<AstNode<UsingStmt>> using_statements;
-    std::optional<Constructor> constructor; // TODO: remove this optional
-};
-
-struct ObjectExpr {
-    StructureBody body;
-    std::optional<Token> super_class;
-    std::vector<Expr> superclass_arguments;
-    bite::SourceSpan name_span; // TODO: temp
-    bite::SourceSpan super_class_span; // TODO: temp
-    ClassEnviroment class_enviroment;
-    Binding superclass_binding = NoBinding();
-};
-
-struct ClassStmt {
-    Token name;
-    bite::SourceSpan name_span; // TODO: temp
-    std::optional<Token> super_class;
-    bite::SourceSpan super_class_span; // TODO: temp
-    StructureBody body;
-    bool is_abstract = false;
-    DeclarationInfo info;
-    ClassEnviroment enviroment;
-    Binding superclass_binding = NoBinding();
-};
-
-struct NativeStmt {
-    Token name;
-    DeclarationInfo info;
-};
-
-struct ObjectStmt {
-    Token name;
-    Expr object;
-    DeclarationInfo info;
-};
-
-struct TraitStmt {
-    Token name;
-    std::vector<Method> methods;
-    std::vector<Field> fields;
-    std::vector<AstNode<UsingStmt>> using_stmts;
-    DeclarationInfo info;
-    TraitEnviroment enviroment;
+    Value value;
 };
 
 
-// TODO: insane...
-// find a better way to write this
-struct UsingStmtMemeberDeclaration {
-    StringTable::Handle original_name;
-    StringTable::Handle aliased_name;
-    bitflags<ClassAttributes> attributes;
-};
 
-struct UsingStmtItem {
-    Token name;
-    bite::SourceSpan span;
-    std::vector<Token> exclusions;
-    std::vector<std::pair<Token, Token>> aliases;
-    std::vector<UsingStmtMemeberDeclaration> declarations; // TODO
-    Binding binding = NoBinding();
-};
-
-struct UsingStmt {
-    std::vector<UsingStmtItem> items;
-};
-
-// markers for invalid ast nodes
-struct InvalidExpr {};
-
-struct InvalidStmt {};
-
-inline bite::SourceSpan get_span(const Stmt& statment) {
-    return std::visit(overloaded { [](const auto& stmt) { return stmt.span; } }, statment);
-}
-
-inline bite::SourceSpan get_span(const Expr& expression) {
-    return std::visit(overloaded { [](const auto& expr) { return expr.span; } }, expression);
-}
-
-inline bite::SourceSpan get_span(const StmtPtr& statment) {
-    return std::visit(overloaded { [](const auto* stmt) { return stmt->span; } }, statment);
-}
-
-inline bite::SourceSpan get_span(const ExprPtr& expression) {
-    return std::visit(overloaded { [](const auto* expr) { return expr->span; } }, expression);
-}
-
-inline bite::SourceSpan get_span(const Node& node) {
-    return std::holds_alternative<StmtPtr>(node)
-               ? get_span(std::get<StmtPtr>(node))
-               : get_span(std::get<ExprPtr>(node));
-}
+// template <typename T>
+// class AstNode {
+// public:
+//     explicit AstNode(T&& value, const std::int64_t id, const bite::SourceSpan& span) : id(id),
+//         span(span),
+//         ptr(new T(std::move(value))) {}
+//
+//     AstNode(const AstNode& value) = delete;
+//     AstNode& operator=(const AstNode&) = delete;
+//
+//     T& operator*() { return *ptr; }
+//     const T& operator*() const { return *ptr; }
+//
+//     T* operator->() { return ptr.get(); }
+//     const T* operator->() const { return ptr.get(); }
+//
+//     AstNode(AstNode&& other) noexcept = default;
+//     AstNode& operator=(AstNode&& other) noexcept = default;
+//
+//     ~AstNode() = default;
+//
+//     std::int64_t id;
+//     bite::SourceSpan span;
+//
+// private:
+//     std::unique_ptr<T> ptr;
+// };
+//
+// using Expr = std::variant<AstNode<struct LiteralExpr>, AstNode<struct StringLiteral>, AstNode<struct UnaryExpr>, AstNode
+//                           <struct BinaryExpr>, AstNode<struct VariableExpr>, AstNode<struct CallExpr>, AstNode<struct
+//                               GetPropertyExpr>, AstNode<struct SuperExpr>, AstNode<struct BlockExpr>, AstNode<struct
+//                               IfExpr>, AstNode<struct LoopExpr>, AstNode<struct BreakExpr>, AstNode<struct ContinueExpr>
+//                           , AstNode<struct WhileExpr>, AstNode<struct ForExpr>, AstNode<struct ReturnExpr>, AstNode<
+//                               struct ThisExpr>, AstNode<struct ObjectExpr>, AstNode<struct InvalidExpr>>;
+//
+// using Stmt = std::variant<AstNode<struct VarStmt>, AstNode<struct ExprStmt>, AstNode<struct FunctionStmt>, AstNode<
+//                               struct ClassStmt>, AstNode<struct NativeStmt>, AstNode<struct ObjectStmt>, AstNode<struct
+//                               TraitStmt>, AstNode<struct UsingStmt>, AstNode<struct InvalidStmt>>;
+//
+// // TODO: this feels wrong...
+// using ExprPtr = std::variant<AstNode<LiteralExpr>*, AstNode<StringLiteral>*, AstNode<UnaryExpr>*, AstNode<BinaryExpr>*,
+//                              AstNode<VariableExpr>*, AstNode<CallExpr>*, AstNode<GetPropertyExpr>*, AstNode<SuperExpr>*,
+//                              AstNode<BlockExpr>*, AstNode<IfExpr>*, AstNode<LoopExpr>*, AstNode<BreakExpr>*, AstNode<
+//                                  ContinueExpr>*, AstNode<WhileExpr>*, AstNode<ForExpr>*, AstNode<ReturnExpr>*, AstNode<
+//                                  ThisExpr>*, AstNode<ObjectExpr>*, AstNode<InvalidExpr>*>;
+//
+// using StmtPtr = std::variant<AstNode<VarStmt>*, AstNode<ExprStmt>*, AstNode<FunctionStmt>*, AstNode<ClassStmt>*, AstNode
+//                              <NativeStmt>*, AstNode<ObjectStmt>*, AstNode<TraitStmt>*, AstNode<UsingStmt>*, AstNode<
+//                                  InvalidStmt>*>;
+//
+// using Node = std::variant<StmtPtr, ExprPtr>;
+//
+// struct LocalDeclarationInfo {
+//     Node declaration;
+//     std::int64_t idx;
+//     bool is_captured;
+// };
+//
+// struct GlobalDeclarationInfo {
+//     Node declaration;
+//     StringTable::Handle name;
+// };
+//
+// using DeclarationInfo = std::variant<LocalDeclarationInfo, GlobalDeclarationInfo>;
+//
+//
+// using Binding = std::variant<struct NoBinding, struct LocalBinding, struct GlobalBinding, struct UpvalueBinding, struct
+//                              ParameterBinding, struct MemberBinding, struct PropertyBinding, struct SuperBinding, struct
+//                              ClassObjectBinding>;
+//
+// struct NoBinding {};
+//
+// struct LocalBinding {
+//     LocalDeclarationInfo* info;
+// };
+//
+// struct GlobalBinding {
+//     GlobalDeclarationInfo* info;
+// };
+//
+// struct UpvalueBinding {
+//     std::int64_t idx;
+// };
+//
+// struct ParameterBinding {
+//     std::int64_t idx;
+// };
+//
+// struct MemberBinding {
+//     StringTable::Handle name;
+// };
+//
+// struct ClassObjectBinding {
+//     bite::box<Binding> class_binding; // performance overhead?
+//     StringTable::Handle name;
+// };
+//
+// struct PropertyBinding {
+//     StringTable::Handle property;
+// };
+//
+// struct SuperBinding {
+//     StringTable::Handle property;
+// };
+//
+//
+// struct Local {
+//     LocalDeclarationInfo* declaration;
+//     StringTable::Handle name;
+// };
+//
+// struct Locals {
+//     int64_t locals_count = 0;
+//     std::vector<std::vector<Local>> scopes;
+// };
+//
+// struct GlobalEnviroment {
+//     bite::unordered_dense::map<StringTable::Handle, GlobalDeclarationInfo*> globals;
+//     Locals locals;
+// };
+//
+// struct UpValue {
+//     int64_t idx;
+//     bool local;
+//
+//     bool operator==(const UpValue& other) const {
+//         return this->idx == other.idx && this->local == other.local;
+//     }
+// };
+//
+// struct FunctionEnviroment {
+//     Locals locals;
+//     std::vector<UpValue> upvalues;
+//     std::vector<StringTable::Handle> parameters;
+// };
+//
+//
+// enum class ClassAttributes: std::uint8_t {
+//     PRIVATE,
+//     OVERRIDE,
+//     ABSTRACT,
+//     GETTER,
+//     SETTER,
+//     OPERATOR,
+//     size // tracks ClassAttributes size. Must be at end!
+// };
+//
+// struct MemberInfo {
+//     bitflags<ClassAttributes> attributes;
+//     bite::SourceSpan decl_span;
+// };
+//
+// struct ClassEnviroment {
+//     StringTable::Handle class_name; // TODO: temporary!
+//     bite::unordered_dense::map<StringTable::Handle, MemberInfo> members;
+//     ClassEnviroment* class_object_enviroment = nullptr;
+// };
+//
+// struct TraitEnviroment {
+//     bite::unordered_dense::map<StringTable::Handle, MemberInfo> members;
+//     bite::unordered_dense::map<StringTable::Handle, MemberInfo> requirements;
+// };
+//
+// class Ast {
+// public:
+//     std::vector<Stmt> statements;
+//     GlobalEnviroment enviroment;
+//     std::size_t current_id = 0;
+//
+//     template <typename T, typename... Args>
+//     AstNode<T> make_node(const bite::SourceSpan& span, Args&&... args) {
+//         return AstNode<T>(T(std::forward<Args>(args)...), current_id++, span);
+//     }
+// };
+//
+//
+// struct UnaryExpr {
+//     Expr expr;
+//     Token::Type op;
+// };
+//
+// struct BinaryExpr {
+//     Expr left;
+//     Expr right;
+//     Token::Type op;
+//     Binding binding; // TODO: temp
+// };
+//
+// struct CallExpr {
+//     Expr callee;
+//     std::vector<Expr> arguments;
+// };
+//
+// struct LiteralExpr {
+//     Value literal;
+// };
+//
+// struct StringLiteral {
+//     std::string string;
+// };
+//
+// struct VariableExpr {
+//     Token identifier;
+//     Binding binding = NoBinding();
+// };
+//
+// struct GetPropertyExpr {
+//     Expr left; // Todo: better name?
+//     Token property;
+// };
+//
+// struct SuperExpr {
+//     Token method;
+// };
+//
+// struct BlockExpr {
+//     std::vector<Stmt> stmts;
+//     std::optional<Expr> expr;
+//     std::optional<Token> label;
+// };
+//
+// struct IfExpr {
+//     Expr condition;
+//     Expr then_expr;
+//     std::optional<Expr> else_expr;
+// };
+//
+// struct LoopExpr {
+//     AstNode<BlockExpr> body;
+//     std::optional<Token> label;
+// };
+//
+// struct WhileExpr {
+//     Expr condition;
+//     AstNode<BlockExpr> body;
+//     std::optional<Token> label;
+// };
+//
+// struct BreakExpr {
+//     std::optional<Expr> expr;
+//     std::optional<Token> label;
+//     bite::SourceSpan label_span;
+// };
+//
+// struct ContinueExpr {
+//     std::optional<Token> label;
+//     bite::SourceSpan label_span;
+// };
+//
+// struct ForExpr {
+//     Token name;
+//     Expr iterable;
+//     AstNode<BlockExpr> body;
+//     std::optional<Token> label;
+//     DeclarationInfo info; // For iterator variable
+// };
+//
+// struct ReturnExpr {
+//     std::optional<Expr> value;
+// };
+//
+//
+// struct ThisExpr {};
+//
+//
+// struct FunctionStmt {
+//     Token name;
+//     std::vector<Token> params;
+//     std::optional<Expr> body;
+//     DeclarationInfo info;
+//     FunctionEnviroment enviroment {};
+// };
+//
+// struct VarStmt {
+//     Token name;
+//     std::optional<Expr> value;
+//     DeclarationInfo info;
+// };
+//
+// struct ExprStmt {
+//     Expr expr;
+// };
+//
+// struct Field {
+//     AstNode<VarStmt> variable;
+//     bitflags<ClassAttributes> attributes;
+//     bite::SourceSpan span;
+// };
+//
+// struct Method {
+//     AstNode<FunctionStmt> function;
+//     bitflags<ClassAttributes> attributes;
+//     bite::SourceSpan decl_span;
+// };
+//
+// struct Constructor {
+//     bool has_super;
+//     std::vector<Expr> super_arguments;
+//     AstNode<FunctionStmt> function;
+//     bite::SourceSpan superconstructor_call_span;
+//     bite::SourceSpan decl_span;
+// };
+//
+// /**
+//  * Shared fields between ObjectExpr and ClassStmt
+//  */
+// struct StructureBody {
+//     std::vector<Method> methods;
+//     std::vector<Field> fields;
+//     std::optional<AstNode<ObjectExpr>> class_object;
+//     std::vector<AstNode<UsingStmt>> using_statements;
+//     std::optional<Constructor> constructor; // TODO: remove this optional
+// };
+//
+// struct ObjectExpr {
+//     StructureBody body;
+//     std::optional<Token> super_class;
+//     std::vector<Expr> superclass_arguments;
+//     bite::SourceSpan name_span; // TODO: temp
+//     bite::SourceSpan super_class_span; // TODO: temp
+//     ClassEnviroment class_enviroment;
+//     Binding superclass_binding = NoBinding();
+// };
+//
+// struct ClassStmt {
+//     Token name;
+//     bite::SourceSpan name_span; // TODO: temp
+//     std::optional<Token> super_class;
+//     bite::SourceSpan super_class_span; // TODO: temp
+//     StructureBody body;
+//     bool is_abstract = false;
+//     DeclarationInfo info;
+//     ClassEnviroment enviroment;
+//     Binding superclass_binding = NoBinding();
+// };
+//
+// struct NativeStmt {
+//     Token name;
+//     DeclarationInfo info;
+// };
+//
+// struct ObjectStmt {
+//     Token name;
+//     Expr object;
+//     DeclarationInfo info;
+// };
+//
+// struct TraitStmt {
+//     Token name;
+//     std::vector<Method> methods;
+//     std::vector<Field> fields;
+//     std::vector<AstNode<UsingStmt>> using_stmts;
+//     DeclarationInfo info;
+//     TraitEnviroment enviroment;
+// };
+//
+//
+// // TODO: insane...
+// // find a better way to write this
+// struct UsingStmtMemeberDeclaration {
+//     StringTable::Handle original_name;
+//     StringTable::Handle aliased_name;
+//     bitflags<ClassAttributes> attributes;
+// };
+//
+// struct UsingStmtItem {
+//     Token name;
+//     bite::SourceSpan span;
+//     std::vector<Token> exclusions;
+//     std::vector<std::pair<Token, Token>> aliases;
+//     std::vector<UsingStmtMemeberDeclaration> declarations; // TODO
+//     Binding binding = NoBinding();
+// };
+//
+// struct UsingStmt {
+//     std::vector<UsingStmtItem> items;
+// };
+//
+// // markers for invalid ast nodes
+// struct InvalidExpr {};
+//
+// struct InvalidStmt {};
+//
+// inline bite::SourceSpan get_span(const Stmt& statment) {
+//     return std::visit(overloaded { [](const auto& stmt) { return stmt.span; } }, statment);
+// }
+//
+// inline bite::SourceSpan get_span(const Expr& expression) {
+//     return std::visit(overloaded { [](const auto& expr) { return expr.span; } }, expression);
+// }
+//
+// inline bite::SourceSpan get_span(const StmtPtr& statment) {
+//     return std::visit(overloaded { [](const auto* stmt) { return stmt->span; } }, statment);
+// }
+//
+// inline bite::SourceSpan get_span(const ExprPtr& expression) {
+//     return std::visit(overloaded { [](const auto* expr) { return expr->span; } }, expression);
+// }
+//
+// inline bite::SourceSpan get_span(const Node& node) {
+//     return std::holds_alternative<StmtPtr>(node)
+//                ? get_span(std::get<StmtPtr>(node))
+//                : get_span(std::get<ExprPtr>(node));
+// }
 
 // inline std::string expr_to_string(const Expr& expr, std::string_view source);
 //

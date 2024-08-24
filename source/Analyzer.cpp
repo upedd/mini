@@ -271,9 +271,7 @@ void bite::Analyzer::super_expr(const AstNode<SuperExpr>& expr) {
 }
 
 void bite::Analyzer::object_expr(AstNode<ObjectExpr>& expr) {
-    // TODO: tons of overlap with class declaration!
     auto* env = current_class_enviroment(); // assert non-null
-    // TODO: refactor!
     if (expr->body.class_object) {
         // TODO: better error message
         // TODO: multiline error!
@@ -299,117 +297,11 @@ void bite::Analyzer::object_expr(AstNode<ObjectExpr>& expr) {
 void bite::Analyzer::trait_declaration(AstNode<TraitStmt>& stmt) {
     declare(stmt->name.string, &stmt);
     auto* env = current_trait_enviroment();
-    unordered_dense::set<StringTable::Handle> requirements; // TODO: should contain attr as well i guess?
-    for (auto& using_stmt : stmt->using_stmts) {
-        for (auto& item : using_stmt->items) {
-            // Overlap with class
-            // TODO: better error messages, refactor?
-            auto binding = resolve_without_upvalues(item.name.string, item.span);
-            item.binding = resolve(item.name.string, item.span);
-            AstNode<TraitStmt>* item_trait = nullptr;
-            if (auto* global = std::get_if<GlobalBinding>(&binding)) {
-                if (std::holds_alternative<StmtPtr>(global->info->declaration) && std::holds_alternative<AstNode<
-                    TraitStmt>*>(std::get<StmtPtr>(global->info->declaration))) {
-                    item_trait = std::get<AstNode<TraitStmt>*>(std::get<StmtPtr>(global->info->declaration));
-                } else {
-                    context->diagnostics.add(
-                        {
-                            .level = DiagnosticLevel::ERROR,
-                            .message = "using item must be trait",
-                            .inline_hints = {
-                                InlineHint {
-                                    .location = item.span,
-                                    .message = "does not point to trait type",
-                                    .level = DiagnosticLevel::ERROR
-                                },
-                                InlineHint {
-                                    .location = std::holds_alternative<StmtPtr>(global->info->declaration)
-                                                    ? get_span(std::get<StmtPtr>(global->info->declaration))
-                                                    : get_span(std::get<ExprPtr>(global->info->declaration)),
-                                    .message = "defined here",
-                                    .level = DiagnosticLevel::INFO
-                                }
-                            }
-                        }
-                    );
-                    m_has_errors = true;
-                }
-            } else if (auto* local = std::get_if<LocalBinding>(&binding)) {
-                if (std::holds_alternative<StmtPtr>(local->info->declaration) && std::holds_alternative<AstNode<
-                    TraitStmt>*>(std::get<StmtPtr>(local->info->declaration))) {
-                    item_trait = std::get<AstNode<TraitStmt>*>(std::get<StmtPtr>(local->info->declaration));
-                } else {
-                    context->diagnostics.add(
-                        {
-                            .level = DiagnosticLevel::ERROR,
-                            .message = "using item must be trait",
-                            .inline_hints = {
-                                InlineHint {
-                                    .location = item.span,
-                                    .message = "does not point to trait type",
-                                    .level = DiagnosticLevel::ERROR
-                                },
-                                InlineHint {
-                                    .location = std::holds_alternative<StmtPtr>(local->info->declaration)
-                                                    ? get_span(std::get<StmtPtr>(local->info->declaration))
-                                                    : get_span(std::get<ExprPtr>(local->info->declaration)),
-                                    .message = "defined here",
-                                    .level = DiagnosticLevel::INFO
-                                }
-                            }
-                        }
-                    );
-                    m_has_errors = true;
-                }
-            } else {
-                context->diagnostics.add(
-                    {
-                        .level = DiagnosticLevel::ERROR,
-                        .message = "using item must be an local or global variable",
-                        .inline_hints = {
-                            InlineHint {
-                                .location = item.span,
-                                .message = "is not an local or global variable",
-                                .level = DiagnosticLevel::ERROR
-                            }
-                        }
-                    }
-                );
-                m_has_errors = true;
-            }
-
-            if (!item_trait) {
-                continue;
-            }
-
-            // TODO: prob refactor?
-            for (auto& [field_name, field_attr] : (*item_trait)->enviroment.members) {
-                //check if excluded
-                bool is_excluded = false;
-                // possibly use some ranges here
-                for (auto& exclusion : item.exclusions) {
-                    if (exclusion.string == field_name) {
-                        is_excluded = true;
-                        break;
-                    }
-                }
-                if (is_excluded || field_attr.attributes[ClassAttributes::ABSTRACT]) {
-                    requirements.insert(field_name);
-                    // warn about useless exclude?
-                    continue;
-                }
-                // should aliasing methods that are requierments be allowed?
-                StringTable::Handle aliased_name = field_name;
-                for (auto& [before, after] : item.aliases) {
-                    if (before.string == field_name) {
-                        aliased_name = after.string;
-                        break;
-                    }
-                }
-                declare_in_trait_enviroment(*env, aliased_name, field_attr);
-                item.declarations.emplace_back(field_name, aliased_name, field_attr.attributes);
-            }
-        }
+    unordered_dense::map<StringTable::Handle, MemberInfo> requirements; // TODO: should contain attr as well i guess?
+    for (auto& using_stmt_node : stmt->using_stmts) {
+        using_stmt(using_stmt_node, requirements, [this, env](StringTable::Handle name, const MemberInfo& info) {
+            declare_in_trait_enviroment(*env, name, info);
+        });
     }
 
     for (auto& field : stmt->fields) {
@@ -431,9 +323,9 @@ void bite::Analyzer::trait_declaration(AstNode<TraitStmt>& stmt) {
     // TODO: check
     // TODO: ranges
     // TODO: passing attributes
-    for (auto& requirement : requirements) {
-        if (!env->members.contains(requirement)) {
-            env->requirements.push_back(requirement);
+    for (auto& [name, info] : requirements) {
+        if (!env->members.contains(name)) {
+            env->requirements[name] = info;
         }
     }
 }
@@ -1013,6 +905,309 @@ bool bite::Analyzer::is_in_class_with_superclass() {
         }
     }
     return false;
+}
+
+std::optional<Node> bite::Analyzer::find_declaration(StringTable::Handle name, const SourceSpan& span) {
+    auto binding = resolve_without_upvalues(name, span);
+    if (std::holds_alternative<GlobalBinding>(binding)) {
+        return std::get<GlobalBinding>(binding).info->declaration;
+    }
+    if (std::holds_alternative<LocalBinding>(binding)) {
+        return std::get<LocalBinding>(binding).info->declaration;
+    }
+    return {};
+}
+
+void bite::Analyzer::check_member_declaration(
+    SourceSpan& name_span,
+    bool is_abstract,
+    StringTable::Handle name,
+    MemberInfo& info,
+    unordered_dense::map<StringTable::Handle, MemberInfo>& overrideable_members
+) {
+    if (info.attributes[ClassAttributes::ABSTRACT] && !is_abstract) {
+        emit_error_diagnostic(
+            "abstract member inside of non-abstract class",
+            info.decl_span,
+            "is abstract",
+            {
+                InlineHint {
+                    .location = name_span,
+                    .message = "is not abstract",
+                    .level = DiagnosticLevel::INFO
+                }
+            }
+        );
+    }
+
+
+    if (overrideable_members.contains(name)) {
+        auto& member = overrideable_members[name];
+        // TODO: partial overrides!!!
+        if (!info.attributes[ClassAttributes::OVERRIDE]) {
+            // TODO: maybe point to original method
+            emit_error_diagnostic(
+                "memeber should override explicitly",
+                info.decl_span,
+                "add 'override' attribute to this field"
+            );
+        }
+        // auto& member_attr = overrideable_members[method.function->name.string];
+        // auto& method_attr = method.attributes;
+        // if (!method.attributes[ClassAttributes::OVERRIDE] && ((member_attr.attributes[ClassAttributes::GETTER] &&
+        //     method_attr[ClassAttributes::GETTER]) || (member_attr.attributes[ClassAttributes::SETTER] && method_attr
+        //     [ClassAttributes::SETTER]))) {
+        //     // TODO: maybe point to original method
+        //     // TODO: fixme!
+        //     emit_error_diagnostic(
+        //         "memeber should override explicitly",
+        //         method.decl_span,
+        //         "add 'override' attribute to this field"
+        //     );
+        //     }
+
+        // TODO: refactor!
+        if (member.attributes[ClassAttributes::GETTER] && member.attributes[ClassAttributes::SETTER] && info.
+            attributes[ClassAttributes::GETTER] && !info.attributes[ClassAttributes::SETTER] && info.attributes[
+                ClassAttributes::OVERRIDE]) {
+            member.attributes -= ClassAttributes::GETTER;
+        } else if (member.attributes[ClassAttributes::GETTER] && member.attributes[ClassAttributes::SETTER] && !
+            info.attributes[ClassAttributes::GETTER] && info.attributes[ClassAttributes::SETTER] && info.
+            attributes[ClassAttributes::OVERRIDE]) {
+            member.attributes -= ClassAttributes::SETTER;
+        } else if (info.attributes[ClassAttributes::OVERRIDE]) {
+            // TODO: performance?
+            overrideable_members.erase(name);
+        }
+    } else if (info.attributes[ClassAttributes::OVERRIDE]) {
+        emit_error_diagnostic(
+            "memeber does not override anything",
+            info.decl_span,
+            "remove 'override' attribute from this field"
+        );
+    }
+}
+
+void bite::Analyzer::handle_constructor(
+    Constructor& constructor,
+    std::vector<Field>& fields,
+    bool is_abstract,
+    SourceSpan& name_span,
+    ClassEnviroment* env,
+    unordered_dense::map<StringTable::Handle, MemberInfo>& overrideable_members,
+    AstNode<ClassStmt>* superclass
+) {
+    // TODO: we can maybe elimante has super from ClassStmt!
+    if (!superclass && constructor.has_super) {
+        emit_error_diagnostic(
+            "no superclass to call",
+            constructor.superconstructor_call_span,
+            "here",
+            {
+                InlineHint {
+                    .location = name_span,
+                    .message = "does not declare any superclass",
+                    .level = DiagnosticLevel::INFO
+                }
+            }
+        );
+    }
+
+    if (superclass && (*superclass)->body.constructor) {
+        auto& superconstructor = *(*superclass)->body.constructor;
+        if (!superconstructor.function->params.empty() && !constructor.has_super) {
+            // TODO: better diagnostic in default constructor
+            // TODO: better constructor declspan
+            emit_error_diagnostic(
+                "subclass must call it's superclass constructor",
+                constructor.decl_span,
+                "must add superconstructor call here",
+                {
+                    InlineHint {
+                        .location = name_span,
+                        .message = "declares superclass here",
+                        .level = DiagnosticLevel::INFO
+                    },
+                    InlineHint {
+                        .location = superconstructor.decl_span,
+                        .message = "superclass defines constructor here",
+                        .level = DiagnosticLevel::INFO
+                    }
+                }
+            );
+        }
+        if (constructor.super_arguments.size() != superconstructor.function->params.size()) {
+            // TODO: not safe?
+            emit_error_diagnostic(
+                std::format(
+                    "expected {} arguments, but got {} in superconstructor call",
+                    superconstructor.function->params.size(),
+                    constructor.super_arguments.size()
+                ),
+                constructor.superconstructor_call_span,
+                std::format("provides {} arguments", constructor.super_arguments.size()),
+                {
+                    InlineHint {
+                        .location = name_span,
+                        .message = "superclass declared here",
+                        .level = DiagnosticLevel::INFO
+                    },
+                    InlineHint {
+                        .location = superconstructor.decl_span,
+                        .message = std::format(
+                            "superclass constructor expected {} arguments",
+                            superconstructor.function->params.size()
+                        ),
+                        .level = DiagnosticLevel::INFO
+                    }
+                }
+            );
+        }
+    }
+    node_stack.emplace_back(&constructor.function);
+    for (const auto& param : constructor.function->params) {
+        declare(param.string, &constructor.function);
+    }
+    for (auto& super_arg : constructor.super_arguments) {
+        visit_expr(super_arg);
+    }
+    // visit in this env to support upvalues!
+    for (auto& field : fields) {
+        MemberInfo info = MemberInfo(field.attributes, field.span);
+        check_member_declaration(name_span, is_abstract, field.variable->name.string, info, overrideable_members);
+        declare_in_class_enviroment(
+            *env,
+            field.variable->name.string,
+            MemberInfo(field.attributes, field.span)
+        );
+        if (field.variable->value) {
+            visit_expr(*field.variable->value);
+        }
+    }
+
+    if (constructor.function->body) {
+        visit_expr(*constructor.function->body);
+    }
+    node_stack.pop_back();
+}
+
+void bite::Analyzer::structure_body(
+    StructureBody& body,
+    std::optional<Token> super_class,
+    Binding& superclass_binding,
+    const SourceSpan& super_class_span,
+    SourceSpan& name_span,
+    ClassEnviroment* env,
+    bool is_abstract
+) {
+    // TODO: init should be an reserved keyword
+    unordered_dense::map<StringTable::Handle, MemberInfo> overrideable_members;
+    AstNode<ClassStmt>* superclass = nullptr;
+    if (super_class) {
+        // TODO: refactor? better error message?
+        superclass_binding = resolve(super_class->string, super_class_span);
+        if (auto declaration = find_declaration(super_class->string, super_class_span)) {
+            if (auto class_stmt = stmt_from_node<AstNode<ClassStmt>*>(*declaration)) {
+                superclass = *class_stmt;
+            } else {
+                emit_error_diagnostic(
+                    "superclass must be a class",
+                    super_class_span,
+                    "does not point to a class",
+                    {
+                        InlineHint {
+                            .location = get_span(*declaration),
+                            .message = "defined here",
+                            .level = DiagnosticLevel::INFO
+                        }
+                    }
+                );
+            }
+        } else {
+            emit_error_diagnostic(
+                "superclass must be an local or global variable",
+                super_class_span,
+                "is not an local or global variable"
+            );
+        }
+        if (superclass) {
+            for (auto& [name, info] : (*superclass)->enviroment.members) {
+                if (info.attributes[ClassAttributes::PRIVATE]) {
+                    continue;
+                }
+                overrideable_members[name] = info;
+            }
+        }
+    }
+
+    // TODO: confilcts with superclass methods and overrides
+    // TODO: disallow override in trait, and validate member attributes better through whole analyzer
+    unordered_dense::map<StringTable::Handle, MemberInfo> requirements;
+    for (auto& using_stmt_node : body.using_statements) {
+        // refactor?
+        using_stmt(using_stmt_node, requirements, [this, env](StringTable::Handle name, const MemberInfo& info) {
+            declare_in_class_enviroment(*env, name, info);
+        });
+    }
+
+    handle_constructor(*body.constructor, body.fields, is_abstract, name_span, env, overrideable_members, superclass);
+
+    // hoist methods
+    for (const auto& method : body.methods) {
+        MemberInfo info(method.attributes, method.decl_span);
+        check_member_declaration(name_span, is_abstract, method.function->name.string, info, overrideable_members);
+        declare_in_class_enviroment(*env, method.function->name.string, info);
+    }
+
+    // Must overrdie abstracts
+    if (!is_abstract && superclass && (*superclass)->is_abstract) {
+        for (const auto& [name, attr] : overrideable_members) {
+            if (attr.attributes[ClassAttributes::ABSTRACT]) {
+                emit_error_diagnostic(
+                    std::format("abstract member {} not overriden", *name),
+                    name_span,
+                    "override member in this class",
+                    {
+                        InlineHint {
+                            .location = attr.decl_span,
+                            .message = "abstract member declared here",
+                            .level = DiagnosticLevel::INFO
+                        }
+                    }
+                );
+            }
+        }
+    }
+
+    for (const auto& [name, attr] : overrideable_members) {
+        declare_in_class_enviroment(*env, name, attr);
+    }
+
+    for (auto& method : body.methods) {
+        // TODO: refactor!
+        node_stack.emplace_back(&method.function);
+        function(method.function);
+        node_stack.pop_back();
+    }
+
+    // TODO: getter and setters requirements workings
+    for (auto& [requirement, info] : requirements) {
+        if (!env->members.contains(requirement)) {
+            // TODO: point to trait as well
+            emit_error_diagnostic(
+                std::format("trait requirement not satisifed: {}", *requirement),
+                name_span,
+                std::format("add member {} in this class", *requirement),
+                {
+                    InlineHint {
+                        .location = info.decl_span,
+                        .message = "requirement declared here",
+                        .level = DiagnosticLevel::INFO
+                    }
+                }
+            );
+        }
+    }
 }
 
 void bite::Analyzer::visit_stmt(Stmt& statement) {

@@ -299,7 +299,6 @@ void Compiler::while_expr(const AstNode<WhileExpr>& expr) {
 }
 
 void Compiler::for_expr(const AstNode<ForExpr>& expr) {
-
     // TODO: desugaring step!
     with_expression_scope(
         BlockScope(),
@@ -616,12 +615,12 @@ void Compiler::trait_statement(const AstNode<TraitStmt>& stmt) {
         emit(method.attributes.to_ullong()); // check!
     }
 
-    for (auto& requirement : stmt->enviroment.requirements) {
+    for (const auto& [name, info] : stmt->enviroment.requirements) {
         // pass requirements down
-        int constant_idx = current_function()->add_constant(*requirement);
+        int constant_idx = current_function()->add_constant(*name);
         emit(OpCode::TRAIT_METHOD, constant_idx);
         // TODO: pass attributes also!
-        bitflags<ClassAttributes> attr;
+        auto attr(info.attributes);
         attr += ClassAttributes::ABSTRACT;
         emit(attr.to_ullong());
     }
