@@ -192,7 +192,7 @@ std::unique_ptr<Stmt> Parser::statement_or_expression() {
 
 std::optional<std::unique_ptr<Stmt>> Parser::statement() {
     return with_source_span(
-        [this] -> std::optional<Stmt> {
+        [this] -> std::optional<std::unique_ptr<Stmt>> {
             if (match(Token::Type::LET)) {
                 return var_declaration();
             }
@@ -280,7 +280,9 @@ std::unique_ptr<VariableDeclaration> Parser::var_declaration() {
 
 // The part after name
 std::unique_ptr<VariableDeclaration> Parser::var_declaration_body(const Token& name) {
-    std::unique_ptr<Expr> expr = match(Token::Type::EQUAL) ? expression() : std::make_unique<LiteralExpr>(make_span(), nil_t);
+    std::unique_ptr<Expr> expr = match(Token::Type::EQUAL)
+                                     ? expression()
+                                     : std::make_unique<LiteralExpr>(make_span(), nil_t);
     consume(Token::Type::SEMICOLON, "missing semicolon");
     return std::make_unique<VariableDeclaration>(make_span(), name, std::move(expr));
 }
@@ -312,11 +314,11 @@ std::vector<Token> Parser::functions_parameters() {
     return parameters;
 }
 
-std::vector<std::unique_ptr<Expr>> Parser::call_arguments() {
-    std::vector<std::unique_ptr<Expr>> arguments;
+std::forward_list<std::unique_ptr<Expr>> Parser::call_arguments() {
+    std::forward_list<std::unique_ptr<Expr>> arguments;
     if (!check(Token::Type::RIGHT_PAREN)) {
         do {
-            arguments.emplace_back(expression());
+            arguments.push_front(expression());
         } while (match(Token::Type::COMMA));
     }
     consume(Token::Type::RIGHT_PAREN, "unmatched ')'");
@@ -342,7 +344,15 @@ std::unique_ptr<ClassDeclaration> Parser::class_declaration(const bool is_abstra
     auto span = make_span();
     StructureBody body = structure_body(class_name);
 
-    return std::make_unique<ClassDeclaration>(make_span(), class_name, span, superclass, superspan, std::move(body), is_abstract);
+    return std::make_unique<ClassDeclaration>(
+        make_span(),
+        class_name,
+        span,
+        superclass,
+        superspan,
+        std::move(body),
+        is_abstract
+    );
 }
 
 StructureBody Parser::structure_body(const Token& class_token) {
@@ -356,13 +366,15 @@ StructureBody Parser::structure_body(const Token& class_token) {
         }
 
         // Object definition
-        bool skip = with_source_span([this, &body] -> bool {
-            if (match(Token::Type::OBJECT)) {
-                body.class_object = object_expression();
-                return true;
+        bool skip = with_source_span(
+            [this, &body] -> bool {
+                if (match(Token::Type::OBJECT)) {
+                    body.class_object = object_expression();
+                    return true;
+                }
+                return false;
             }
-            return false;
-        });
+        );
         if (skip) {
             continue;
         }
@@ -496,7 +508,7 @@ bitflags<ClassAttributes> Parser::member_attributes() {
 Constructor Parser::constructor_statement() {
     Token init_token = current;
     std::vector<Token> parameters = functions_parameters();
-    std::vector<std::unique_ptr<Expr>> super_arguments;
+    std::forward_list<std::unique_ptr<Expr>> super_arguments;
     bool has_super = false;
     bite::SourceSpan super_span;
     // init(parameters*) : super(arguments*) [block]
@@ -603,7 +615,7 @@ std::unique_ptr<FunctionDeclaration> Parser::in_trait_function(
     bool skip_params
 ) {
     std::vector<Token> parameters = skip_params ? std::vector<Token>() : functions_parameters();
-    std::optional<Expr> body;
+    std::optional<std::unique_ptr<Expr>> body;
     if (match(Token::Type::LEFT_BRACE)) {
         body = block();
     } else {
@@ -815,10 +827,10 @@ std::unique_ptr<ReturnExpr> Parser::return_expression() {
     return std::make_unique<ReturnExpr>(make_span(), std::move(expr));
 }
 
-AstNode<ObjectExpr> Parser::object_expression() {
+std::unique_ptr<ObjectExpr> Parser::object_expression() {
     Token object_token = current;
     std::optional<Token> superclass;
-    std::vector<std::unique_ptr<Expr>> superclass_arguments;
+    std::forward_list<std::unique_ptr<Expr>> superclass_arguments;
     bite::SourceSpan superspan = no_span();
     bite::SourceSpan supercall_span = no_span();
     auto span = make_span();
@@ -843,7 +855,7 @@ AstNode<ObjectExpr> Parser::object_expression() {
     body.constructor->super_arguments = std::move(superclass_arguments);
     body.constructor->superconstructor_call_span = supercall_span;
 
-    return ast.make_node<ObjectExpr>(
+    return std::make_unique<ObjectExpr>(
         make_span(),
         std::move(body),
         superclass,
@@ -853,7 +865,7 @@ AstNode<ObjectExpr> Parser::object_expression() {
     );
 }
 
-Expr Parser::labeled_expression() {
+std::unique_ptr<Expr> Parser::labeled_expression() {
     Token label = current;
     consume(Token::Type::COLON, "missing colon after the label");
     if (match(Token::Type::LOOP)) {
@@ -869,44 +881,44 @@ Expr Parser::labeled_expression() {
         return block(label);
     }
     error(next, "expression cannot be labeled", "must be either: 'loop', 'for', 'while' or '{'");
-    return ast.make_node<InvalidExpr>(make_span());
+    return std::make_unique<InvalidExpr>(make_span());
 }
 
-Expr Parser::loop_expression(const std::optional<Token>& label) {
+std::unique_ptr<LoopExpr> Parser::loop_expression(const std::optional<Token>& label) {
     consume(Token::Type::LEFT_BRACE, "missing 'loop' expression body");
-    return ast.make_node<LoopExpr>(make_span(), block(), label);
+    return std::make_unique<LoopExpr>(make_span(), block(), label);
 }
 
-Expr Parser::while_expression(const std::optional<Token>& label) {
+std::unique_ptr<WhileExpr> Parser::while_expression(const std::optional<Token>& label) {
     auto condition = expression();
     if (current.type != Token::Type::LEFT_BRACE) {
         error(current, "missing 'while' loop body", "expected '{' here");
     }
     auto body = block();
-    return ast.make_node<WhileExpr>(make_span(), std::move(condition), std::move(body), label);
+    return std::make_unique<WhileExpr>(make_span(), std::move(condition), std::move(body), label);
 }
 
-Expr Parser::for_expression(const std::optional<Token>& label) {
+std::unique_ptr<ForExpr> Parser::for_expression(const std::optional<Token>& label) {
     consume(Token::Type::IDENTIFIER, "invalid 'for' item declaration");
     Token name = current;
     consume(Token::Type::IN, "invalid 'for' loop range expression");
-    Expr iterable = expression();
+    std::unique_ptr<Expr> iterable = expression();
     if (current.type != Token::Type::LEFT_BRACE) {
         error(current, "invalid 'for' loop body", "expected '{' here");
     }
     auto body = block();
-    return ast.make_node<ForExpr>(make_span(), name, std::move(iterable), std::move(body), label);
+    return std::make_unique<ForExpr>(make_span(), name, std::move(iterable), std::move(body), label);
 }
 
-AstNode<BlockExpr> Parser::block(const std::optional<Token>& label) {
+std::unique_ptr<BlockExpr> Parser::block(const std::optional<Token>& label) {
     // In Bite every block is an expression which can return a value
     // the value that will be returned is the last expression without succeding semicolon.
     // we track that expression here in 'expr_at_end'
-    std::vector<Stmt> stmts;
-    std::optional<Expr> expr_at_end = {};
+    std::forward_list<std::unique_ptr<Stmt>> stmts;
+    std::optional<std::unique_ptr<Expr>> expr_at_end = {};
     while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
         if (auto stmt = statement()) {
-            stmts.push_back(std::move(*stmt));
+            stmts.push_front(std::move(*stmt));
         } else {
             bool is_cntrl_flow = is_control_flow_start(next.type);
             auto expr = expression();
@@ -916,7 +928,7 @@ AstNode<BlockExpr> Parser::block(const std::optional<Token>& label) {
             bool expression_is_statement = is_cntrl_flow && (!check(Token::Type::RIGHT_BRACE) || current.type ==
                 Token::Type::SEMICOLON);
             if (match(Token::Type::SEMICOLON) || expression_is_statement) {
-                stmts.emplace_back(ast.make_node<ExprStmt>(make_span(), std::move(expr)));
+                stmts.push_front(std::make_unique<ExprStmt>(make_span(), std::move(expr)));
             } else {
                 expr_at_end = std::move(expr);
                 break;
@@ -924,10 +936,10 @@ AstNode<BlockExpr> Parser::block(const std::optional<Token>& label) {
         }
     }
     consume(Token::Type::RIGHT_BRACE, "unmatched '}'");
-    return ast.make_node<BlockExpr>(make_span(), std::move(stmts), std::move(expr_at_end), label);
+    return std::make_unique<BlockExpr>(make_span(), std::move(stmts), std::move(expr_at_end), label);
 }
 
-Expr Parser::infix(Expr left) {
+std::unique_ptr<Expr> Parser::infix(std::unique_ptr<Expr> left) {
     switch (current.type) {
         case Token::Type::STAR:
         case Token::Type::PLUS:
@@ -967,27 +979,27 @@ Expr Parser::infix(Expr left) {
 }
 
 
-Expr Parser::dot(Expr left) {
+std::unique_ptr<GetPropertyExpr> Parser::dot(std::unique_ptr<Expr> left) {
     consume(Token::Type::IDENTIFIER, "missing property name");
-    return ast.make_node<GetPropertyExpr>(make_span(), std::move(left), current);
+    return std::make_unique<GetPropertyExpr>(make_span(), std::move(left), current);
 }
 
-Expr Parser::binary(Expr left) {
+std::unique_ptr<BinaryExpr> Parser::binary(std::unique_ptr<Expr> left) {
     Token::Type op = current.type;
     Precedence precedence = get_precendece(op);
-    return ast.make_node<BinaryExpr>(make_span(), std::move(left), expression(precedence), op);
+    return std::make_unique<BinaryExpr>(make_span(), std::move(left), expression(precedence), op);
 }
 
-Expr Parser::assigment(Expr left) {
+std::unique_ptr<BinaryExpr> Parser::assigment(std::unique_ptr<Expr> left) {
     Token::Type op = current.type;
     Precedence precedence = get_precendece(op);
     // lower our precedence to handle right associativity
     // common technique in pratt parsers
     precedence = static_cast<Precedence>(static_cast<int>(precedence) - 1);
-    return ast.make_node<BinaryExpr>(make_span(), std::move(left), expression(precedence), op);
+    return std::make_unique<BinaryExpr>(make_span(), std::move(left), expression(precedence), op);
 }
 
-Expr Parser::call(Expr left) {
-    std::vector<Expr> arguments = call_arguments();
-    return ast.make_node<CallExpr>(make_span(), std::move(left), std::move(arguments));
+std::unique_ptr<CallExpr> Parser::call(std::unique_ptr<Expr> left) {
+    std::forward_list<std::unique_ptr<Expr>> arguments = call_arguments();
+    return std::make_unique<CallExpr>(make_span(), std::move(left), std::move(arguments));
 }

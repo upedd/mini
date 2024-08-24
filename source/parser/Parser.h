@@ -93,12 +93,12 @@ private:
     std::unique_ptr<ObjectDeclaration> object_declaration();
 
     std::unique_ptr<VariableDeclaration> var_declaration();
-    AstNode<VarStmt> var_declaration_body(const Token& name);
+    std::unique_ptr<VariableDeclaration> var_declaration_body(const Token& name);
 
-    AstNode<FunctionStmt> function_declaration();
-    AstNode<FunctionStmt> function_declaration_body(const Token& name, bool skip_params = false);
+    std::unique_ptr<FunctionDeclaration> function_declaration();
+    std::unique_ptr<FunctionDeclaration> function_declaration_body(const Token& name, bool skip_params = false);
     std::vector<Token> functions_parameters();
-    std::vector<std::unique_ptr<Expr>> call_arguments();
+    std::forward_list<std::unique_ptr<Expr>> call_arguments();
 
     std::unique_ptr<ClassDeclaration> class_declaration(bool is_abstract = false);
     StructureBody structure_body(const Token& class_token);
@@ -112,11 +112,11 @@ private:
     Constructor constructor_statement();
 
     Constructor default_constructor(const Token& class_token);
-    AstNode<FunctionStmt> abstract_method(const Token& name, bool skip_params);
-    AstNode<VarStmt> abstract_field(const Token& name);
+    std::unique_ptr<FunctionDeclaration> abstract_method(const Token& name, bool skip_params);
+    std::unique_ptr<VariableDeclaration> abstract_field(const Token& name);
 
     std::unique_ptr<TraitDeclaration> trait_declaration();
-    AstNode<FunctionStmt> in_trait_function(const Token& name, bitflags<ClassAttributes>& attributes, bool skip_params);
+    std::unique_ptr<FunctionDeclaration> in_trait_function(const Token& name, bitflags<ClassAttributes>& attributes, bool skip_params);
 
     /* C like precedence
      * References:
@@ -159,17 +159,17 @@ private:
     std::unique_ptr<ContinueExpr> continue_expression();
     std::unique_ptr<ReturnExpr> return_expression();
     AstNode<ObjectExpr> object_expression();
-    Expr labeled_expression();
-    Expr loop_expression(const std::optional<Token>& label = {});
-    Expr while_expression(const std::optional<Token>& label = {});
-    Expr for_expression(const std::optional<Token>& label = {});
+    std::unique_ptr<Expr> labeled_expression();
+    std::unique_ptr<LoopExpr> loop_expression(const std::optional<Token>& label = {});
+    std::unique_ptr<WhileExpr> while_expression(const std::optional<Token>& label = {});
+    std::unique_ptr<ForExpr> for_expression(const std::optional<Token>& label = {});
     AstNode<BlockExpr> block(const std::optional<Token>& label = {});
 
-    Expr infix(Expr left);
-    Expr dot(Expr left);
-    Expr binary(Expr left);
-    Expr assigment(Expr left);
-    Expr call(Expr left);
+    std::unique_ptr<Expr> infix(std::unique_ptr<Expr> left);
+    std::unique_ptr<GetPropertyExpr> dot(std::unique_ptr<Expr> left);
+    std::unique_ptr<BinaryExpr> binary(std::unique_ptr<Expr> left);
+    std::unique_ptr<BinaryExpr> assigment(std::unique_ptr<Expr> left);
+    std::unique_ptr<CallExpr> call(std::unique_ptr<Expr> left);
 
     Token current;
     Token next;

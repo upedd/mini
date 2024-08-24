@@ -34,34 +34,34 @@
 
 
 #define AST_NODES(V) \
-    V(unary_expr) \
-    V(binary_expr) \
-    V(call_expr) \
-    V(literal_expr) \
-    V(string_expr) \
-    V(variable_expr) \
-    V(get_property_expr) \
-    V(super_expr) \
-    V(block_expr) \
-    V(if_expr) \
-    V(loop_expr) \
-    V(while_expr) \
-    V(for_expr) \
-    V(continue_expr) \
-    V(break_expr) \
-    V(return_expr) \
-    V(this_expr) \
-    V(object_expr) \
-    V(function_declaration) \
-    V(variable_declaration) \
-    V(expr_stmt) \
-    V(class_declaration) \
-    V(native_declaration) \
-    V(trait_declaration) \
-    V(object_declaration) \
-    V(invalid_stmt) \
-    V(invalid_expr)
-#define DEFINE_TYPE_ENUM(type) ##type,
+    V(UnaryExpr, unary_expr) \
+    V(BinaryExpr, binary_expr) \
+    V(CallExpr, call_expr) \
+    V(LiteralExpr, literal_expr) \
+    V(StringExpr, string_expr) \
+    V(VariableExpr, variable_expr) \
+    V(GetPropertyExpr, get_property_expr) \
+    V(SuperExpr, super_expr) \
+    V(BlockExpr, block_expr) \
+    V(IfExpr, if_expr) \
+    V(LoopExpr, loop_expr) \
+    V(WhileExpr, while_expr) \
+    V(ForExpr, for_expr) \
+    V(ContinueExpr, continue_expr) \
+    V(BreakExpr, break_expr) \
+    V(ReturnExpr, return_expr) \
+    V(ThisExpr, this_expr) \
+    V(ObjectExpr, object_expr) \
+    V(FunctionDeclaration, function_declaration) \
+    V(VariableDeclaration, variable_declaration) \
+    V(ExprStmt, expr_stmt) \
+    V(ClassDeclaration, class_declaration) \
+    V(NativeDeclaration, native_declaration) \
+    V(TraitDeclaration, trait_declaration) \
+    V(ObjectDeclaration, object_declaration) \
+    V(InvalidExpr, invalid_stmt) \
+    V(InvalidExpr, invalid_expr)
+#define DEFINE_TYPE_ENUM(class_name, type_name) ##type_name,
 
 enum class NodeKind : std::uint8_t {
     AST_NODES(DEFINE_TYPE_ENUM)
@@ -72,7 +72,7 @@ struct Binding {};
 
 class AstNode {
 public:
-    virtual NodeKind kind() = 0;
+    [[nodiscard]] virtual NodeKind kind() const = 0;
     virtual ~AstNode() = default;
 
     bite::SourceSpan span;
@@ -97,7 +97,7 @@ public:
 
 class UnaryExpr final : public Expr {
 public:
-    NodeKind kind() override {
+    [[nodiscard]] NodeKind kind() const override {
         return NodeKind::unary_expr;
     }
 
@@ -111,7 +111,7 @@ public:
 
 class BinaryExpr final : public Expr {
 public:
-    NodeKind kind() override {
+    [[nodiscard]] NodeKind kind() const override {
         return NodeKind::binary_expr;
     }
 
@@ -129,7 +129,7 @@ public:
 
 class CallExpr final : public Expr {
 public:
-    NodeKind kind() override {
+    [[nodiscard]] NodeKind kind() const override {
         return NodeKind::call_expr;
     }
 
@@ -144,7 +144,7 @@ public:
 
 class LiteralExpr final : public Expr {
 public:
-    NodeKind kind() override {
+    [[nodiscard]] NodeKind kind() const override {
         return NodeKind::literal_expr;
     }
 
@@ -156,7 +156,7 @@ public:
 
 class StringExpr final : public Expr {
 public:
-    NodeKind kind() override {
+    [[nodiscard]] NodeKind kind() const override {
         return NodeKind::string_expr;
     }
 
@@ -168,7 +168,7 @@ public:
 
 class VariableExpr final : public Expr {
 public:
-    NodeKind kind() override {
+    [[nodiscard]] NodeKind kind() const override {
         return NodeKind::variable_expr;
     }
 
@@ -181,7 +181,7 @@ public:
 
 class GetPropertyExpr final : public Expr {
 public:
-    NodeKind kind() override {
+    [[nodiscard]] NodeKind kind() const override {
         return NodeKind::get_property_expr;
     }
 
@@ -195,7 +195,7 @@ public:
 
 class SuperExpr final : public Expr {
 public:
-    NodeKind kind() override {
+    [[nodiscard]] NodeKind kind() const override {
         return NodeKind::super_expr;
     }
 
@@ -207,7 +207,7 @@ public:
 
 class BlockExpr final : public Expr {
 public:
-    NodeKind kind() override {
+    [[nodiscard]] NodeKind kind() const override {
         return NodeKind::block_expr;
     }
 
@@ -228,7 +228,7 @@ public:
 
 class IfExpr final : public Expr {
 public:
-    NodeKind kind() override {
+    [[nodiscard]] NodeKind kind() const override {
         return NodeKind::if_expr;
     }
 
@@ -247,9 +247,24 @@ public:
         else_expr(std::move(else_expr)) {}
 };
 
+class LoopExpr final : public Expr {
+public:
+    [[nodiscard]] NodeKind kind() const override {
+        return NodeKind::loop_expr;
+    }
+
+    std::unique_ptr<BlockExpr> body;
+    std::optional<Token> label;
+
+    LoopExpr(bite::SourceSpan span, std::unique_ptr<BlockExpr> body, const std::optional<Token>& label = {}) :
+        Expr(std::move(span)),
+        body(std::move(body)),
+        label(label) {}
+};
+
 class WhileExpr final : public Expr {
 public:
-    NodeKind kind() override {
+    [[nodiscard]] NodeKind kind() const override {
         return NodeKind::while_expr;
     }
 
@@ -257,14 +272,20 @@ public:
     std::unique_ptr<BlockExpr> body;
     std::optional<Token> label;
 
-    WhileExpr(bite::SourceSpan span, std::unique_ptr<Expr> condition,
-    std::unique_ptr<BlockExpr> body,
-    const std::optional<Token>& label = {}) : Expr(std::move(span)), condition(std::move(condition)), body(std::move(body)), label(label) {}
+    WhileExpr(
+        bite::SourceSpan span,
+        std::unique_ptr<Expr> condition,
+        std::unique_ptr<BlockExpr> body,
+        const std::optional<Token>& label = {}
+    ) : Expr(std::move(span)),
+        condition(std::move(condition)),
+        body(std::move(body)),
+        label(label) {}
 };
 
 class BreakExpr final : public Expr {
 public:
-    NodeKind kind() override {
+    [[nodiscard]] NodeKind kind() const override {
         return NodeKind::break_expr;
     }
 
@@ -272,27 +293,37 @@ public:
     std::optional<Token> label;
     bite::SourceSpan label_span;
 
-    explicit BreakExpr(bite::SourceSpan span, std::optional<std::unique_ptr<Expr>> expr = {},
-    const std::optional<Token>& label = {}, bite::SourceSpan label_span) : Expr(std::move(span)), expr(std::move(expr)), label(label), label_span(std::move(label_span)) {}
+    explicit BreakExpr(
+        bite::SourceSpan span,
+        std::optional<std::unique_ptr<Expr>> expr = {},
+        const std::optional<Token>& label = {},
+        bite::SourceSpan label_span
+    ) : Expr(std::move(span)),
+        expr(std::move(expr)),
+        label(label),
+        label_span(std::move(label_span)) {}
 };
 
 class ContinueExpr final : public Expr {
 public:
-    NodeKind kind() override {
+    [[nodiscard]] NodeKind kind() const override {
         return NodeKind::continue_expr;
     }
 
     std::optional<Token> label;
     bite::SourceSpan label_span;
 
-    ContinueExpr(bite::SourceSpan span, const std::optional<Token>& label, bite::SourceSpan label_span) : Expr(std::move(span)), label(label), label_span(std::move(label_span)) {}
+    ContinueExpr(bite::SourceSpan span, const std::optional<Token>& label, bite::SourceSpan label_span) :
+        Expr(std::move(span)),
+        label(label),
+        label_span(std::move(label_span)) {}
 };
 
 struct DeclarationInfo {};
 
 class ForExpr final : public Expr {
 public:
-    NodeKind kind() override {
+    [[nodiscard]] NodeKind kind() const override {
         return NodeKind::for_expr;
     }
 
@@ -302,26 +333,34 @@ public:
     std::optional<Token> label;
     DeclarationInfo info; // For iterator variable
 
-    ForExpr(bite::SourceSpan span, const Token& name,
-    std::unique_ptr<Expr> iterable,
-    BlockExpr body,
-    const std::optional<Token>& label = {}) : Expr(std::move(span)), name(name), iterable(std::move(iterable)), body(std::move(body)), label(label) {}
+    ForExpr(
+        bite::SourceSpan span,
+        const Token& name,
+        std::unique_ptr<Expr> iterable,
+        BlockExpr body,
+        const std::optional<Token>& label = {}
+    ) : Expr(std::move(span)),
+        name(name),
+        iterable(std::move(iterable)),
+        body(std::move(body)),
+        label(label) {}
 };
 
 class ReturnExpr final : public Expr {
 public:
-    NodeKind kind() override {
+    [[nodiscard]] NodeKind kind() const override {
         return NodeKind::return_expr;
     }
 
     std::optional<std::unique_ptr<Expr>> value;
 
-    explicit ReturnExpr(bite::SourceSpan span, std::optional<std::unique_ptr<Expr>> value) : Expr(std::move(span)), value(std::move(value)) {}
+    explicit ReturnExpr(bite::SourceSpan span, std::optional<std::unique_ptr<Expr>> value) : Expr(std::move(span)),
+        value(std::move(value)) {}
 };
 
 class ThisExpr final : public Expr {
 public:
-    NodeKind kind() override {
+    [[nodiscard]] NodeKind kind() const override {
         return NodeKind::this_expr;
     }
 
@@ -332,7 +371,7 @@ struct FunctionEnviroment {};
 
 class FunctionDeclaration final : public Stmt {
 public:
-    NodeKind kind() override {
+    [[nodiscard]] NodeKind kind() const override {
         return NodeKind::function_declaration;
     }
 
@@ -355,7 +394,7 @@ public:
 
 class VariableDeclaration final : public Stmt {
 public:
-    NodeKind kind() override {
+    [[nodiscard]] NodeKind kind() const override {
         return NodeKind::variable_declaration;
     }
 
@@ -371,7 +410,7 @@ public:
 
 class ExprStmt final : public Stmt {
 public:
-    NodeKind kind() override {
+    [[nodiscard]] NodeKind kind() const override {
         return NodeKind::expr_stmt;
     }
 
@@ -407,13 +446,13 @@ struct Method {
 
 struct Constructor {
     bool has_super;
-    std::vector<std::unique_ptr<Expr>> super_arguments;
+    std::forward_list<std::unique_ptr<Expr>> super_arguments;
     std::unique_ptr<FunctionDeclaration> function;
     bite::SourceSpan superconstructor_call_span;
     bite::SourceSpan decl_span;
 };
 
-class ObjectExpr {};
+class ObjectExpr;
 
 // TODO: rethink:
 // TODO: insane...
@@ -453,7 +492,7 @@ struct ClassEnviroment {};
 
 class ClassDeclaration final : public Stmt {
 public:
-    NodeKind kind() override {
+    [[nodiscard]] NodeKind kind() const override {
         return NodeKind::class_declaration;
     }
 
@@ -484,9 +523,38 @@ public:
         is_abstract(is_abstract) {}
 };
 
+class ObjectExpr : public Expr {
+public:
+    [[nodiscard]] NodeKind kind() const override {
+        return NodeKind::object_expr;
+    }
+
+    StructureBody body;
+    std::optional<Token> super_class;
+    std::forward_list<std::unique_ptr<Expr>> superclass_arguments;
+    bite::SourceSpan name_span; // TODO: temp
+    bite::SourceSpan super_class_span; // TODO: temp
+    ClassEnviroment class_enviroment;
+    Binding superclass_binding;
+
+    ObjectExpr(
+        bite::SourceSpan span,
+        StructureBody body,
+        const std::optional<Token>& super_class,
+        std::forward_list<std::unique_ptr<Expr>> superclass_arguments,
+        bite::SourceSpan name_span,
+        bite::SourceSpan super_class_span
+    ) : Expr(std::move(span)),
+        body(std::move(body)),
+        super_class(super_class),
+        superclass_arguments(std::move(superclass_arguments)),
+        name_span(std::move(name_span)),
+        super_class_span(std::move(super_class_span)) {}
+};
+
 class NativeDeclaration final : public Stmt {
 public:
-    NodeKind kind() override {
+    [[nodiscard]] NodeKind kind() const override {
         return NodeKind::native_declaration;
     }
 
@@ -499,7 +567,7 @@ public:
 
 class ObjectDeclaration final : public Stmt {
 public:
-    NodeKind kind() override {
+    [[nodiscard]] NodeKind kind() const override {
         return NodeKind::object_declaration;
     }
 
@@ -517,7 +585,7 @@ struct TraitEnviroment {};
 
 class TraitDeclaration final : public Stmt {
 public:
-    NodeKind kind() override {
+    [[nodiscard]] NodeKind kind() const override {
         return NodeKind::trait_declaration;
     }
 
@@ -543,7 +611,7 @@ public:
 
 class InvalidStmt final : public Stmt {
 public:
-    NodeKind kind() override {
+    [[nodiscard]] NodeKind kind() const override {
         return NodeKind::invalid_stmt;
     }
 
@@ -552,7 +620,7 @@ public:
 
 class InvalidExpr final : public Expr {
 public:
-    NodeKind kind() override {
+    [[nodiscard]] NodeKind kind() const override {
         return NodeKind::invalid_expr;
     }
 

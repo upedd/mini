@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "Ast.h"
+#include "AstVisitor.h"
 #include "base/logger.h"
 #include "base/overloaded.h"
 #include "shared/Message.h"
@@ -16,7 +17,7 @@ namespace bite {
      * It is the last step in compiler fronted which will check if produced ast is semantically valid
      * It will also resolve variable bindings
      */
-    class Analyzer {
+    class Analyzer : MutatingAstVisitor {
     public:
         explicit Analyzer(SharedContext* context) : context(context) {}
 
@@ -34,30 +35,31 @@ namespace bite {
         void analyze(Ast& ast);
         void block(AstNode<BlockExpr>& expr);
         void variable_declarataion(AstNode<VarStmt>& stmt);
-        void variable_expression(AstNode<VariableExpr>& expr);
-
-        void expression_statement(AstNode<ExprStmt>& stmt);
+        void variable_expr(AstNode<VariableExpr>& expr);
+        void expr_stmt(AstNode<ExprStmt>& stmt);
         void function_declaration(AstNode<FunctionStmt>& box);
         void function(AstNode<FunctionStmt>& stmt);
         void native_declaration(AstNode<NativeStmt>& stmt);
         void class_declaration(AstNode<ClassStmt>& box);
         void object_declaration(AstNode<ObjectStmt>& stmt);
-        void unary(AstNode<UnaryExpr>& expr);
-        void binary(AstNode<BinaryExpr>& expr);
-        void call(AstNode<CallExpr>& expr);
-        void get_property(AstNode<GetPropertyExpr>& expr);
-        void if_expression(AstNode<IfExpr>& expr);
-        void loop_expression(AstNode<LoopExpr>& expr);
+        void unary_expr(AstNode<UnaryExpr>& expr);
+        void binary_expr(AstNode<BinaryExpr>& expr);
+        void call_expr(AstNode<CallExpr>& expr);
+        void get_property_expr(AstNode<GetPropertyExpr>& expr);
+        void if_expr(AstNode<IfExpr>& expr);
+        void loop_expr(AstNode<LoopExpr>& expr);
         void break_expr(AstNode<BreakExpr>& expr);
         void continue_expr(AstNode<ContinueExpr>& expr);
         void while_expr(AstNode<WhileExpr>& expr);
         void for_expr(AstNode<ForExpr>& expr);
         void return_expr(AstNode<ReturnExpr>& expr);
         void this_expr(AstNode<ThisExpr>& expr);
-
+        void string_expr() {}
         void super_expr(const AstNode<SuperExpr>& expr);
         void object_expr(AstNode<ObjectExpr>& expr);
         void trait_declaration(AstNode<TraitStmt>& stmt);
+        void invalid_stmt() {}
+        void invalid_expr() {}
 
 
         // TODO: mess?
@@ -249,8 +251,6 @@ namespace bite {
     private:
         std::vector<Node> node_stack;
         Ast* ast;
-        void visit_stmt(Stmt& statement);
-        void visit_expr(Expr& expression);
 
         bool m_has_errors = false;
         SharedContext* context;

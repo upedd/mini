@@ -44,11 +44,11 @@ void bite::Analyzer::variable_declarataion(AstNode<VarStmt>& stmt) {
     declare(stmt->name.string, &stmt); // TODO is it safe???
 }
 
-void bite::Analyzer::variable_expression(AstNode<VariableExpr>& expr) {
+void bite::Analyzer::variable_expr(AstNode<VariableExpr>& expr) {
     expr->binding = resolve(expr->identifier.string, expr.span);
 }
 
-void bite::Analyzer::expression_statement(AstNode<ExprStmt>& stmt) {
+void bite::Analyzer::expr_stmt(AstNode<ExprStmt>& stmt) {
     visit_expr(stmt->expr);
 }
 
@@ -89,11 +89,11 @@ void bite::Analyzer::object_declaration(AstNode<ObjectStmt>& stmt) {
     visit_expr(stmt->object);
 }
 
-void bite::Analyzer::unary(AstNode<UnaryExpr>& expr) {
+void bite::Analyzer::unary_expr(AstNode<UnaryExpr>& expr) {
     visit_expr(expr->expr);
 }
 
-void bite::Analyzer::binary(AstNode<BinaryExpr>& expr) {
+void bite::Analyzer::binary_expr(AstNode<BinaryExpr>& expr) {
     // TODO: refactor!
     // make sure to first visit right side!
     visit_expr(expr->right);
@@ -130,18 +130,18 @@ void bite::Analyzer::binary(AstNode<BinaryExpr>& expr) {
     }
 }
 
-void bite::Analyzer::call(AstNode<CallExpr>& expr) {
+void bite::Analyzer::call_expr(AstNode<CallExpr>& expr) {
     visit_expr(expr->callee);
     for (auto& argument : expr->arguments) {
         visit_expr(argument);
     }
 }
 
-void bite::Analyzer::get_property(AstNode<GetPropertyExpr>& expr) {
+void bite::Analyzer::get_property_expr(AstNode<GetPropertyExpr>& expr) {
     visit_expr(expr->left);
 }
 
-void bite::Analyzer::if_expression(AstNode<IfExpr>& expr) {
+void bite::Analyzer::if_expr(AstNode<IfExpr>& expr) {
     visit_expr(expr->condition);
     visit_expr(expr->then_expr);
     if (expr->else_expr) {
@@ -149,7 +149,7 @@ void bite::Analyzer::if_expression(AstNode<IfExpr>& expr) {
     }
 }
 
-void bite::Analyzer::loop_expression(AstNode<LoopExpr>& expr) {
+void bite::Analyzer::loop_expr(AstNode<LoopExpr>& expr) {
     block(expr->body);
 }
 
@@ -1210,51 +1210,51 @@ void bite::Analyzer::structure_body(
     }
 }
 
-void bite::Analyzer::visit_stmt(Stmt& statement) {
-    // TODO: refactor?
-    std::visit([this](auto& stmt) { node_stack.emplace_back(&stmt); }, statement);
-    std::visit(
-        overloaded {
-            [this](AstNode<VarStmt>& stmt) { variable_declarataion(stmt); },
-            [this](AstNode<FunctionStmt>& stmt) { function_declaration(stmt); },
-            [this](AstNode<ExprStmt>& stmt) { expression_statement(stmt); },
-            [this](AstNode<ClassStmt>& stmt) { class_declaration(stmt); },
-            [this](AstNode<NativeStmt>& stmt) { native_declaration(stmt); },
-            [this](AstNode<ObjectStmt>& stmt) { object_declaration(stmt); },
-            [this](AstNode<TraitStmt>& stmt) { trait_declaration(stmt); },
-            [this](AstNode<UsingStmt>&) {},
-            [](AstNode<InvalidStmt>&) {},
-        },
-        statement
-    );
-    node_stack.pop_back();
-}
-
-void bite::Analyzer::visit_expr(Expr& expression) {
-    std::visit([this](auto& expr) { node_stack.emplace_back(&expr); }, expression);
-    std::visit(
-        overloaded {
-            [this](AstNode<LiteralExpr>&) {},
-            [this](AstNode<UnaryExpr>& expr) { unary(expr); },
-            [this](AstNode<BinaryExpr>& expr) { binary(expr); },
-            [this](AstNode<StringLiteral>&) {},
-            [this](AstNode<VariableExpr>& expr) { variable_expression(expr); },
-            [this](AstNode<CallExpr>& expr) { call(expr); },
-            [this](AstNode<GetPropertyExpr>& expr) { get_property(expr); },
-            [this](AstNode<SuperExpr>& expr) { super_expr(expr); },
-            [this](AstNode<BlockExpr>& expr) { block(expr); },
-            [this](AstNode<IfExpr>& expr) { if_expression(expr); },
-            [this](AstNode<LoopExpr>& expr) { loop_expression(expr); },
-            [this](AstNode<BreakExpr>& expr) { break_expr(expr); },
-            [this](AstNode<ContinueExpr>& expr) { continue_expr(expr); },
-            [this](AstNode<WhileExpr>& expr) { while_expr(expr); },
-            [this](AstNode<ForExpr>& expr) { for_expr(expr); },
-            [this](AstNode<ReturnExpr>& expr) { return_expr(expr); },
-            [this](AstNode<ThisExpr>& expr) { this_expr(expr); },
-            [this](AstNode<ObjectExpr>& expr) { object_expr(expr); },
-            [](AstNode<InvalidExpr>&) {}
-        },
-        expression
-    );
-    node_stack.pop_back();
-}
+// void bite::Analyzer::visit_stmt(Stmt& statement) {
+//     // TODO: refactor?
+//     std::visit([this](auto& stmt) { node_stack.emplace_back(&stmt); }, statement);
+//     std::visit(
+//         overloaded {
+//             [this](AstNode<VarStmt>& stmt) { variable_declarataion(stmt); },
+//             [this](AstNode<FunctionStmt>& stmt) { function_declaration(stmt); },
+//             [this](AstNode<ExprStmt>& stmt) { expression_statement(stmt); },
+//             [this](AstNode<ClassStmt>& stmt) { class_declaration(stmt); },
+//             [this](AstNode<NativeStmt>& stmt) { native_declaration(stmt); },
+//             [this](AstNode<ObjectStmt>& stmt) { object_declaration(stmt); },
+//             [this](AstNode<TraitStmt>& stmt) { trait_declaration(stmt); },
+//             [this](AstNode<UsingStmt>&) {},
+//             [](AstNode<InvalidStmt>&) {},
+//         },
+//         statement
+//     );
+//     node_stack.pop_back();
+// }
+//
+// void bite::Analyzer::visit_expr(Expr& expression) {
+//     std::visit([this](auto& expr) { node_stack.emplace_back(&expr); }, expression);
+//     std::visit(
+//         overloaded {
+//             [this](AstNode<LiteralExpr>&) {},
+//             [this](AstNode<UnaryExpr>& expr) { unary_expr(expr); },
+//             [this](AstNode<BinaryExpr>& expr) { binary(expr); },
+//             [this](AstNode<StringLiteral>&) {},
+//             [this](AstNode<VariableExpr>& expr) { variable_expression(expr); },
+//             [this](AstNode<CallExpr>& expr) { call(expr); },
+//             [this](AstNode<GetPropertyExpr>& expr) { get_property(expr); },
+//             [this](AstNode<SuperExpr>& expr) { super_expr(expr); },
+//             [this](AstNode<BlockExpr>& expr) { block(expr); },
+//             [this](AstNode<IfExpr>& expr) { if_expression(expr); },
+//             [this](AstNode<LoopExpr>& expr) { loop_expression(expr); },
+//             [this](AstNode<BreakExpr>& expr) { break_expr(expr); },
+//             [this](AstNode<ContinueExpr>& expr) { continue_expr(expr); },
+//             [this](AstNode<WhileExpr>& expr) { while_expr(expr); },
+//             [this](AstNode<ForExpr>& expr) { for_expr(expr); },
+//             [this](AstNode<ReturnExpr>& expr) { return_expr(expr); },
+//             [this](AstNode<ThisExpr>& expr) { this_expr(expr); },
+//             [this](AstNode<ObjectExpr>& expr) { object_expr(expr); },
+//             [](AstNode<InvalidExpr>&) {}
+//         },
+//         expression
+//     );
+//     node_stack.pop_back();
+// }
