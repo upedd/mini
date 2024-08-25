@@ -190,34 +190,34 @@ private:
     void expr_stmt(const ExprStmt& stmt);
     void native_declaration(const NativeDeclaration& stmt);
 
-    void if_expr(const AstNode<IfExpr>& stmt);
+    void if_expr(const IfExpr& stmt);
 
     void visit_expr(const Expr& expr);
 
-    void block_expr(const AstNode<BlockExpr>& expr);
-    void loop_expr(const AstNode<LoopExpr>& expr);
+    void block_expr(const BlockExpr& expr);
+    void loop_expr(const LoopExpr& expr);
     void pop_out_of_scopes(int64_t depth);
-    void break_expr(const AstNode<BreakExpr>& expr);
-    void continue_expr(const AstNode<ContinueExpr>& expr);
-    void while_expr(const AstNode<WhileExpr>& expr);
-    void for_expr(const AstNode<ForExpr>& expr);
-    void return_expr(const AstNode<ReturnExpr>& stmt);
+    void break_expr(const BreakExpr& expr);
+    void continue_expr(const ContinueExpr& expr);
+    void while_expr(const WhileExpr& expr);
+    void for_expr(const ForExpr& expr);
+    void return_expr(const ReturnExpr& stmt);
 
-    void literal_expr(const AstNode<LiteralExpr>& expr);
-    void string_expr(const AstNode<StringLiteral>& expr);
-    void unary_expr(const AstNode<UnaryExpr>& expr);
+    void literal_expr(const LiteralExpr& expr);
+    void string_expr(const StringExpr& expr);
+    void unary_expr(const UnaryExpr& expr);
 
-    void binary_expr(const AstNode<BinaryExpr>& expr);
+    void binary_expr(const BinaryExpr& expr);
     void emit_set_variable(const Binding& binding);
 
     void emit_get_variable(const Binding& binding);
 
-    void logical_expr(const AstNode<BinaryExpr>& expr);
+    void logical_expr(const BinaryExpr& expr);
 
-    void variable_expr(const AstNode<VariableExpr>& expr);
-    void call_expr(const AstNode<CallExpr>& expr);
-    void get_property_expr(const AstNode<GetPropertyExpr>& expr);
-    void super_expr(const AstNode<SuperExpr>& expr);
+    void variable_expr(const VariableExpr& expr);
+    void call_expr(const CallExpr& expr);
+    void get_property_expr(const GetPropertyExpr& expr);
+    void super_expr(const SuperExpr& expr);
 
     Parser parser;
     Function main;

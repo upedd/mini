@@ -37,8 +37,8 @@ bool Compiler::compile() {
         ); // TODO: workaround
         return false;
     }
-    for (auto& stmt : ast.statements) {
-        visit_stmt(stmt);
+    for (auto& stmt : ast.stmts) {
+        visit(*stmt);
     }
     // default return at main
     emit_default_return();
@@ -114,23 +114,6 @@ void Compiler::emit_default_return() {
     emit(OpCode::RETURN);
 }
 
-void Compiler::visit_stmt(const Stmt& statement) {
-    std::visit(
-        overloaded {
-            [this](const AstNode<VarStmt>& stmt) { variable_declaration(stmt); },
-            [this](const AstNode<FunctionStmt>& stmt) { function_declaration(stmt); },
-            [this](const AstNode<ExprStmt>& stmt) { expr_stmt(stmt); },
-            [this](const AstNode<ClassStmt>& stmt) { class_declaration(stmt); },
-            [this](const AstNode<NativeStmt>& stmt) { native_declaration(stmt); },
-            [this](const AstNode<ObjectStmt>& stmt) { object_declaration(stmt); },
-            [this](const AstNode<TraitStmt>& stmt) { trait_declaration(stmt); },
-            [this](const AstNode<UsingStmt>&) {},
-            [](const AstNode<InvalidStmt>&) {},
-        },
-        statement
-    );
-}
-
 void Compiler::define_variable(const DeclarationInfo& info) {
     // TODO: refactor!
     if (std::holds_alternative<LocalDeclarationInfo>(info)) {
@@ -154,44 +137,44 @@ int64_t Compiler::synthetic_variable() {
     return current_context().on_stack - 1;
 }
 
-void Compiler::variable_declaration(const AstNode<VarStmt>& expr) {
-    if (expr->value) {
-        visit_expr(*expr->value);
+void Compiler::variable_declaration(const VariableDeclaration& expr) {
+    if (expr.value) {
+        visit(**expr.value);
     }
-    define_variable(expr->info);
+    define_variable(expr.info);
 }
 
-void Compiler::function_declaration(const AstNode<FunctionStmt>& stmt) {
+void Compiler::function_declaration(const FunctionDeclaration& stmt) {
     function(stmt, FunctionType::FUNCTION);
     current_context().on_stack++;
-    define_variable(stmt->info);
+    define_variable(stmt.info);
 }
 
-void Compiler::native_declaration(const AstNode<NativeStmt>& stmt) {
-    std::string name = *stmt->name.string;
+void Compiler::native_declaration(const NativeDeclaration& stmt) {
+    std::string name = *stmt.name.string;
     natives.push_back(name);
     int idx = current_function()->add_constant(name);
     emit(OpCode::GET_NATIVE, idx);
     current_context().on_stack++;
     // TODO: better way to get those bindings
-    define_variable(stmt->info);
+    define_variable(stmt.info);
 }
 
-void Compiler::block_expr(const AstNode<BlockExpr>& expr) {
+void Compiler::block_expr(const BlockExpr& expr) {
     int break_idx = current_function()->add_empty_jump_destination();
     ExpressionScope scope {
-            expr->label
-                ? ExpressionScope(LabeledBlockScope { .label = expr->label->string, .break_idx = break_idx })
+            expr.label
+                ? ExpressionScope(LabeledBlockScope { .label = expr.label->string, .break_idx = break_idx })
                 : ExpressionScope(BlockScope())
         };
     with_expression_scope(
         std::move(scope),
         [&expr, this](const ExpressionScope& expr_scope) {
-            for (const auto& stmt : expr->stmts) {
-                visit_stmt(stmt);
+            for (const auto& stmt : expr.stmts) {
+                visit(*stmt);
             }
-            if (expr->expr) {
-                visit_expr(*expr->expr);
+            if (expr.expr) {
+                visit(**expr.expr);
                 emit(OpCode::SET, get_return_slot(expr_scope));
                 emit(OpCode::POP);
                 current_context().on_stack--;
@@ -201,9 +184,9 @@ void Compiler::block_expr(const AstNode<BlockExpr>& expr) {
     current_function()->patch_jump_destination(break_idx, current_program().size());
 }
 
-void Compiler::loop_expr(const AstNode<LoopExpr>& expr) {
+void Compiler::loop_expr(const LoopExpr& expr) {
     std::optional<StringTable::Handle> label =
-        expr->label ? expr->label->string : std::optional<StringTable::Handle> {};
+        expr.label ? expr.label->string : std::optional<StringTable::Handle> {};
     int continue_idx = current_function()->add_empty_jump_destination();
     int break_idx = current_function()->add_empty_jump_destination();
 
@@ -215,11 +198,11 @@ void Compiler::loop_expr(const AstNode<LoopExpr>& expr) {
             with_expression_scope(
                 BlockScope(),
                 [this, &expr](const ExpressionScope&) {
-                    for (const auto& stmt : expr->body->stmts) {
-                        visit_stmt(stmt);
+                    for (const auto& stmt : expr.body->stmts) {
+                        visit(*stmt);
                     }
-                    if (expr->body->expr) {
-                        visit_expr(*expr->body->expr);
+                    if (expr.body->expr) {
+                        visit(**expr.body->expr);
                     }
                 }
             );
@@ -251,7 +234,7 @@ void Compiler::pop_out_of_scopes(int64_t depth) {
     }
 }
 
-void Compiler::while_expr(const AstNode<WhileExpr>& expr) {
+void Compiler::while_expr(const WhileExpr& expr) {
     // TODO: potential desugaring:
     // auto negated_cond = ast.make_node<UnaryExpr>(ast.make_copy(expr->condition), Token::Type::BANG);
     // auto break_stmt = ast.make_node<ExprStmt>(
@@ -263,7 +246,7 @@ void Compiler::while_expr(const AstNode<WhileExpr>& expr) {
     // );
     // loop_expression(desugared_while);
     std::optional<StringTable::Handle> label =
-        expr->label ? expr->label->string : std::optional<StringTable::Handle> {};
+        expr.label ? expr.label->string : std::optional<StringTable::Handle> {};
     int continue_idx = current_function()->add_empty_jump_destination();
     int break_idx = current_function()->add_empty_jump_destination();
     int end_idx = current_function()->add_empty_jump_destination();
@@ -272,7 +255,7 @@ void Compiler::while_expr(const AstNode<WhileExpr>& expr) {
         [&expr, this, continue_idx, end_idx](const ExpressionScope&) {
             current_function()->patch_jump_destination(continue_idx, current_program().size());
 
-            visit_expr(expr->condition);
+            visit(*expr.condition);
             emit(OpCode::JUMP_IF_FALSE, end_idx);
             // pop condition evaluation
             emit(OpCode::POP);
@@ -282,11 +265,11 @@ void Compiler::while_expr(const AstNode<WhileExpr>& expr) {
             with_expression_scope(
                 BlockScope(),
                 [this, &expr](const ExpressionScope&) {
-                    for (const auto& stmt : expr->body->stmts) {
-                        visit_stmt(stmt);
+                    for (const auto& stmt : expr.body->stmts) {
+                        visit(*stmt);
                     }
-                    if (expr->body->expr) {
-                        visit_expr(*expr->body->expr);
+                    if (expr.body->expr) {
+                        visit(**expr.body->expr);
                     }
                 }
             );
@@ -298,18 +281,18 @@ void Compiler::while_expr(const AstNode<WhileExpr>& expr) {
     current_function()->patch_jump_destination(break_idx, current_program().size());
 }
 
-void Compiler::for_expr(const AstNode<ForExpr>& expr) {
+void Compiler::for_expr(const ForExpr& expr) {
     // TODO: desugaring step!
     with_expression_scope(
         BlockScope(),
         [&expr, this](const ExpressionScope& scope) {
-            visit_expr(expr->iterable);
+            visit(*expr.iterable);
             int iterator_constant = current_function()->add_constant("iterator");
             emit(OpCode::GET_PROPERTY, iterator_constant);
             emit(OpCode::CALL, 0);
             int64_t iterator_slot = synthetic_variable();
-            std::optional<StringTable::Handle> label = expr->label
-                                                           ? expr->label->string
+            std::optional<StringTable::Handle> label = expr.label
+                                                           ? expr.label->string
                                                            : std::optional<StringTable::Handle>();
             int continue_idx = current_function()->add_empty_jump_destination();
             int break_idx = current_function()->add_empty_jump_destination();
@@ -334,17 +317,17 @@ void Compiler::for_expr(const AstNode<ForExpr>& expr) {
                     emit(OpCode::GET_PROPERTY, item_constant);
                     emit(OpCode::CALL, 0);
                     current_context().on_stack++;
-                    define_variable(expr->info);
+                    define_variable(expr.info);
                     // end item
 
                     with_expression_scope(
                         BlockScope(),
                         [this, &expr](const ExpressionScope&) {
-                            for (const auto& stmt : expr->body->stmts) {
-                                visit_stmt(stmt);
+                            for (const auto& stmt : expr.body->stmts) {
+                                visit(*stmt);
                             }
-                            if (expr->body->expr) {
-                                visit_expr(*expr->body->expr);
+                            if (expr.body->expr) {
+                                visit(**expr.body->expr);
                             }
                         }
                     );
@@ -360,14 +343,14 @@ void Compiler::for_expr(const AstNode<ForExpr>& expr) {
 }
 
 
-void Compiler::break_expr(const AstNode<BreakExpr>& expr) {
+void Compiler::break_expr(const BreakExpr& expr) {
     // refactor!
     int64_t pop_out_depth = 0;
     for (auto& scope : current_context().expression_scopes | std::views::reverse) {
-        if (expr->label) {
-            if ((std::holds_alternative<LabeledBlockScope>(scope) && std::get<LabeledBlockScope>(scope).label == expr->
+        if (expr.label) {
+            if ((std::holds_alternative<LabeledBlockScope>(scope) && std::get<LabeledBlockScope>(scope).label == expr.
                 label->string) || (std::holds_alternative<LoopScope>(scope) && std::get<LoopScope>(scope).label &&
-                std::get<LoopScope>(scope).label == expr->label->string)) {
+                std::get<LoopScope>(scope).label == expr.label->string)) {
                 break;
             }
         } else if (std::holds_alternative<LoopScope>(scope)) {
@@ -378,8 +361,8 @@ void Compiler::break_expr(const AstNode<BreakExpr>& expr) {
     // assert we found scope to pop out!
     ExpressionScope& scope = current_context().expression_scopes[current_context().expression_scopes.size() -
         pop_out_depth - 1];
-    if (expr->expr) {
-        visit_expr(*expr->expr);
+    if (expr.expr) {
+        visit(**expr.expr);
         emit(OpCode::SET, get_return_slot(scope));
         emit(OpCode::POP);
         current_context().on_stack--;
@@ -395,13 +378,13 @@ void Compiler::break_expr(const AstNode<BreakExpr>& expr) {
     );
 }
 
-void Compiler::continue_expr(const AstNode<ContinueExpr>& expr) {
+void Compiler::continue_expr(const ContinueExpr& expr) {
     // overlap with break expr maybe refactor?
     int64_t pop_out_depth = 0;
     for (auto& scope : current_context().expression_scopes | std::views::reverse) {
         if (std::holds_alternative<LoopScope>(scope)) {
-            if (expr->label) {
-                if (std::get<LoopScope>(scope).label && std::get<LoopScope>(scope).label == expr->label->string) {
+            if (expr.label) {
+                if (std::get<LoopScope>(scope).label && std::get<LoopScope>(scope).label == expr.label->string) {
                     break;
                 }
             } else {
@@ -420,25 +403,25 @@ void Compiler::continue_expr(const AstNode<ContinueExpr>& expr) {
 }
 
 
-void Compiler::function(const AstNode<FunctionStmt>& stmt, FunctionType type) {
+void Compiler::function(const FunctionDeclaration& stmt, FunctionType type) {
     // TODO: integrate into new strings
-    auto function_name = *stmt->name.string;
-    auto* function = new Function(function_name, stmt->params.size());
+    auto function_name = *stmt.name.string;
+    auto* function = new Function(function_name, stmt.params.size());
     functions.push_back(function);
 
     with_context(
         function,
         type,
         [&stmt, this] {
-            current_function()->set_upvalue_count(stmt->enviroment.upvalues.size());
-            visit_expr(*stmt->body); // TODO: assert has body?
+            current_function()->set_upvalue_count(stmt.enviroment.upvalues.size());
+            visit(**stmt.body); // TODO: assert has body?
             emit_default_return();
         }
     );
 
     int constant = current_function()->add_constant(function);
     emit(OpCode::CLOSURE, constant);
-    for (const UpValue& upvalue : stmt->enviroment.upvalues) {
+    for (const UpValue& upvalue : stmt.enviroment.upvalues) {
         emit(upvalue.local);
         if (upvalue.local) {
             emit(current_context().slots[upvalue.idx].index);
@@ -458,15 +441,16 @@ void Compiler::constructor(const Constructor& stmt, const std::vector<Field>& fi
         FunctionType::CONSTRUCTOR,
         [&fields, this, &stmt, has_superclass] {
             if (stmt.has_super) {
-                for (const Expr& expr : stmt.super_arguments) {
-                    visit_expr(expr);
+                for (auto& expr : stmt.super_arguments) {
+                    visit(*expr);
                 }
+                auto super_arguments_size = std::ranges::distance(stmt.super_arguments);
                 // maybe better way to do this instead of this superinstruction?
-                emit(OpCode::CALL_SUPER_CONSTRUCTOR, stmt.super_arguments.size());
+                emit(OpCode::CALL_SUPER_CONSTRUCTOR, super_arguments_size);
                 emit(OpCode::POP); // discard constructor response
             } else if (has_superclass && stmt.super_arguments.empty()) {
                 // default superclass construct
-                emit(OpCode::CALL_SUPER_CONSTRUCTOR, stmt.super_arguments.size());
+                emit(OpCode::CALL_SUPER_CONSTRUCTOR, 0);
                 emit(OpCode::POP); // discard constructor response
             }
 
@@ -476,14 +460,14 @@ void Compiler::constructor(const Constructor& stmt, const std::vector<Field>& fi
                 if (field.attributes[ClassAttributes::ABSTRACT]) {
                     continue;
                 }
-                visit_expr(*field.variable->value);
+                visit(**field.variable->value);
                 emit(OpCode::THIS);
                 int property_name = current_function()->add_constant(*field.variable->name.string);
                 emit(OpCode::SET_PROPERTY, property_name);
                 emit(OpCode::POP); // pop value;
             }
             if (stmt.function->body) {
-                visit_expr(*stmt.function->body);
+                visit(**stmt.function->body);
             }
             current_function()->set_upvalue_count(stmt.function->enviroment.upvalues.size());
             emit_default_return();
@@ -502,21 +486,21 @@ void Compiler::constructor(const Constructor& stmt, const std::vector<Field>& fi
     }
 }
 
-void Compiler::object_expr(const AstNode<ObjectExpr>& expr) {
+void Compiler::object_expr(const ObjectExpr& expr) {
     // TODO: refactor! tons of overlap with class
     std::string name = "object"; // todo: check!
     uint8_t name_constant = current_function()->add_constant(name);
     emit(OpCode::NIL);
     emit(OpCode::CLASS, name_constant);
 
-    if (expr->super_class) {
-        emit_get_variable(expr->superclass_binding);
+    if (expr.super_class) {
+        emit_get_variable(expr.superclass_binding);
         emit(OpCode::INHERIT);
     }
 
     // TODO: overlap with trait declaration
-    for (const auto& using_stmt : expr->body.using_statements) {
-        for (const auto& item : using_stmt->items) {
+    for (const auto& using_stmt : expr.body.using_statements) {
+        for (const auto& item : using_stmt.items) {
             for (auto& [original_name, field_name, attr] : item.declarations) {
                 int field_name_constant = current_function()->add_constant(*original_name);
                 // TODO: performance
@@ -554,17 +538,17 @@ void Compiler::object_expr(const AstNode<ObjectExpr>& expr) {
         }
     }
 
-    for (const auto& field : expr->body.fields) {
+    for (const auto& field : expr.body.fields) {
         std::string field_name = *field.variable->name.string;
         int field_constant = current_function()->add_constant(field_name);
         emit(OpCode::FIELD, field_constant);
         emit(field.attributes.to_ullong());
     }
 
-    for (auto& method : expr->body.methods) {
+    for (auto& method : expr.body.methods) {
         std::string method_name = *method.function->name.string;
         if (!method.attributes[ClassAttributes::ABSTRACT]) {
-            function(method.function, FunctionType::METHOD);
+            function(*method.function, FunctionType::METHOD);
         }
         int idx = current_function()->add_constant(method_name);
         emit(OpCode::METHOD, idx);
@@ -572,28 +556,28 @@ void Compiler::object_expr(const AstNode<ObjectExpr>& expr) {
         current_context().on_stack--;
     }
 
-    if (expr->body.constructor) { // TODO: always must have constructor!
-        bool has_super_class = static_cast<bool>(expr->super_class);
-        constructor(*expr->body.constructor, expr->body.fields, has_super_class);
+    if (expr.body.constructor) { // TODO: always must have constructor!
+        bool has_super_class = static_cast<bool>(expr.super_class);
+        constructor(*expr.body.constructor, expr.body.fields, has_super_class);
     }
 
     emit(OpCode::CONSTRUCTOR);
     emit(OpCode::CALL, 0);
 }
 
-void Compiler::object_declaration(const AstNode<ObjectStmt>& stmt) {
-    visit_expr(stmt->object);
-    define_variable(stmt->info);
+void Compiler::object_declaration(const ObjectDeclaration& stmt) {
+    visit(*stmt.object);
+    define_variable(stmt.info);
 }
 
-void Compiler::trait_declaration(const AstNode<TraitStmt>& stmt) {
-    std::string name = *stmt->name.string;
+void Compiler::trait_declaration(const TraitDeclaration& stmt) {
+    std::string name = *stmt.name.string;
     uint8_t name_constanst = current_function()->add_constant(name);
     emit(OpCode::TRAIT, name_constanst);
-    define_variable(stmt->info);
+    define_variable(stmt.info);
 
-    for (const auto& using_stmt : stmt->using_stmts) {
-        for (const auto& item : using_stmt->items) {
+    for (const auto& using_stmt : stmt.using_stmts) {
+        for (const auto& item : using_stmt.items) {
             for (const auto& [original_name, field_name, attr] : item.declarations) {
                 int field_name_constant = current_function()->add_constant(*original_name);
                 emit_get_variable(item.binding);
@@ -606,16 +590,16 @@ void Compiler::trait_declaration(const AstNode<TraitStmt>& stmt) {
         }
     }
 
-    for (const auto& method : stmt->methods) {
+    for (const auto& method : stmt.methods) {
         if (!method.attributes[ClassAttributes::ABSTRACT]) {
-            function(method.function, FunctionType::METHOD);
+            function(*method.function, FunctionType::METHOD);
         }
         int method_name_constant = current_function()->add_constant(*method.function->name.string);
         emit(OpCode::TRAIT_METHOD, method_name_constant);
         emit(method.attributes.to_ullong()); // check!
     }
 
-    for (const auto& [name, info] : stmt->enviroment.requirements) {
+    for (const auto& [name, info] : stmt.enviroment.requirements) {
         // pass requirements down
         int constant_idx = current_function()->add_constant(*name);
         emit(OpCode::TRAIT_METHOD, constant_idx);
@@ -626,31 +610,31 @@ void Compiler::trait_declaration(const AstNode<TraitStmt>& stmt) {
     }
 }
 
-void Compiler::class_declaration(const AstNode<ClassStmt>& stmt) {
+void Compiler::class_declaration(const ClassDeclaration& stmt) {
     // TODO: refactor!
-    std::string name = *stmt->name.string;
+    std::string name = *stmt.name.string;
     uint8_t name_constant = current_function()->add_constant(name);
-    if (stmt->body.class_object) {
-        object_expr(*stmt->body.class_object);
+    if (stmt.body.class_object) {
+        object_expr(**stmt.body.class_object);
     } else {
         emit(OpCode::NIL);
         current_context().on_stack++;
     }
-    if (stmt->is_abstract) {
+    if (stmt.is_abstract) {
         emit(OpCode::ABSTRACT_CLASS, name_constant);
     } else {
         emit(OpCode::CLASS, name_constant);
     }
-    define_variable(stmt->info);
+    define_variable(stmt.info);
 
-    if (stmt->super_class) {
-        emit_get_variable(stmt->superclass_binding);
+    if (stmt.super_class) {
+        emit_get_variable(stmt.superclass_binding);
         emit(OpCode::INHERIT);
     }
 
     // TODO: overlap with trait declaration
-    for (const auto& using_stmt : stmt->body.using_statements) {
-        for (const auto& item : using_stmt->items) {
+    for (const auto& using_stmt : stmt.body.using_statements) {
+        for (const auto& item : using_stmt.items) {
             for (auto& [original_name, field_name, attr] : item.declarations) {
                 int field_name_constant = current_function()->add_constant(*original_name);
                 // TODO: performance
@@ -688,40 +672,40 @@ void Compiler::class_declaration(const AstNode<ClassStmt>& stmt) {
         }
     }
 
-    for (const auto& field : stmt->body.fields) {
+    for (const auto& field : stmt.body.fields) {
         std::string field_name = *field.variable->name.string;
         int field_constant = current_function()->add_constant(field_name);
         emit(OpCode::FIELD, field_constant);
         emit(field.attributes.to_ullong());
     }
 
-    for (auto& method : stmt->body.methods) {
+    for (auto& method : stmt.body.methods) {
         std::string method_name = *method.function->name.string;
         if (!method.attributes[ClassAttributes::ABSTRACT]) {
-            function(method.function, FunctionType::METHOD);
+            function(*method.function, FunctionType::METHOD);
         }
         int idx = current_function()->add_constant(method_name);
         emit(OpCode::METHOD, idx);
         emit(method.attributes.to_ullong()); // check size?
     }
 
-    if (stmt->body.constructor) { // TODO: always must have constructor!
-        bool has_super_class = static_cast<bool>(stmt->super_class);
-        constructor(*stmt->body.constructor, stmt->body.fields, has_super_class);
+    if (stmt.body.constructor) { // TODO: always must have constructor!
+        bool has_super_class = static_cast<bool>(stmt.super_class);
+        constructor(*stmt.body.constructor, stmt.body.fields, has_super_class);
     }
 
     emit(OpCode::CONSTRUCTOR);
 }
 
-void Compiler::expr_stmt(const AstNode<ExprStmt>& stmt) {
-    visit_expr(stmt->expr);
+void Compiler::expr_stmt(const ExprStmt& stmt) {
+    visit(*stmt.value);
     emit(OpCode::POP);
     current_context().on_stack--;
 }
 
-void Compiler::return_expr(const AstNode<ReturnExpr>& stmt) {
-    if (stmt->value) {
-        visit_expr(*stmt->value);
+void Compiler::return_expr(const ReturnExpr& stmt) {
+    if (stmt.value) {
+        visit(**stmt.value);
     } else {
         emit(OpCode::NIL);
         current_context().on_stack++;
@@ -732,70 +716,43 @@ void Compiler::return_expr(const AstNode<ReturnExpr>& stmt) {
     current_context().on_stack++;
 }
 
-void Compiler::if_expr(const AstNode<IfExpr>& stmt) {
-    visit_expr(stmt->condition);
+void Compiler::if_expr(const IfExpr& stmt) {
+    visit(*stmt.condition);
     // TODO: better control flow constructs this is kinda confusing
     int jump_to_else = current_function()->add_empty_jump_destination();
     emit(OpCode::JUMP_IF_FALSE, jump_to_else);
     // maybe combine these into utility some bytecode writer which tracks stack
     emit(OpCode::POP);
     current_context().on_stack--;
-    visit_expr(stmt->then_expr);
+    visit(*stmt.then_expr);
     auto jump_to_end = current_function()->add_empty_jump_destination();
     emit(OpCode::JUMP, jump_to_end);
     current_function()->patch_jump_destination(jump_to_else, current_program().size());
     emit(OpCode::POP); // confusing thing is we don't need to pop this off our stack counter (proof left as a exercise)
-    if (stmt->else_expr) {
+    if (stmt.else_expr) {
         current_context().on_stack--; // current result does not exist!
-        visit_expr(*stmt->else_expr);
+        visit(**stmt.else_expr);
     } else {
         emit(OpCode::NIL); // default return value!
     }
     current_function()->patch_jump_destination(jump_to_end, current_program().size());
 }
 
-void Compiler::visit_expr(const Expr& expression) {
-    std::visit(
-        overloaded {
-            [this](const AstNode<LiteralExpr>& expr) { literal_expr(expr); },
-            [this](const AstNode<UnaryExpr>& expr) { unary_expr(expr); },
-            [this](const AstNode<BinaryExpr>& expr) { binary_expr(expr); },
-            [this](const AstNode<StringLiteral>& expr) { string_expr(expr); },
-            [this](const AstNode<VariableExpr>& expr) { variable(expr); },
-            [this](const AstNode<CallExpr>& expr) { call_expr(expr); },
-            [this](const AstNode<GetPropertyExpr>& expr) { get_property_expr(expr); },
-            [this](const AstNode<SuperExpr>& expr) { super_expr(expr); },
-            [this](const AstNode<BlockExpr>& expr) { block_expr(expr); },
-            [this](const AstNode<IfExpr>& expr) { if_expr(expr); },
-            [this](const AstNode<LoopExpr>& expr) { loop_expr(expr); },
-            [this](const AstNode<BreakExpr>& expr) { break_expr(expr); },
-            [this](const AstNode<ContinueExpr>& expr) { continue_expr(expr); },
-            [this](const AstNode<WhileExpr>& expr) { while_expr(expr); },
-            [this](const AstNode<ForExpr>& expr) { for_expr(expr); },
-            [this](const AstNode<ReturnExpr>& expr) { return_expr(expr); },
-            [this](const AstNode<ThisExpr>&) { this_expr(); },
-            [this](const AstNode<ObjectExpr>& expr) { object_expr(expr); },
-            [](const AstNode<InvalidExpr>&) {}
-        },
-        expression
-    );
-}
-
-void Compiler::literal_expr(const AstNode<LiteralExpr>& expr) {
-    int index = current_function()->add_constant(expr->literal);
+void Compiler::literal_expr(const LiteralExpr& expr) {
+    int index = current_function()->add_constant(expr.value);
     emit(OpCode::CONSTANT, index);
     current_context().on_stack++;
 }
 
-void Compiler::string_expr(const AstNode<StringLiteral>& expr) {
-    int index = current_function()->add_constant(expr->string);
+void Compiler::string_expr(const StringExpr& expr) {
+    int index = current_function()->add_constant(expr.string);
     emit(OpCode::CONSTANT, index); // handle overflow!!!
     current_context().on_stack++;
 }
 
-void Compiler::unary_expr(const AstNode<UnaryExpr>& expr) {
-    visit_expr(expr->expr);
-    switch (expr->op) {
+void Compiler::unary_expr(const UnaryExpr& expr) {
+    visit(*expr.expr);
+    switch (expr.op) {
         case Token::Type::MINUS: emit(OpCode::NEGATE);
             break;
         case Token::Type::BANG: emit(OpCode::NOT);
@@ -806,36 +763,36 @@ void Compiler::unary_expr(const AstNode<UnaryExpr>& expr) {
     }
 }
 
-void Compiler::binary_expr(const AstNode<BinaryExpr>& expr) {
+void Compiler::binary_expr(const BinaryExpr& expr) {
     // we don't need to actually visit lhs for plain assigment
-    if (expr->op == Token::Type::EQUAL) {
-        visit_expr(expr->right);
+    if (expr.op == Token::Type::EQUAL) {
+        visit(*expr.right);
         // TODO: refactor?
-        if (std::holds_alternative<AstNode<GetPropertyExpr>>(expr->left)) {
-            visit_expr(std::get<AstNode<GetPropertyExpr>>(expr->left)->left);
+        if (std::holds_alternative<AstNode<GetPropertyExpr>>(expr.left)) {
+            visit(*std::get<AstNode<GetPropertyExpr>>(expr.left)->left);
         }
-        emit_set_variable(expr->binding);
+        emit_set_variable(expr.binding);
         current_context().on_stack--;
         return;
     }
-    visit_expr(expr->left);
+    visit(*expr.left);
     // we need handle logical expressions before we execute right side as they can short circut
-    if (expr->op == Token::Type::AND_AND || expr->op == Token::Type::BAR_BAR) {
+    if (expr.op == Token::Type::AND_AND || expr.op == Token::Type::BAR_BAR) {
         logical_expr(expr);
         current_context().on_stack--;
         return;
     }
 
-    visit_expr(expr->right);
+    visit(*expr.right);
 
     // TODO: refactor!!
-    if (std::holds_alternative<AstNode<GetPropertyExpr>>(expr->left) && (expr->op == Token::Type::EQUAL || expr->op ==
-        Token::Type::PLUS_EQUAL || expr->op == Token::Type::MINUS_EQUAL || expr->op == Token::Type::STAR_EQUAL || expr->
-        op == Token::Type::SLASH_EQUAL || expr->op == Token::Type::SLASH_SLASH_EQUAL || expr->op ==
-        Token::Type::AND_EQUAL || expr->op == Token::Type::CARET_EQUAL || expr->op == Token::Type::BAR_EQUAL)) {
-        visit_expr(std::get<AstNode<GetPropertyExpr>>(expr->left)->left);
+    if (std::holds_alternative<AstNode<GetPropertyExpr>>(expr.left) && (expr.op == Token::Type::EQUAL || expr.op ==
+        Token::Type::PLUS_EQUAL || expr.op == Token::Type::MINUS_EQUAL || expr.op == Token::Type::STAR_EQUAL || expr.
+        op == Token::Type::SLASH_EQUAL || expr.op == Token::Type::SLASH_SLASH_EQUAL || expr.op ==
+        Token::Type::AND_EQUAL || expr.op == Token::Type::CARET_EQUAL || expr.op == Token::Type::BAR_EQUAL)) {
+        visit(*std::get<AstNode<GetPropertyExpr>>(expr.left)->left);
     }
-    switch (expr->op) {
+    switch (expr.op) {
         case Token::Type::PLUS: emit(OpCode::ADD);
             break;
         case Token::Type::MINUS: emit(OpCode::SUBTRACT);
@@ -871,37 +828,37 @@ void Compiler::binary_expr(const AstNode<BinaryExpr>& expr) {
         case Token::Type::SLASH_SLASH: emit(OpCode::FLOOR_DIVISON);
             break;
         case Token::Type::PLUS_EQUAL: emit(OpCode::ADD);
-            emit_set_variable(expr->binding);
+            emit_set_variable(expr.binding);
             break;
         case Token::Type::MINUS_EQUAL: emit(OpCode::SUBTRACT);
-            emit_set_variable(expr->binding);
+            emit_set_variable(expr.binding);
             break;
         case Token::Type::STAR_EQUAL: emit(OpCode::MULTIPLY);
-            emit_set_variable(expr->binding);
+            emit_set_variable(expr.binding);
             break;
         case Token::Type::SLASH_EQUAL: emit(OpCode::DIVIDE);
-            emit_set_variable(expr->binding);
+            emit_set_variable(expr.binding);
             break;
         case Token::Type::SLASH_SLASH_EQUAL: emit(OpCode::FLOOR_DIVISON);
-            emit_set_variable(expr->binding);
+            emit_set_variable(expr.binding);
             break;
         case Token::Type::PERCENT_EQUAL: emit(OpCode::MODULO);
-            emit_set_variable(expr->binding);
+            emit_set_variable(expr.binding);
             break;
         case Token::Type::LESS_LESS_EQUAL: emit(OpCode::LEFT_SHIFT);
-            emit_set_variable(expr->binding);
+            emit_set_variable(expr.binding);
             break;
         case Token::Type::GREATER_GREATER_EQUAL: emit(OpCode::RIGHT_SHIFT);
-            emit_set_variable(expr->binding);
+            emit_set_variable(expr.binding);
             break;
         case Token::Type::AND_EQUAL: emit(OpCode::BITWISE_AND);
-            emit_set_variable(expr->binding);
+            emit_set_variable(expr.binding);
             break;
         case Token::Type::CARET_EQUAL: emit(OpCode::BITWISE_XOR);
-            emit_set_variable(expr->binding);
+            emit_set_variable(expr.binding);
             break;
         case Token::Type::BAR_EQUAL: emit(OpCode::BITWISE_OR);
-            emit_set_variable(expr->binding);
+            emit_set_variable(expr.binding);
             break;
         default: std::unreachable(); // panic
     }
@@ -985,38 +942,39 @@ void Compiler::emit_get_variable(const Binding& binding) {
     );
 }
 
-void Compiler::variable(const AstNode<VariableExpr>& expr) {
-    emit_get_variable(expr->binding);
+void Compiler::variable_expr(const VariableExpr& expr) {
+    emit_get_variable(expr.binding);
     current_context().on_stack++;
 }
 
-void Compiler::logical_expr(const AstNode<BinaryExpr>& expr) {
+void Compiler::logical_expr(const BinaryExpr& expr) {
     int jump = current_function()->add_empty_jump_destination();
-    emit(expr->op == Token::Type::AND_AND ? OpCode::JUMP_IF_FALSE : OpCode::JUMP_IF_TRUE, jump);
+    emit(expr.op == Token::Type::AND_AND ? OpCode::JUMP_IF_FALSE : OpCode::JUMP_IF_TRUE, jump);
     emit(OpCode::POP);
     current_context().on_stack--;
-    visit_expr(expr->right);
+    visit(*expr.right);
     current_function()->patch_jump_destination(jump, current_program().size());
 }
 
-void Compiler::call_expr(const AstNode<CallExpr>& expr) {
-    visit_expr(expr->callee);
-    for (const Expr& argument : expr->arguments) {
-        visit_expr(argument);
+void Compiler::call_expr(const CallExpr& expr) {
+    visit(*expr.callee);
+    for (auto& argument : expr.arguments) {
+        visit(*argument);
     }
-    emit(OpCode::CALL, expr->arguments.size()); // TODO: check
-    current_context().on_stack -= expr->arguments.size();
+    auto arguments_size = std::ranges::distance(arguments_size);
+    emit(OpCode::CALL, arguments_size); // TODO: check
+    current_context().on_stack -= arguments_size;
 }
 
-void Compiler::get_property_expr(const AstNode<GetPropertyExpr>& expr) {
-    visit_expr(expr->left);
-    std::string name = *expr->property.string;
+void Compiler::get_property_expr(const GetPropertyExpr& expr) {
+    visit(*expr.left);
+    std::string name = *expr.property.string;
     int constant = current_function()->add_constant(name);
     emit(OpCode::GET_PROPERTY, constant);
 }
 
-void Compiler::super_expr(const AstNode<SuperExpr>& expr) {
-    int constant = current_function()->add_constant(*expr->method.string);
+void Compiler::super_expr(const SuperExpr& expr) {
+    int constant = current_function()->add_constant(*expr.method.string);
     // or just resolve this in vm?
     emit(OpCode::THIS);
     emit(OpCode::GET_SUPER, constant);

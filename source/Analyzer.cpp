@@ -37,7 +37,7 @@ void bite::Analyzer::block_expr(BlockExpr& expr) {
     );
 }
 
-void bite::Analyzer::variable_declarataion(VariableDeclaration& stmt) {
+void bite::Analyzer::variable_declaration(VariableDeclaration& stmt) {
     if (stmt.value) {
         visit(*stmt.value.value());
     }
@@ -115,10 +115,10 @@ void bite::Analyzer::binary_expr(BinaryExpr& expr) {
         // TODO: FIX!
         if (expr.left->is_variable_expr()) {
             expr.binding = expr.left->as_variable_expr()->binding;
-        } else if (std::holds_alternative<AstNode<GetPropertyExpr>>(expr.left)) {
-            expr.binding = PropertyBinding(std::get<AstNode<GetPropertyExpr>>(expr.left).property.string);
-        } else if (std::holds_alternative<AstNode<SuperExpr>>(expr.left)) {
-            expr.binding = SuperBinding(std::get<AstNode<SuperExpr>>(expr.left).method.string);
+        } else if (expr.left->is_get_property_expr()) {
+            expr.binding = PropertyBinding(expr.left->as_get_property_expr()->property.string);
+        } else if (expr.left->is_super_expr()) {
+            expr.binding = SuperBinding(expr.as_super_expr()->method.string);
         } else {
             context->diagnostics.add(
                 {
@@ -225,7 +225,7 @@ void bite::Analyzer::for_expr(ForExpr& expr) {
         [this, &expr] {
             declare(expr.name.string, &expr);
             visit(*expr.iterable);
-            block_expr(expr.body);
+            block_expr(*expr.body);
         }
     );
 }

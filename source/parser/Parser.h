@@ -103,7 +103,7 @@ private:
     std::unique_ptr<ClassDeclaration> class_declaration(bool is_abstract = false);
     StructureBody structure_body(const Token& class_token);
 
-    AstNode<UsingStmt> using_statement();
+    UsingStmt using_statement();
     UsingStmtItem using_stmt_item();
     UsingStmtItem using_stmt_item_with_params(const Token& name, const bite::SourceSpan& span);
 
@@ -158,12 +158,12 @@ private:
     std::unique_ptr<BreakExpr> break_expression();
     std::unique_ptr<ContinueExpr> continue_expression();
     std::unique_ptr<ReturnExpr> return_expression();
-    AstNode<ObjectExpr> object_expression();
+    std::unique_ptr<ObjectExpr> object_expression();
     std::unique_ptr<Expr> labeled_expression();
     std::unique_ptr<LoopExpr> loop_expression(const std::optional<Token>& label = {});
     std::unique_ptr<WhileExpr> while_expression(const std::optional<Token>& label = {});
     std::unique_ptr<ForExpr> for_expression(const std::optional<Token>& label = {});
-    AstNode<BlockExpr> block(const std::optional<Token>& label = {});
+    std::unique_ptr<BlockExpr> block(const std::optional<Token>& label = {});
 
     std::unique_ptr<Expr> infix(std::unique_ptr<Expr> left);
     std::unique_ptr<GetPropertyExpr> dot(std::unique_ptr<Expr> left);

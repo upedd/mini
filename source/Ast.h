@@ -60,9 +60,9 @@
     V(NativeDeclaration, native_declaration) \
     V(TraitDeclaration, trait_declaration) \
     V(ObjectDeclaration, object_declaration) \
-    V(InvalidExpr, invalid_stmt) \
+    V(InvalidStmt, invalid_stmt) \
     V(InvalidExpr, invalid_expr)
-#define DEFINE_TYPE_ENUM(class_name, type_name) ##type_name,
+#define DEFINE_TYPE_ENUM(class_name, type_name) type_name,
 
 enum class NodeKind : std::uint8_t {
     AST_NODES(DEFINE_TYPE_ENUM)
@@ -77,7 +77,7 @@ public:
     virtual ~AstNode() = default;
 
     #define TYPE_METHODS(class_name, type_name) \
-        [[nodiscard]] virtual bool is_##type_name() const { return kind() == NodeKind::##type_name; } \
+        [[nodiscard]] virtual bool is_##type_name() const { return kind() == NodeKind::type_name; } \
         [[nodiscard]] class_name* as_##type_name();
 
     AST_NODES(TYPE_METHODS)
@@ -204,13 +204,14 @@ public:
 };
 
 class Expr : public AstNode {
+public:
     explicit Expr(bite::SourceSpan span) : AstNode(std::move(span)) {}
 };
 
 class Ast {
 public:
-    GlobalEnviroment enviroment;
     std::vector<std::unique_ptr<Stmt>> stmts;
+    GlobalEnviroment enviroment;
 };
 
 
@@ -414,8 +415,8 @@ public:
 
     explicit BreakExpr(
         bite::SourceSpan span,
-        std::optional<std::unique_ptr<Expr>> expr = {},
-        const std::optional<Token>& label = {},
+        std::optional<std::unique_ptr<Expr>> expr,
+        const std::optional<Token>& label,
         bite::SourceSpan label_span
     ) : Expr(std::move(span)),
         expr(std::move(expr)),
@@ -446,7 +447,7 @@ public:
 
     Token name;
     std::unique_ptr<Expr> iterable;
-    BlockExpr body;
+    std::unique_ptr<BlockExpr> body;
     std::optional<Token> label;
     DeclarationInfo info; // For iterator variable
 
@@ -454,7 +455,7 @@ public:
         bite::SourceSpan span,
         const Token& name,
         std::unique_ptr<Expr> iterable,
-        BlockExpr body,
+        std::unique_ptr<BlockExpr> body,
         const std::optional<Token>& label = {}
     ) : Expr(std::move(span)),
         name(name),
@@ -678,7 +679,7 @@ public:
     std::unique_ptr<Expr> object;
     DeclarationInfo info;
 
-    ObjectDeclaration(bite::SourceSpan& span, const Token& name, std::unique_ptr<Expr> object) : Stmt(std::move(span)),
+    ObjectDeclaration(bite::SourceSpan span, const Token& name, std::unique_ptr<Expr> object) : Stmt(std::move(span)),
         name(name),
         object(std::move(object)) {}
 };

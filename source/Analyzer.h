@@ -34,7 +34,7 @@ namespace bite {
 
         void analyze(Ast& ast);
         void block_expr(BlockExpr& expr);
-        void variable_declarataion(VariableDeclaration& stmt);
+        void variable_declaration(VariableDeclaration& stmt);
         void variable_expr(VariableExpr& expr);
         void expr_stmt(ExprStmt& stmt);
         void function_declaration(FunctionDeclaration& box);
@@ -54,12 +54,13 @@ namespace bite {
         void for_expr(ForExpr& expr);
         void return_expr(ReturnExpr& expr);
         void this_expr(ThisExpr& expr);
-        void string_expr() {}
+        void string_expr(StringExpr& /*unused*/) {}
         void super_expr(SuperExpr& expr);
         void object_expr(ObjectExpr& expr);
         void trait_declaration(TraitDeclaration& stmt);
-        void invalid_stmt() {}
-        void invalid_expr() {}
+        void invalid_stmt(InvalidStmt& /*unused*/) {}
+        void invalid_expr(InvalidExpr& /*unused*/) {}
+        void literal_expr(LiteralExpr& /*unused*/) {}
 
 
         // TODO: mess?
