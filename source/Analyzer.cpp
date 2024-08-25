@@ -120,7 +120,7 @@ void bite::Analyzer::binary_expr(BinaryExpr& expr) {
         } else if (std::holds_alternative<AstNode<SuperExpr>>(expr.left)) {
             expr.binding = SuperBinding(std::get<AstNode<SuperExpr>>(expr.left).method.string);
         } else {
-            context.diagnostics.add(
+            context->diagnostics.add(
                 {
                     .level = DiagnosticLevel::ERROR,
                     .message = "expected lvalue",
@@ -726,19 +726,13 @@ int64_t bite::Analyzer::handle_closure(
 
 Binding bite::Analyzer::resolve_without_upvalues(StringTable::Handle name, const SourceSpan& span) {
     for (auto node : node_stack | std::views::reverse) {
-        if (std::holds_alternative<StmtPtr>(node)) {
-            auto stmt = std::get<StmtPtr>(node);
-            if (std::holds_alternative<AstNode<FunctionStmt>*>(stmt)) {
-                auto* function = std::get<AstNode<FunctionStmt>*>(stmt);
-                if (auto binding = get_binding_in_function_enviroment((*function)->enviroment, name)) {
-                    return std::move(binding.value());
-                }
+        if (node->is_function_declaration()) {
+            if (auto binding = get_binding_in_function_enviroment(node->as_function_declaration()->enviroment, name)) {
+                return std::move(binding.value());
             }
-            if (std::holds_alternative<AstNode<ClassStmt>*>(stmt)) {
-                auto& klass = std::get<AstNode<ClassStmt>*>(stmt);
-                if (auto binding = get_binding_in_class_enviroment((*klass)->enviroment, name, span)) {
-                    return std::move(binding.value());
-                }
+        } else if (node->is_class_declaration()) {
+            if (auto binding = get_binding_in_class_enviroment(node->as_class_declaration()->enviroment, name, span)) {
+                return std::move(binding.value());
             }
         }
     }
@@ -761,11 +755,8 @@ Binding bite::Analyzer::resolve_without_upvalues(StringTable::Handle name, const
 Binding bite::Analyzer::resolve(StringTable::Handle name, const SourceSpan& span) {
     std::vector<std::reference_wrapper<FunctionEnviroment>> function_enviroments_visited;
     for (auto node : node_stack | std::views::reverse) {
-        if (std::holds_alternative<StmtPtr>(node)) {
-            auto stmt = std::get<StmtPtr>(node);
-            if (std::holds_alternative<AstNode<FunctionStmt>*>(stmt)) {
-                auto* function = std::get<AstNode<FunctionStmt>*>(stmt);
-                if (auto binding = get_binding_in_function_enviroment((*function)->enviroment, name)) {
+        if (node->is_function_declaration()) {
+            if (auto binding = get_binding_in_function_enviroment(node->as_function_declaration()->enviroment, name)) {
                     if (std::holds_alternative<LocalBinding>(*binding) && !function_enviroments_visited.empty()) {
                         capture_local(std::get<LocalBinding>(*binding).info);
                         return UpvalueBinding {
@@ -779,27 +770,18 @@ Binding bite::Analyzer::resolve(StringTable::Handle name, const SourceSpan& span
 
                     return std::move(binding.value());
                 }
-                function_enviroments_visited.emplace_back((*function)->enviroment);
+        }
+        if (node->is_class_declaration()) {
+            if (auto binding = get_binding_in_class_enviroment(node->as_class_declaration()->enviroment, name, span)) {
+                return std::move(binding.value());
             }
-            if (std::holds_alternative<AstNode<ClassStmt>*>(stmt)) {
-                auto& klass = std::get<AstNode<ClassStmt>*>(stmt);
-                if (auto binding = get_binding_in_class_enviroment((*klass)->enviroment, name, span)) {
-                    return std::move(binding.value());
-                }
+        } else if (node->is_trait_declaration()) {
+            if (auto binding = get_binding_in_trait_enviroment(node->as_trait_declaration()->enviroment, name)) {
+                return std::move(binding.value());
             }
-            if (std::holds_alternative<AstNode<TraitStmt>*>(stmt)) {
-                auto& trait = std::get<AstNode<TraitStmt>*>(stmt);
-                if (auto binding = get_binding_in_trait_enviroment((*trait)->enviroment, name)) {
-                    return std::move(binding.value());
-                }
-            }
-        } else if (std::holds_alternative<ExprPtr>(node)) {
-            auto expr = std::get<ExprPtr>(node);
-            if (std::holds_alternative<AstNode<ObjectExpr>*>(expr)) {
-                auto& object = std::get<AstNode<ObjectExpr>*>(expr);
-                if (auto binding = get_binding_in_class_enviroment((*object)->class_enviroment, name, span)) {
-                    return std::move(binding.value());
-                }
+        } else if (node->is_object_expr()) {
+            if (auto binding = get_binding_in_class_enviroment(node->as_object_expr()->class_enviroment, name, span)) {
+                return std::move(binding.value());
             }
         }
     }
@@ -827,12 +809,8 @@ Binding bite::Analyzer::resolve(StringTable::Handle name, const SourceSpan& span
 
 bool bite::Analyzer::is_in_loop() {
     for (auto node : node_stack) {
-        if (std::holds_alternative<ExprPtr>(node)) {
-            auto expr = std::get<ExprPtr>(node);
-            if (std::holds_alternative<AstNode<LoopExpr>*>(expr) || std::holds_alternative<AstNode<WhileExpr>*>(expr) ||
-                std::holds_alternative<AstNode<ForExpr>*>(expr)) {
-                return true;
-            }
+        if (node->is_loop_expr() || node->is_while_expr() || node->is_for_expr()) {
+            return true;
         }
     }
     return false;
@@ -840,7 +818,7 @@ bool bite::Analyzer::is_in_loop() {
 
 bool bite::Analyzer::is_in_function() {
     for (auto node : node_stack) {
-        if (node_is_function(node)) {
+        if (node->is_function_declaration()) {
             return true;
         }
     }
@@ -850,31 +828,31 @@ bool bite::Analyzer::is_in_function() {
 bool bite::Analyzer::is_there_matching_label(StringTable::Handle label_name) {
     for (auto node : node_stack | std::views::reverse) {
         // labels do not cross functions
-        if (node_is_function(node)) {
+        if (node->is_function_declaration()) {
             break;
         }
-        if (std::holds_alternative<ExprPtr>(node)) {
-            auto expr = std::get<ExprPtr>(node);
-            if (std::holds_alternative<AstNode<BlockExpr>*>(expr)) {
-                auto label = (*std::get<AstNode<BlockExpr>*>(expr))->label;
-                if (label && label->string == label_name) {
-                    return true;
-                }
-            } else if (std::holds_alternative<AstNode<WhileExpr>*>(expr)) {
-                auto label = (*std::get<AstNode<WhileExpr>*>(expr))->label;
-                if (label && label->string == label_name) {
-                    return true;
-                }
-            } else if (std::holds_alternative<AstNode<LoopExpr>*>(expr)) {
-                auto label = (*std::get<AstNode<LoopExpr>*>(expr))->label;
-                if (label && label->string == label_name) {
-                    return true;
-                }
-            } else if (std::holds_alternative<AstNode<ForExpr>*>(expr)) {
-                auto label = (*std::get<AstNode<ForExpr>*>(expr))->label;
-                if (label && label->string == label_name) {
-                    return true;
-                }
+        if (node->is_block_expr()) {
+            auto label = node->as_block_expr()->label;
+            if (label && label->string == label_name) {
+                return true;
+            }
+        }
+        if (node->is_loop_expr()) {
+            auto label = node->as_loop_expr()->label;
+            if (label && label->string == label_name) {
+                return true;
+            }
+        }
+        if (node->is_while_expr()) {
+            auto label = node->as_while_expr()->label;
+            if (label && label->string == label_name) {
+                return true;
+            }
+        }
+        if (node->is_for_expr()) {
+            auto label = node->as_for_expr()->label;
+            if (label && label->string == label_name) {
+                return true;
             }
         }
     }
@@ -883,11 +861,7 @@ bool bite::Analyzer::is_there_matching_label(StringTable::Handle label_name) {
 
 bool bite::Analyzer::is_in_class() {
     for (auto node : node_stack) {
-        if (std::holds_alternative<StmtPtr>(node) && std::holds_alternative<AstNode<ClassStmt>*>(
-            std::get<StmtPtr>(node)
-        ) || (std::holds_alternative<ExprPtr>(node) && std::holds_alternative<AstNode<ObjectExpr>*>(
-            std::get<ExprPtr>(node)
-        ))) {
+        if (node->is_class_declaration() || node->is_object_expr()) {
             return true;
         }
     }
@@ -896,18 +870,14 @@ bool bite::Analyzer::is_in_class() {
 
 bool bite::Analyzer::is_in_class_with_superclass() {
     for (auto node : node_stack) {
-        if ((std::holds_alternative<StmtPtr>(node) && std::holds_alternative<AstNode<ClassStmt>
-            *>(std::get<StmtPtr>(node)) && (*std::get<AstNode<ClassStmt>*>(std::get<StmtPtr>(node)))->super_class) || (
-            std::holds_alternative<ExprPtr>(node) && std::holds_alternative<AstNode<ObjectExpr>*>(
-                std::get<ExprPtr>(node)
-            ) && (*std::get<AstNode<ObjectExpr>*>(std::get<ExprPtr>(node)))->super_class)) {
+        if ((node->is_class_declaration() && node->as_class_declaration()->super_class) || (node->is_object_expr() && node->as_object_expr()->super_class)) {
             return true;
         }
     }
     return false;
 }
 
-std::optional<Node> bite::Analyzer::find_declaration(StringTable::Handle name, const SourceSpan& span) {
+std::optional<AstNode*> bite::Analyzer::find_declaration(StringTable::Handle name, const SourceSpan& span) {
     auto binding = resolve_without_upvalues(name, span);
     if (std::holds_alternative<GlobalBinding>(binding)) {
         return std::get<GlobalBinding>(binding).info->declaration;
@@ -989,7 +959,7 @@ void bite::Analyzer::handle_constructor(
     SourceSpan& name_span,
     ClassEnviroment* env,
     unordered_dense::map<StringTable::Handle, MemberInfo>& overrideable_members,
-    AstNode<ClassStmt>* superclass
+    ClassDeclaration* superclass
 ) {
     // TODO: we can maybe elimante has super from ClassStmt!
     if (!superclass && constructor.has_super) {
@@ -1007,8 +977,8 @@ void bite::Analyzer::handle_constructor(
         );
     }
 
-    if (superclass && (*superclass)->body.constructor) {
-        auto& superconstructor = *(*superclass)->body.constructor;
+    if (superclass && superclass->body.constructor) {
+        auto& superconstructor = *superclass->body.constructor;
         if (!superconstructor.function->params.empty() && !constructor.has_super) {
             // TODO: better diagnostic in default constructor
             // TODO: better constructor declspan
@@ -1030,16 +1000,17 @@ void bite::Analyzer::handle_constructor(
                 }
             );
         }
-        if (constructor.super_arguments.size() != superconstructor.function->params.size()) {
+        auto super_arguments_size = std::distance(constructor.super_arguments.begin(), constructor.super_arguments.end());
+        if (super_arguments_size != superconstructor.function->params.size()) {
             // TODO: not safe?
             emit_error_diagnostic(
                 std::format(
                     "expected {} arguments, but got {} in superconstructor call",
                     superconstructor.function->params.size(),
-                    constructor.super_arguments.size()
+                    super_arguments_size
                 ),
                 constructor.superconstructor_call_span,
-                std::format("provides {} arguments", constructor.super_arguments.size()),
+                std::format("provides {} arguments", super_arguments_size),
                 {
                     InlineHint {
                         .location = name_span,
@@ -1058,9 +1029,9 @@ void bite::Analyzer::handle_constructor(
             );
         }
     }
-    node_stack.emplace_back(&constructor.function);
+    node_stack.emplace_back(&*constructor.function);
     for (const auto& param : constructor.function->params) {
-        declare(param.string, &constructor.function);
+        declare(param.string, &*constructor.function);
     }
     for (auto& super_arg : constructor.super_arguments) {
         visit(*super_arg);
@@ -1092,13 +1063,13 @@ void bite::Analyzer::structure_body(
 ) {
     // TODO: init should be an reserved keyword
     unordered_dense::map<StringTable::Handle, MemberInfo> overrideable_members;
-    AstNode<ClassStmt> * superclass = nullptr;
+    ClassDeclaration* superclass = nullptr;
     if (super_class) {
         // TODO: refactor? better error message?
         superclass_binding = resolve(super_class->string, super_class_span);
         if (auto declaration = find_declaration(super_class->string, super_class_span)) {
-            if (auto class_stmt = stmt_from_node<AstNode<ClassStmt>*>(*declaration)) {
-                superclass = *class_stmt;
+            if (declaration && declaration.value()->is_class_declaration()) {
+                superclass = declaration.value()->as_class_declaration();
             } else {
                 emit_error_diagnostic(
                     "superclass must be a class",
@@ -1106,7 +1077,7 @@ void bite::Analyzer::structure_body(
                     "does not point to a class",
                     {
                         InlineHint {
-                            .location = get_span(*declaration),
+                            .location = declaration.value()->span,
                             .message = "defined here",
                             .level = DiagnosticLevel::INFO
                         }
@@ -1121,7 +1092,7 @@ void bite::Analyzer::structure_body(
             );
         }
         if (superclass) {
-            for (auto& [name, info] : (*superclass)->enviroment.members) {
+            for (auto& [name, info] : superclass->enviroment.members) {
                 if (info.attributes[ClassAttributes::PRIVATE]) {
                     continue;
                 }
@@ -1154,7 +1125,7 @@ void bite::Analyzer::structure_body(
     }
 
     // Must overrdie abstracts
-    if (!is_abstract && superclass && (*superclass)->is_abstract) {
+    if (!is_abstract && superclass && superclass->is_abstract) {
         for (const auto& [name, attr] : overrideable_members) {
             if (attr.attributes[ClassAttributes::ABSTRACT]) {
                 emit_error_diagnostic(
@@ -1179,8 +1150,8 @@ void bite::Analyzer::structure_body(
 
     for (auto& method : body.methods) {
         // TODO: refactor!
-        node_stack.emplace_back(&method.function);
-        function(method.function);
+        node_stack.emplace_back(&*method.function);
+        function(*method.function);
         node_stack.pop_back();
     }
 
@@ -1203,52 +1174,3 @@ void bite::Analyzer::structure_body(
         }
     }
 }
-
-// void bite::Analyzer::visit(*Stmt& statement) {
-//     // TODO: refactor?
-//     std::visit([this](auto& stmt) { node_stack.emplace_back(&stmt); }, statement);
-//     std::visit(
-//         overloaded {
-//             [this](AstNode<VarStmt>& stmt) { variable_declarataion(stmt); },
-//             [this](AstNode<FunctionStmt>& stmt) { function_declaration(stmt); },
-//             [this](AstNode<ExprStmt>& stmt) { expression_statement(stmt); },
-//             [this](AstNode<ClassStmt>& stmt) { class_declaration(stmt); },
-//             [this](AstNode<NativeStmt>& stmt) { native_declaration(stmt); },
-//             [this](AstNode<ObjectStmt>& stmt) { object_declaration(stmt); },
-//             [this](AstNode<TraitStmt>& stmt) { trait_declaration(stmt); },
-//             [this](AstNode<UsingStmt>&) {},
-//             [](AstNode<InvalidStmt>&) {},
-//         },
-//         statement
-//     );
-//     node_stack.pop_back();
-// }
-//
-// void bite::Analyzer::visit(*Expr& expression) {
-//     std::visit([this](auto& expr) { node_stack.emplace_back(&expr); }, expression);
-//     std::visit(
-//         overloaded {
-//             [this](AstNode<LiteralExpr>&) {},
-//             [this](AstNode<UnaryExpr>& expr) { unary_expr(expr); },
-//             [this](AstNode<BinaryExpr>& expr) { binary(expr); },
-//             [this](AstNode<StringLiteral>&) {},
-//             [this](AstNode<VariableExpr>& expr) { variable_expression(expr); },
-//             [this](AstNode<CallExpr>& expr) { call(expr); },
-//             [this](AstNode<GetPropertyExpr>& expr) { get_property(expr); },
-//             [this](AstNode<SuperExpr>& expr) { super_expr(expr); },
-//             [this](AstNode<BlockExpr>& expr) { block(expr); },
-//             [this](AstNode<IfExpr>& expr) { if_expression(expr); },
-//             [this](AstNode<LoopExpr>& expr) { loop_expression(expr); },
-//             [this](AstNode<BreakExpr>& expr) { break_expr(expr); },
-//             [this](AstNode<ContinueExpr>& expr) { continue_expr(expr); },
-//             [this](AstNode<WhileExpr>& expr) { while_expr(expr); },
-//             [this](AstNode<ForExpr>& expr) { for_expr(expr); },
-//             [this](AstNode<ReturnExpr>& expr) { return_expr(expr); },
-//             [this](AstNode<ThisExpr>& expr) { this_expr(expr); },
-//             [this](AstNode<ObjectExpr>& expr) { object_expr(expr); },
-//             [](AstNode<InvalidExpr>&) {}
-//         },
-//         expression
-//     );
-//     node_stack.pop_back();
-// }

@@ -209,6 +209,7 @@ class Expr : public AstNode {
 
 class Ast {
 public:
+    GlobalEnviroment enviroment;
     std::vector<std::unique_ptr<Stmt>> stmts;
 };
 

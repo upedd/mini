@@ -55,7 +55,7 @@ namespace bite {
         void return_expr(ReturnExpr& expr);
         void this_expr(ThisExpr& expr);
         void string_expr() {}
-        void super_expr( SuperExpr& expr);
+        void super_expr(SuperExpr& expr);
         void object_expr(ObjectExpr& expr);
         void trait_declaration(TraitDeclaration& stmt);
         void invalid_stmt() {}
@@ -136,11 +136,11 @@ namespace bite {
 
         void with_scope(const auto& fn) {
             for (auto node : node_stack | std::views::reverse) {
-                if (node_is_function(node)) {
-                    auto* function = std::get<AstNode<FunctionStmt>*>(std::get<StmtPtr>(node));
-                    (*function)->enviroment.locals.scopes.emplace_back();
+                if (node->is_function_declaration()) {
+                    auto* function = node->as_function_declaration();
+                    function->enviroment.locals.scopes.emplace_back();
                     fn();
-                    (*function)->enviroment.locals.scopes.pop_back();
+                    function->enviroment.locals.scopes.pop_back();
                     return;
                 }
             }
@@ -151,27 +151,19 @@ namespace bite {
 
         std::optional<AstNode*> find_declaration(StringTable::Handle name, const SourceSpan& span);
 
-        // template <typename T>
-        // std::optional<T> stmt_from_node(AstNode* node) {
-        //     if (std::holds_alternative<StmtPtr>(node) && std::holds_alternative<T>(std::get<StmtPtr>(node))) {
-        //         return std::get<T>(std::get<StmtPtr>(node));
-        //     }
-        //     return {};
-        // }
-
         void using_stmt(
-            AstNode<UsingStmt>& stmt,
+            UsingStmt& stmt,
             unordered_dense::map<StringTable::Handle, MemberInfo>& requirements,
             const auto& fn
         ) {
-            for (auto& item : stmt->items) {
+            for (auto& item : stmt.items) {
                 // Overlap with class
                 // TODO: better error messages, refactor?
-                AstNode<TraitStmt>* item_trait = nullptr;
+                TraitDeclaration* item_trait = nullptr;
                 item.binding = resolve(item.name.string, item.span);
                 if (auto declaration = find_declaration(item.name.string, item.span)) {
-                    if (auto item_trait_stmt = stmt_from_node<AstNode<TraitStmt>*>(*declaration)) {
-                        item_trait = *item_trait_stmt;
+                    if (declaration.value()->is_trait_declaration()) {
+                        item_trait = declaration.value()->as_trait_declaration();
                     } else {
                         emit_error_diagnostic(
                             "using item must be a trait",
@@ -179,7 +171,7 @@ namespace bite {
                             "does not point to trait type",
                             {
                                 InlineHint {
-                                    .location = get_span(*declaration),
+                                    .location = declaration.value()->span,
                                     .message = "defined here",
                                     .level = DiagnosticLevel::INFO
                                 }
@@ -198,7 +190,7 @@ namespace bite {
                     continue;
                 }
 
-                for (auto& [field_name, field_attr] : (*item_trait)->enviroment.members) {
+                for (auto& [field_name, field_attr] : item_trait->enviroment.members) {
                     //check if excluded
                     bool is_excluded = std::ranges::contains(item.exclusions, field_name, &Token::string);
 
@@ -222,7 +214,6 @@ namespace bite {
         }
 
 
-
         // TODO: refactor
         void check_member_declaration(
             SourceSpan& name_span,
@@ -240,11 +231,19 @@ namespace bite {
             SourceSpan& name_span,
             ClassEnviroment* env,
             unordered_dense::map<StringTable::Handle, MemberInfo>& overrideable_members,
-            AstNode<ClassStmt>* superclass
+            ClassDeclaration* superclass
         );
 
         // TODO: refactor. put class node in the object
-        void structure_body(StructureBody& body, std::optional<Token> super_class, Binding& superclass_binding, const SourceSpan& super_class_span, SourceSpan& name_span, ClassEnviroment* env, bool is_abstract);
+        void structure_body(
+            StructureBody& body,
+            std::optional<Token> super_class,
+            Binding& superclass_binding,
+            const SourceSpan& super_class_span,
+            SourceSpan& name_span,
+            ClassEnviroment* env,
+            bool is_abstract
+        );
 
     private:
         std::vector<AstNode*> node_stack;

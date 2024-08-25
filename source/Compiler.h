@@ -7,7 +7,7 @@
 #include "parser/Parser.h"
 
 
-class Compiler {
+class Compiler : AstVisitor {
 public:
     class Error : public std::runtime_error {
     public:
@@ -157,11 +157,11 @@ public:
 
     void this_expr();
 
-    void object_expression(const AstNode<ObjectExpr>& expr);
+    void object_expr(const ObjectExpr& expr);
 
-    void object_statement(const AstNode<ObjectStmt>& stmt);
+    void object_declaration(const ObjectDeclaration& stmt);
 
-    void trait_statement(const AstNode<TraitStmt>& stmt);
+    void trait_declaration(const TraitDeclaration& stmt);
 
 private:
     void start_context(Function* function, FunctionType type);
@@ -180,44 +180,44 @@ private:
     void define_variable(const DeclarationInfo& info);
     int64_t synthetic_variable();
 
-    void variable_declaration(const AstNode<VarStmt>& expr);
-    void function_declaration(const AstNode<FunctionStmt>& stmt);
-    void function(const AstNode<FunctionStmt>& stmt, FunctionType type);
+    void variable_declaration(const VariableDeclaration& expr);
+    void function_declaration(const FunctionDeclaration& stmt);
+    void function(const FunctionDeclaration& stmt, FunctionType type);
 
     void constructor(const Constructor& stmt, const std::vector<Field>& fields, bool has_superclass);
 
-    void class_declaration(const AstNode<ClassStmt>& stmt);
-    void expr_statement(const AstNode<ExprStmt>& stmt);
-    void native_declaration(const AstNode<NativeStmt>& stmt);
+    void class_declaration(const ClassDeclaration& stmt);
+    void expr_stmt(const ExprStmt& stmt);
+    void native_declaration(const NativeDeclaration& stmt);
 
-    void if_expression(const AstNode<IfExpr>& stmt);
+    void if_expr(const AstNode<IfExpr>& stmt);
 
     void visit_expr(const Expr& expr);
 
-    void block(const AstNode<BlockExpr>& expr);
-    void loop_expression(const AstNode<LoopExpr>& expr);
+    void block_expr(const AstNode<BlockExpr>& expr);
+    void loop_expr(const AstNode<LoopExpr>& expr);
     void pop_out_of_scopes(int64_t depth);
     void break_expr(const AstNode<BreakExpr>& expr);
     void continue_expr(const AstNode<ContinueExpr>& expr);
     void while_expr(const AstNode<WhileExpr>& expr);
     void for_expr(const AstNode<ForExpr>& expr);
-    void return_expression(const AstNode<ReturnExpr>& stmt);
+    void return_expr(const AstNode<ReturnExpr>& stmt);
 
-    void literal(const AstNode<LiteralExpr>& expr);
-    void string_literal(const AstNode<StringLiteral>& expr);
-    void unary(const AstNode<UnaryExpr>& expr);
+    void literal_expr(const AstNode<LiteralExpr>& expr);
+    void string_expr(const AstNode<StringLiteral>& expr);
+    void unary_expr(const AstNode<UnaryExpr>& expr);
 
-    void binary(const AstNode<BinaryExpr>& expr);
+    void binary_expr(const AstNode<BinaryExpr>& expr);
     void emit_set_variable(const Binding& binding);
 
     void emit_get_variable(const Binding& binding);
 
-    void logical(const AstNode<BinaryExpr>& expr);
+    void logical_expr(const AstNode<BinaryExpr>& expr);
 
-    void variable(const AstNode<VariableExpr>& expr);
-    void call(const AstNode<CallExpr>& expr);
-    void get_property(const AstNode<GetPropertyExpr>& expr);
-    void super(const AstNode<SuperExpr>& expr);
+    void variable_expr(const AstNode<VariableExpr>& expr);
+    void call_expr(const AstNode<CallExpr>& expr);
+    void get_property_expr(const AstNode<GetPropertyExpr>& expr);
+    void super_expr(const AstNode<SuperExpr>& expr);
 
     Parser parser;
     Function main;
