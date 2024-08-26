@@ -23,14 +23,19 @@ void bite::Analyzer::analyze(Ast& ast) {
 
 void bite::Analyzer::block_expr(BlockExpr& expr) {
     // investigate performance
-    with_scope(
+    with_context(
+        expr,
         [&expr, this] {
-            for (auto& stmt : expr.stmts) {
-                visit(*stmt);
-            }
-            if (expr.expr) {
-                visit(*expr.expr.value());
-            }
+            with_scope(
+                [&expr, this] {
+                    for (auto& stmt : expr.stmts) {
+                        visit(*stmt);
+                    }
+                    if (expr.expr) {
+                        visit(*expr.expr.value());
+                    }
+                }
+            );
         }
     );
 }
@@ -56,12 +61,17 @@ void bite::Analyzer::function_declaration(FunctionDeclaration& stmt) {
 }
 
 void bite::Analyzer::function(FunctionDeclaration& stmt) {
-    for (const auto& param : stmt.params) {
-        declare(param.string, &stmt, &stmt.info);
-    }
-    if (stmt.body) {
-        visit(*stmt.body.value());
-    }
+    with_context(
+        stmt,
+        [this, &stmt] {
+            for (const auto& param : stmt.params) {
+                declare(param.string, &stmt, &stmt.info);
+            }
+            if (stmt.body) {
+                visit(*stmt.body.value());
+            }
+        }
+    );
 }
 
 void bite::Analyzer::native_declaration(NativeDeclaration& stmt) {
@@ -70,23 +80,31 @@ void bite::Analyzer::native_declaration(NativeDeclaration& stmt) {
 
 void bite::Analyzer::class_declaration(ClassDeclaration& stmt) {
     declare(stmt.name.string, &stmt, &stmt.info);
-    auto* env = current_class_enviroment(); // assert non-null
-    env->class_name = stmt.name.string;
-    if (stmt.body.class_object) {
-        env->class_object_enviroment = &(*stmt.body.class_object)->class_enviroment;
-        node_stack.emplace_back(&*stmt.body.class_object.value());
-        object_expr(*stmt.body.class_object.value());
-        node_stack.pop_back();
-    }
+    with_context(
+        stmt,
+        [this, &stmt] {
+            auto* env = current_class_enviroment(); // assert non-null
+            env->class_name = stmt.name.string;
+            if (stmt.body.class_object) {
+                env->class_object_enviroment = &(*stmt.body.class_object)->class_enviroment;
+                with_context(
+                    *stmt.body.class_object.value(),
+                    [this, &stmt] {
+                        object_expr(*stmt.body.class_object.value());
+                    }
+                );
+            }
 
-    structure_body(
-        stmt.body,
-        stmt.super_class,
-        stmt.superclass_binding,
-        stmt.super_class_span,
-        stmt.name_span,
-        env,
-        stmt.is_abstract
+            structure_body(
+                stmt.body,
+                stmt.super_class,
+                stmt.superclass_binding,
+                stmt.super_class_span,
+                stmt.name_span,
+                env,
+                stmt.is_abstract
+            );
+        }
     );
 }
 
@@ -101,7 +119,7 @@ void bite::Analyzer::unary_expr(UnaryExpr& expr) {
 
 void bite::Analyzer::binary_expr(BinaryExpr& expr) {
     // TODO: refactor!
-    // make sure to first visit right side!
+    // make sure to first analyze right side!
     visit(*expr.right);
     visit(*expr.left);
     // Special handling for assigment
@@ -109,8 +127,6 @@ void bite::Analyzer::binary_expr(BinaryExpr& expr) {
         expr.op == Token::Type::STAR_EQUAL || expr.op == Token::Type::SLASH_EQUAL || expr.op ==
         Token::Type::SLASH_SLASH_EQUAL || expr.op == Token::Type::AND_EQUAL || expr.op == Token::Type::CARET_EQUAL ||
         expr.op == Token::Type::BAR_EQUAL) {
-        // TODO: handle more lvalues
-        // TODO: FIX!
         if (expr.left->is_variable_expr()) {
             expr.binding = expr.left->as_variable_expr()->binding;
         } else if (expr.left->is_get_property_expr()) {
@@ -118,20 +134,7 @@ void bite::Analyzer::binary_expr(BinaryExpr& expr) {
         } else if (expr.left->is_super_expr()) {
             expr.binding = SuperBinding(expr.as_super_expr()->method.string);
         } else {
-            context->diagnostics.add(
-                {
-                    .level = DiagnosticLevel::ERROR,
-                    .message = "expected lvalue",
-                    .inline_hints = {
-                        InlineHint {
-                            .location = expr.left->span,
-                            .message = "is not an lvalue",
-                            .level = DiagnosticLevel::ERROR
-                        }
-                    }
-                }
-            );
-            m_has_errors = true;
+            emit_error_diagnostic("expected lvalue", expr.left->span, "is not an lvalue");
         }
     }
 }
@@ -156,26 +159,18 @@ void bite::Analyzer::if_expr(IfExpr& expr) {
 }
 
 void bite::Analyzer::loop_expr(LoopExpr& expr) {
-    block_expr(*expr.body);
+    with_context(
+        expr,
+        [this, &expr] {
+            visit(*expr.body);
+        }
+    );
 }
 
 void bite::Analyzer::break_expr(BreakExpr& expr) {
     // TODO better break expr analyzing!
     if (expr.label && !is_there_matching_label(expr.label->string)) {
-        context->diagnostics.add(
-            {
-                .level = DiagnosticLevel::ERROR,
-                .message = "unresolved label",
-                .inline_hints = {
-                    InlineHint {
-                        .location = expr.label_span,
-                        .message = "no matching label found",
-                        .level = DiagnosticLevel::ERROR
-                    }
-                }
-            }
-        );
-        m_has_errors = true;
+        emit_error_diagnostic("unresolved label", expr.label_span, "no matching label found");
     }
     if (expr.expr) {
         visit(*expr.expr.value());
@@ -184,38 +179,21 @@ void bite::Analyzer::break_expr(BreakExpr& expr) {
 
 void bite::Analyzer::continue_expr(ContinueExpr& expr) {
     if (!is_in_loop()) {
-        context->diagnostics.add(
-            {
-                .level = DiagnosticLevel::ERROR,
-                .message = "continue expression outside of loop",
-                .inline_hints = {
-                    InlineHint { .location = expr.span, .message = "here", .level = DiagnosticLevel::ERROR }
-                }
-            }
-        );
-        m_has_errors = true;
+        emit_error_diagnostic("continue expression outside of loop", expr.span, "here");
     }
     if (expr.label && !is_there_matching_label(expr.label->string)) {
-        context->diagnostics.add(
-            {
-                .level = DiagnosticLevel::ERROR,
-                .message = "unresolved label",
-                .inline_hints = {
-                    InlineHint {
-                        .location = expr.label_span,
-                        .message = "no matching label found",
-                        .level = DiagnosticLevel::ERROR
-                    }
-                }
-            }
-        );
-        m_has_errors = true;
+        emit_error_diagnostic("unresolved label", expr.label_span, "no matching label found");
     }
 }
 
 void bite::Analyzer::while_expr(WhileExpr& expr) {
     visit(*expr.condition);
-    block_expr(*expr.body);
+    with_context(
+        expr,
+        [this, &expr] {
+            visit(*expr.body);
+        }
+    );
 }
 
 void bite::Analyzer::for_expr(ForExpr& expr) {
@@ -223,23 +201,19 @@ void bite::Analyzer::for_expr(ForExpr& expr) {
         [this, &expr] {
             declare(expr.name.string, &expr, &expr.info);
             visit(*expr.iterable);
-            block_expr(*expr.body);
+            with_context(
+                expr,
+                [this, &expr] {
+                    visit(*expr.body);
+                }
+            );
         }
     );
 }
 
 void bite::Analyzer::return_expr(ReturnExpr& expr) {
     if (!is_in_function()) {
-        context->diagnostics.add(
-            {
-                .level = DiagnosticLevel::ERROR,
-                .message = "return expression outside of function",
-                .inline_hints = {
-                    InlineHint { .location = expr.span, .message = "here", .level = DiagnosticLevel::ERROR }
-                }
-            }
-        );
-        m_has_errors = true;
+        emit_error_diagnostic("return expression outside of function", expr.span, "here");
     }
     if (expr.value) {
         visit(*expr.value.value());
@@ -248,104 +222,86 @@ void bite::Analyzer::return_expr(ReturnExpr& expr) {
 
 void bite::Analyzer::this_expr(ThisExpr& expr) {
     if (!is_in_class()) {
-        context->diagnostics.add(
-            {
-                .level = DiagnosticLevel::ERROR,
-                .message = "'this' outside of class member",
-                .inline_hints = {
-                    InlineHint { .location = expr.span, .message = "here", .level = DiagnosticLevel::ERROR }
-                }
-            }
-        );
-        m_has_errors = true;
+        emit_error_diagnostic("'this' outside of class member", expr.span, "here");
     }
 }
 
 void bite::Analyzer::super_expr(SuperExpr& expr) {
     if (!is_in_class_with_superclass()) {
-        context->diagnostics.add(
-            {
-                .level = DiagnosticLevel::ERROR,
-                .message = "'super' outside of class with superclass",
-                .inline_hints = {
-                    InlineHint { .location = expr.span, .message = "here", .level = DiagnosticLevel::ERROR }
-                }
-            }
-        );
-        m_has_errors = true;
+        emit_error_diagnostic("'super' outside of class with superclass", expr.span, "here");
     }
 }
 
 void bite::Analyzer::object_expr(ObjectExpr& expr) {
-    auto* env = current_class_enviroment(); // assert non-null
-    if (expr.body.class_object) {
-        // TODO: better error message
-        // TODO: multiline error!
-        context->diagnostics.add(
-            {
-                .level = DiagnosticLevel::ERROR,
-                .message = "object cannot contain another object",
-                .inline_hints = {
-                    InlineHint {
-                        .location = expr.body.class_object.value()->span,
-                        .message = "",
-                        .level = DiagnosticLevel::ERROR
-                    }
-                }
+    with_context(
+        expr,
+        [this, &expr] {
+            auto* env = current_class_enviroment(); // assert non-null
+            if (expr.body.class_object) {
+                // TODO: better error message
+                // TODO: multiline error!
+                emit_error_diagnostic("object cannot contain another object", expr.body.class_object.value()->span, "");
             }
-        );
-        m_has_errors = true;
-    }
-    // TODO: disallow constructors in objects
-    structure_body(
-        expr.body,
-        expr.super_class,
-        expr.superclass_binding,
-        expr.super_class_span,
-        expr.name_span,
-        env,
-        false
+            // TODO: disallow constructors in objects
+            structure_body(
+                expr.body,
+                expr.super_class,
+                expr.superclass_binding,
+                expr.super_class_span,
+                expr.name_span,
+                env,
+                false
+            );
+        }
     );
 }
 
 void bite::Analyzer::trait_declaration(TraitDeclaration& stmt) {
     declare(stmt.name.string, &stmt, &stmt.info);
-    auto* env = current_trait_enviroment();
-    unordered_dense::map<StringTable::Handle, MemberInfo> requirements; // TODO: should contain attr as well i guess?
-    for (auto& using_stmt_node : stmt.using_stmts) {
-        using_stmt(
-            using_stmt_node,
-            requirements,
-            [this, env](StringTable::Handle name, const MemberInfo& info) {
-                declare_in_trait_enviroment(*env, name, info);
+    with_context(
+        stmt,
+        [this, &stmt] {
+            auto* env = current_trait_enviroment();
+            unordered_dense::map<StringTable::Handle, MemberInfo> requirements;
+            // TODO: should contain attr as well i guess?
+            for (auto& using_stmt_node : stmt.using_stmts) {
+                using_stmt(
+                    using_stmt_node,
+                    requirements,
+                    [this, env](StringTable::Handle name, const MemberInfo& info) {
+                        declare_in_trait_enviroment(*env, name, info);
+                    }
+                );
             }
-        );
-    }
 
-    for (auto& field : stmt.fields) {
-        declare_in_trait_enviroment(*env, field.variable->name.string, MemberInfo(field.attributes, field.span));
-    }
-    // hoist methods
-    for (auto& method : stmt.methods) {
-        declare_in_trait_enviroment(
-            *env,
-            method.function->name.string,
-            MemberInfo(method.attributes, method.decl_span)
-        );
-    }
-    for (auto& method : stmt.methods) {
-        node_stack.emplace_back(&*method.function);
-        function(*method.function);
-        node_stack.pop_back();
-    }
-    // TODO: check
-    // TODO: ranges
-    // TODO: passing attributes
-    for (auto& [name, info] : requirements) {
-        if (!env->members.contains(name)) {
-            env->requirements[name] = info;
+            for (auto& field : stmt.fields) {
+                declare_in_trait_enviroment(
+                    *env,
+                    field.variable->name.string,
+                    MemberInfo(field.attributes, field.span)
+                );
+            }
+            // hoist methods
+            for (auto& method : stmt.methods) {
+                declare_in_trait_enviroment(
+                    *env,
+                    method.function->name.string,
+                    MemberInfo(method.attributes, method.decl_span)
+                );
+            }
+            for (auto& method : stmt.methods) {
+                visit(*method.function);
+            }
+            // TODO: check
+            // TODO: ranges
+            // TODO: passing attributes
+            for (auto& [name, info] : requirements) {
+                if (!env->members.contains(name)) {
+                    env->requirements[name] = info;
+                }
+            }
         }
-    }
+    );
 }
 
 void bite::Analyzer::declare_in_function_enviroment(
@@ -357,40 +313,24 @@ void bite::Analyzer::declare_in_function_enviroment(
     if (env.locals.scopes.empty()) {
         if (std::ranges::contains(env.parameters, name)) {
             // TODO: better error message, point to original
-            context->diagnostics.add(
-                {
-                    .level = DiagnosticLevel::ERROR,
-                    .message = "duplicate parameter name",
-                    .inline_hints = {
-                        InlineHint { .location = declaration->span, .message = "here", .level = DiagnosticLevel::ERROR }
-                    }
-                }
-            );
-            m_has_errors = true;
+            emit_error_diagnostic("duplicate parameter name", declaration->span, "here");
         }
         env.parameters.push_back(name);
     } else {
         for (auto& local : env.locals.scopes.back()) {
             if (local.name == name) {
-                context->diagnostics.add(
+                emit_error_diagnostic(
+                    "variable redeclared in the same scope",
+                    declaration->span,
+                    "new declaration here",
                     {
-                        .level = DiagnosticLevel::ERROR,
-                        .message = "variable redeclared in the same scope",
-                        .inline_hints = {
-                            InlineHint {
-                                .location = declaration->span,
-                                .message = "new declaration here",
-                                .level = DiagnosticLevel::ERROR
-                            },
-                            InlineHint {
-                                .location = local.declaration->declaration->span,
-                                .message = "originally declared here",
-                                .level = DiagnosticLevel::INFO
-                            }
+                        InlineHint {
+                            .location = local.declaration->declaration->span,
+                            .message = "originally declared here",
+                            .level = DiagnosticLevel::INFO
                         }
                     }
                 );
-                m_has_errors = true;
             }
         }
         // assert not-null probably
@@ -423,25 +363,18 @@ void bite::Analyzer::declare_in_class_enviroment(
             return;
         }
 
-        context->diagnostics.add(
+        emit_error_diagnostic(
+            "class member name conflict",
+            attributes.decl_span,
+            "new declaration here",
             {
-                .level = DiagnosticLevel::ERROR,
-                .message = "class member name conflict",
-                .inline_hints = {
-                    InlineHint {
-                        .location = attributes.decl_span,
-                        .message = "new declaration here",
-                        .level = DiagnosticLevel::ERROR
-                    },
-                    InlineHint {
-                        .location = env.members[name].decl_span,
-                        .message = "originally declared here",
-                        .level = DiagnosticLevel::INFO
-                    }
+                InlineHint {
+                    .location = env.members[name].decl_span,
+                    .message = "originally declared here",
+                    .level = DiagnosticLevel::INFO
                 }
             }
         );
-        m_has_errors = true;
     }
     env.members[name] = attributes;
 }
@@ -463,25 +396,18 @@ void bite::Analyzer::declare_in_trait_enviroment(
             member_attr.attributes += ClassAttributes::SETTER;
             return;
         }
-        context->diagnostics.add(
+        emit_error_diagnostic(
+            "trait member name conflict",
+            attributes.decl_span,
+            "new declaration here",
             {
-                .level = DiagnosticLevel::ERROR,
-                .message = "trait member name conflict",
-                .inline_hints = {
-                    InlineHint {
-                        .location = attributes.decl_span,
-                        .message = "new declaration here",
-                        .level = DiagnosticLevel::ERROR
-                    },
-                    InlineHint {
-                        .location = env.members[name].decl_span,
-                        .message = "originally declared here",
-                        .level = DiagnosticLevel::INFO
-                    }
+                InlineHint {
+                    .location = env.members[name].decl_span,
+                    .message = "originally declared here",
+                    .level = DiagnosticLevel::INFO
                 }
             }
         );
-        m_has_errors = true;
     }
     env.members[name] = attributes;
 }
@@ -494,50 +420,36 @@ void bite::Analyzer::declare_in_global_enviroment(
 ) {
     if (env.locals.scopes.empty()) {
         if (env.globals.contains(name)) {
-            context->diagnostics.add(
+            emit_error_diagnostic(
+                "global variable name conflict",
+                declaration->span,
+                "new declaration here",
                 {
-                    .level = DiagnosticLevel::ERROR,
-                    .message = "global variable name conflict",
-                    .inline_hints = {
-                        InlineHint {
-                            .location = declaration->span,
-                            .message = "new declaration here",
-                            .level = DiagnosticLevel::ERROR
-                        },
-                        InlineHint {
-                            .location = env.globals[name]->declaration->span,
-                            .message = "originally declared here",
-                            .level = DiagnosticLevel::INFO
-                        }
+                    InlineHint {
+                        .location = env.globals[name]->declaration->span,
+                        .message = "originally declared here",
+                        .level = DiagnosticLevel::INFO
                     }
                 }
             );
-            m_has_errors = true;
         }
         *declaration_info = GlobalDeclarationInfo { .declaration = declaration, .name = name };
         env.globals[name] = reinterpret_cast<GlobalDeclarationInfo*>(declaration_info);
     } else {
         for (auto& local : env.locals.scopes.back()) {
             if (local.name == name) {
-                context->diagnostics.add(
+                emit_error_diagnostic(
+                    "variable redeclared in the same scope",
+                    declaration->span,
+                    "new declaration here",
                     {
-                        .level = DiagnosticLevel::ERROR,
-                        .message = "variable redeclared in the same scope",
-                        .inline_hints = {
-                            InlineHint {
-                                .location = declaration->span,
-                                .message = "new declaration here",
-                                .level = DiagnosticLevel::ERROR
-                            },
-                            InlineHint {
-                                .location = local.declaration->declaration->span,
-                                .message = "originally declared here",
-                                .level = DiagnosticLevel::INFO
-                            }
+                        InlineHint {
+                            .location = local.declaration->declaration->span,
+                            .message = "originally declared here",
+                            .level = DiagnosticLevel::INFO
                         }
                     }
                 );
-                m_has_errors = true;
             }
         }
         *declaration_info = LocalDeclarationInfo {
@@ -552,7 +464,7 @@ void bite::Analyzer::declare_in_global_enviroment(
 }
 
 void bite::Analyzer::declare(StringTable::Handle name, AstNode* declaration, DeclarationInfo* declaration_info) {
-    for (auto* node : node_stack | std::views::reverse) {
+    for (auto* node : context_nodes | std::views::reverse) {
         if (node->is_function_declaration()) {
             declare_in_function_enviroment(
                 node->as_function_declaration()->enviroment,
@@ -566,7 +478,7 @@ void bite::Analyzer::declare(StringTable::Handle name, AstNode* declaration, Dec
 }
 
 ClassEnviroment* bite::Analyzer::current_class_enviroment() {
-    for (auto* node : node_stack | std::views::reverse) {
+    for (auto* node : context_nodes | std::views::reverse) {
         if (node->is_class_declaration()) {
             return &node->as_class_declaration()->enviroment;
         }
@@ -578,7 +490,7 @@ ClassEnviroment* bite::Analyzer::current_class_enviroment() {
 }
 
 TraitEnviroment* bite::Analyzer::current_trait_enviroment() {
-    for (auto* node : node_stack | std::views::reverse) {
+    for (auto* node : context_nodes | std::views::reverse) {
         if (node->is_trait_declaration()) {
             return &node->as_trait_declaration()->enviroment;
         }
@@ -592,7 +504,7 @@ void bite::Analyzer::declare_in_outer(
     DeclarationInfo* declaration_info
 ) {
     bool skipped = false;
-    for (auto* node : node_stack | std::views::reverse) {
+    for (auto* node : context_nodes | std::views::reverse) {
         if (node->is_function_declaration()) {
             if (!skipped) {
                 skipped = true;
@@ -695,13 +607,13 @@ int64_t bite::Analyzer::add_upvalue(FunctionEnviroment& enviroment, const UpValu
 }
 
 int64_t bite::Analyzer::handle_closure(
-    const std::vector<std::reference_wrapper<FunctionEnviroment>>& enviroments_visited,
+    const std::vector<std::reference_wrapper<FunctionEnviroment>>& enviroments_analyzeed,
     StringTable::Handle name,
     int64_t local_index
 ) {
     bool is_local = true;
     int64_t value = local_index;
-    for (const auto& enviroment : enviroments_visited | std::views::reverse) {
+    for (const auto& enviroment : enviroments_analyzeed | std::views::reverse) {
         value = add_upvalue(enviroment, UpValue { .idx = value, .local = is_local });
         if (is_local) {
             // Only top level can be pointing to an local variable
@@ -712,7 +624,7 @@ int64_t bite::Analyzer::handle_closure(
 }
 
 Binding bite::Analyzer::resolve_without_upvalues(StringTable::Handle name, const SourceSpan& span) {
-    for (auto* node : node_stack | std::views::reverse) {
+    for (auto* node : context_nodes | std::views::reverse) {
         if (node->is_function_declaration()) {
             if (auto binding = get_binding_in_function_enviroment(node->as_function_declaration()->enviroment, name)) {
                 return std::move(binding.value());
@@ -728,27 +640,20 @@ Binding bite::Analyzer::resolve_without_upvalues(StringTable::Handle name, const
     }
 
     // TODO: better error
-    context->diagnostics.add(
-        {
-            .level = DiagnosticLevel::ERROR,
-            .message = std::format("unresolved variable: {}", *name),
-            .inline_hints = { InlineHint { .location = span, .message = "here", .level = DiagnosticLevel::ERROR } }
-        }
-    );
-    m_has_errors = true;
+    emit_error_diagnostic(std::format("unresolved variable: {}", *name), span, "here");
     return NoBinding();
 }
 
 Binding bite::Analyzer::resolve(StringTable::Handle name, const SourceSpan& span) {
-    std::vector<std::reference_wrapper<FunctionEnviroment>> function_enviroments_visited;
-    for (auto* node : node_stack | std::views::reverse) {
+    std::vector<std::reference_wrapper<FunctionEnviroment>> function_enviroments_analyzeed;
+    for (auto* node : context_nodes | std::views::reverse) {
         if (node->is_function_declaration()) {
             if (auto binding = get_binding_in_function_enviroment(node->as_function_declaration()->enviroment, name)) {
-                if (std::holds_alternative<LocalBinding>(*binding) && !function_enviroments_visited.empty()) {
+                if (std::holds_alternative<LocalBinding>(*binding) && !function_enviroments_analyzeed.empty()) {
                     capture_local(std::get<LocalBinding>(*binding).info);
                     return UpvalueBinding {
                             handle_closure(
-                                function_enviroments_visited,
+                                function_enviroments_analyzeed,
                                 name,
                                 std::get<LocalBinding>(*binding).info->idx
                             )
@@ -773,29 +678,22 @@ Binding bite::Analyzer::resolve(StringTable::Handle name, const SourceSpan& span
         }
     }
     if (auto binding = get_binding_in_global_enviroment(ast->enviroment, name)) {
-        if (std::holds_alternative<LocalBinding>(*binding) && !function_enviroments_visited.empty()) {
+        if (std::holds_alternative<LocalBinding>(*binding) && !function_enviroments_analyzeed.empty()) {
             capture_local(std::get<LocalBinding>(*binding).info);
             return UpvalueBinding {
-                    handle_closure(function_enviroments_visited, name, std::get<LocalBinding>(*binding).info->idx)
+                    handle_closure(function_enviroments_analyzeed, name, std::get<LocalBinding>(*binding).info->idx)
                 };
         }
 
         return std::move(binding.value());
     }
     // TODO: better error
-    context->diagnostics.add(
-        {
-            .level = DiagnosticLevel::ERROR,
-            .message = std::format("unresolved variable: {}", *name),
-            .inline_hints = { InlineHint { .location = span, .message = "here", .level = DiagnosticLevel::ERROR } }
-        }
-    );
-    m_has_errors = true;
+    emit_error_diagnostic(std::format("unresolved variable: {}", *name), span, "here");
     return NoBinding();
 }
 
 bool bite::Analyzer::is_in_loop() {
-    for (auto* node : node_stack) {
+    for (auto* node : context_nodes) {
         if (node->is_loop_expr() || node->is_while_expr() || node->is_for_expr()) {
             return true;
         }
@@ -804,7 +702,7 @@ bool bite::Analyzer::is_in_loop() {
 }
 
 bool bite::Analyzer::is_in_function() {
-    for (auto* node : node_stack) {
+    for (auto* node : context_nodes) {
         if (node->is_function_declaration()) {
             return true;
         }
@@ -813,7 +711,7 @@ bool bite::Analyzer::is_in_function() {
 }
 
 bool bite::Analyzer::is_there_matching_label(StringTable::Handle label_name) {
-    for (auto* node : node_stack | std::views::reverse) {
+    for (auto* node : context_nodes | std::views::reverse) {
         // labels do not cross functions
         if (node->is_function_declaration()) {
             break;
@@ -847,7 +745,7 @@ bool bite::Analyzer::is_there_matching_label(StringTable::Handle label_name) {
 }
 
 bool bite::Analyzer::is_in_class() {
-    for (auto* node : node_stack) {
+    for (auto* node : context_nodes) {
         if (node->is_class_declaration() || node->is_object_expr()) {
             return true;
         }
@@ -856,7 +754,7 @@ bool bite::Analyzer::is_in_class() {
 }
 
 bool bite::Analyzer::is_in_class_with_superclass() {
-    for (auto* node : node_stack) {
+    for (auto* node : context_nodes) {
         if ((node->is_class_declaration() && node->as_class_declaration()->super_class) || (node->is_object_expr() &&
             node->as_object_expr()->super_class)) {
             return true;
@@ -1020,27 +918,43 @@ void bite::Analyzer::handle_constructor(
             );
         }
     }
-    node_stack.emplace_back(&*constructor.function);
-    for (const auto& param : constructor.function->params) {
-        declare(param.string, &*constructor.function, &constructor.function->info);
-    }
-    for (auto& super_arg : constructor.super_arguments) {
-        visit(*super_arg);
-    }
-    // visit in this env to support upvalues!
-    for (auto& field : fields) {
-        MemberInfo info = MemberInfo(field.attributes, field.span);
-        check_member_declaration(name_span, is_abstract, field.variable->name.string, info, overrideable_members);
-        declare_in_class_enviroment(*env, field.variable->name.string, MemberInfo(field.attributes, field.span));
-        if (field.variable->value) {
-            visit(**field.variable->value);
-        }
-    }
+    with_context(
+        *constructor.function,
+        [&] {
+            for (const auto& param : constructor.function->params) {
+                declare(param.string, &*constructor.function, &constructor.function->info);
+            }
 
-    if (constructor.function->body) {
-        visit(**constructor.function->body);
-    }
-    node_stack.pop_back();
+            for (auto& super_arg : constructor.super_arguments) {
+                visit(*super_arg);
+            }
+            // analyze in this env to support upvalues!
+            for (auto& field : fields) {
+                MemberInfo info = MemberInfo(field.attributes, field.span);
+                check_member_declaration(
+                    name_span,
+                    is_abstract,
+                    field.variable->name.string,
+                    info,
+                    overrideable_members
+                );
+                declare_in_class_enviroment(
+                    *env,
+                    field.variable->name.string,
+                    MemberInfo(field.attributes, field.span)
+                );
+                if (field.variable->value) {
+                    visit(**field.variable->value);
+                }
+            }
+
+
+
+            if (constructor.function->body) {
+                visit(**constructor.function->body);
+            }
+        }
+    );
 }
 
 void bite::Analyzer::structure_body(
@@ -1140,10 +1054,9 @@ void bite::Analyzer::structure_body(
     }
 
     for (auto& method : body.methods) {
-        // TODO: refactor!
-        node_stack.emplace_back(&*method.function);
-        function(*method.function);
-        node_stack.pop_back();
+        with_context(*method.function, [this, &method] {
+            function(*method.function);
+        });
     }
 
     // TODO: getter and setters requirements workings

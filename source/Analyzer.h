@@ -61,6 +61,12 @@ namespace bite {
         void invalid_expr(InvalidExpr& /*unused*/) {}
         void literal_expr(LiteralExpr& /*unused*/) {}
 
+        void with_context(AstNode& node, const auto& fn) {
+            context_nodes.push_back(&node);
+            fn();
+            context_nodes.pop_back();
+        }
+
         void declare_in_function_enviroment(
             FunctionEnviroment& env,
             StringTable::Handle name,
@@ -141,7 +147,7 @@ namespace bite {
         bool is_in_class_with_superclass();
 
         void with_scope(const auto& fn) {
-            for (auto node : node_stack | std::views::reverse) {
+            for (auto node : context_nodes | std::views::reverse) {
                 if (node->is_function_declaration()) {
                     auto* function = node->as_function_declaration();
                     function->enviroment.locals.scopes.emplace_back();
@@ -252,7 +258,7 @@ namespace bite {
         );
 
     private:
-        std::vector<AstNode*> node_stack;
+        std::vector<AstNode*> context_nodes;
         Ast* ast;
 
         bool m_has_errors = false;

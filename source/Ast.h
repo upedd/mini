@@ -2,7 +2,7 @@
 #define EXPR_H
 #include <algorithm>
 #include <format>
-#include <forward_list>
+#include <vector>
 #include <utility>
 #include <vector>
 
@@ -255,9 +255,9 @@ public:
     }
 
     std::unique_ptr<Expr> callee;
-    std::forward_list<std::unique_ptr<Expr>> arguments;
+    std::vector<std::unique_ptr<Expr>> arguments;
 
-    CallExpr(bite::SourceSpan span, std::unique_ptr<Expr> callee, std::forward_list<std::unique_ptr<Expr>> arguments) :
+    CallExpr(bite::SourceSpan span, std::unique_ptr<Expr> callee, std::vector<std::unique_ptr<Expr>> arguments) :
         Expr(std::move(span)),
         callee(std::move(callee)),
         arguments(std::move(arguments)) {}
@@ -332,13 +332,13 @@ public:
         return NodeKind::block_expr;
     }
 
-    std::forward_list<std::unique_ptr<Stmt>> stmts;
+    std::vector<std::unique_ptr<Stmt>> stmts;
     std::optional<std::unique_ptr<Expr>> expr;
     std::optional<Token> label;
 
     BlockExpr(
         bite::SourceSpan span,
-        std::forward_list<std::unique_ptr<Stmt>> stmts,
+        std::vector<std::unique_ptr<Stmt>> stmts,
         std::optional<std::unique_ptr<Expr>> expr = {},
         const std::optional<Token>& label = {}
     ) : Expr(std::move(span)),
@@ -553,7 +553,7 @@ struct Method {
 
 struct Constructor {
     bool has_super;
-    std::forward_list<std::unique_ptr<Expr>> super_arguments;
+    std::vector<std::unique_ptr<Expr>> super_arguments;
     std::unique_ptr<FunctionDeclaration> function;
     bite::SourceSpan superconstructor_call_span;
     bite::SourceSpan decl_span;
@@ -636,7 +636,7 @@ public:
 
     StructureBody body;
     std::optional<Token> super_class;
-    std::forward_list<std::unique_ptr<Expr>> superclass_arguments;
+    std::vector<std::unique_ptr<Expr>> superclass_arguments;
     bite::SourceSpan name_span; // TODO: temp
     bite::SourceSpan super_class_span; // TODO: temp
     ClassEnviroment class_enviroment;
@@ -646,7 +646,7 @@ public:
         bite::SourceSpan span,
         StructureBody body,
         const std::optional<Token>& super_class,
-        std::forward_list<std::unique_ptr<Expr>> superclass_arguments,
+        std::vector<std::unique_ptr<Expr>> superclass_arguments,
         bite::SourceSpan name_span,
         bite::SourceSpan super_class_span
     ) : Expr(std::move(span)),

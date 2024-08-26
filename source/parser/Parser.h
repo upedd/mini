@@ -98,7 +98,7 @@ private:
     std::unique_ptr<FunctionDeclaration> function_declaration();
     std::unique_ptr<FunctionDeclaration> function_declaration_body(const Token& name, bool skip_params = false);
     std::vector<Token> functions_parameters();
-    std::forward_list<std::unique_ptr<Expr>> call_arguments();
+    std::vector<std::unique_ptr<Expr>> call_arguments();
 
     std::unique_ptr<ClassDeclaration> class_declaration(bool is_abstract = false);
     StructureBody structure_body(const Token& class_token);

@@ -4,6 +4,7 @@
 #include "Analyzer.h"
 #include "Ast.h"
 #include "Object.h"
+#include "base/overloaded.h"
 #include "parser/Parser.h"
 
 

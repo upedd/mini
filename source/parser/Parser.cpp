@@ -314,11 +314,11 @@ std::vector<Token> Parser::functions_parameters() {
     return parameters;
 }
 
-std::forward_list<std::unique_ptr<Expr>> Parser::call_arguments() {
-    std::forward_list<std::unique_ptr<Expr>> arguments;
+std::vector<std::unique_ptr<Expr>> Parser::call_arguments() {
+    std::vector<std::unique_ptr<Expr>> arguments;
     if (!check(Token::Type::RIGHT_PAREN)) {
         do {
-            arguments.push_front(expression());
+            arguments.push_back(expression());
         } while (match(Token::Type::COMMA));
     }
     consume(Token::Type::RIGHT_PAREN, "unmatched ')'");
@@ -508,7 +508,7 @@ bitflags<ClassAttributes> Parser::member_attributes() {
 Constructor Parser::constructor_statement() {
     Token init_token = current;
     std::vector<Token> parameters = functions_parameters();
-    std::forward_list<std::unique_ptr<Expr>> super_arguments;
+    std::vector<std::unique_ptr<Expr>> super_arguments;
     bool has_super = false;
     bite::SourceSpan super_span;
     // init(parameters*) : super(arguments*) [block]
@@ -830,7 +830,7 @@ std::unique_ptr<ReturnExpr> Parser::return_expression() {
 std::unique_ptr<ObjectExpr> Parser::object_expression() {
     Token object_token = current;
     std::optional<Token> superclass;
-    std::forward_list<std::unique_ptr<Expr>> superclass_arguments;
+    std::vector<std::unique_ptr<Expr>> superclass_arguments;
     bite::SourceSpan superspan = no_span();
     bite::SourceSpan supercall_span = no_span();
     auto span = make_span();
@@ -914,11 +914,11 @@ std::unique_ptr<BlockExpr> Parser::block(const std::optional<Token>& label) {
     // In Bite every block is an expression which can return a value
     // the value that will be returned is the last expression without succeding semicolon.
     // we track that expression here in 'expr_at_end'
-    std::forward_list<std::unique_ptr<Stmt>> stmts;
+    std::vector<std::unique_ptr<Stmt>> stmts;
     std::optional<std::unique_ptr<Expr>> expr_at_end = {};
     while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
         if (auto stmt = statement()) {
-            stmts.push_front(std::move(*stmt));
+            stmts.push_back(std::move(*stmt));
         } else {
             bool is_cntrl_flow = is_control_flow_start(next.type);
             auto expr = expression();
@@ -928,7 +928,7 @@ std::unique_ptr<BlockExpr> Parser::block(const std::optional<Token>& label) {
             bool expression_is_statement = is_cntrl_flow && (!check(Token::Type::RIGHT_BRACE) || current.type ==
                 Token::Type::SEMICOLON);
             if (match(Token::Type::SEMICOLON) || expression_is_statement) {
-                stmts.push_front(std::make_unique<ExprStmt>(make_span(), std::move(expr)));
+                stmts.push_back(std::make_unique<ExprStmt>(make_span(), std::move(expr)));
             } else {
                 expr_at_end = std::move(expr);
                 break;
@@ -1000,6 +1000,6 @@ std::unique_ptr<BinaryExpr> Parser::assigment(std::unique_ptr<Expr> left) {
 }
 
 std::unique_ptr<CallExpr> Parser::call(std::unique_ptr<Expr> left) {
-    std::forward_list<std::unique_ptr<Expr>> arguments = call_arguments();
+    std::vector<std::unique_ptr<Expr>> arguments = call_arguments();
     return std::make_unique<CallExpr>(make_span(), std::move(left), std::move(arguments));
 }
