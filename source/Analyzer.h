@@ -30,6 +30,41 @@ namespace bite {
             return m_has_errors;
         }
 
+        void with_context(AstNode& node, const auto& fn) {
+            context_nodes.push_back(&node);
+            fn();
+            context_nodes.pop_back();
+        }
+
+
+        bool is_in_loop();
+        bool is_in_function();
+        bool is_there_matching_label(StringTable::Handle label_name);
+        bool is_in_class();
+        bool is_in_class_with_superclass();
+
+        DeclarationInfo declare_in_function_enviroment(
+            FunctionEnviroment& env,
+            StringTable::Handle name,
+            AstNode* declaration
+        );
+        DeclarationInfo declare_in_class_enviroment(
+            ClassEnviroment& env,
+            StringTable::Handle name,
+            const MemberInfo& attributes
+        );
+        DeclarationInfo declare_in_trait_enviroment(
+            TraitEnviroment& env,
+            StringTable::Handle name,
+            const MemberInfo& attributes
+        );
+        DeclarationInfo declare_in_global_enviroment(
+            GlobalEnviroment& env,
+            StringTable::Handle name,
+            AstNode* declaration
+        );
+        DeclarationInfo declare(const StringTable::Handle name, AstNode* declaration);
+
         void analyze(Ast& ast);
         void block_expr(BlockExpr& expr);
         void variable_declaration(VariableDeclaration& stmt);
@@ -53,98 +88,36 @@ namespace bite {
         void for_expr(ForExpr& expr);
         void return_expr(ReturnExpr& expr);
         void this_expr(ThisExpr& expr);
-        void string_expr(StringExpr& /*unused*/) {}
+
         void super_expr(SuperExpr& expr);
         void object_expr(ObjectExpr& expr);
         void trait_declaration(TraitDeclaration& stmt);
-        void invalid_stmt(InvalidStmt& /*unused*/) {}
-        void invalid_expr(InvalidExpr& /*unused*/) {}
+        DeclarationInfo declare_local(Locals& locals, StringTable::Handle name, AstNode* declaration);
         void literal_expr(LiteralExpr& /*unused*/) {}
+        void string_expr(StringExpr& /*unused*/) {}
+        void invalid_stmt(InvalidStmt& /*unused*/) {BITE_PANIC("got invalid stmt"); }
+        void invalid_expr(InvalidExpr& /*unused*/) {BITE_PANIC("got invalid expr"); }
 
-        void with_context(AstNode& node, const auto& fn) {
-            context_nodes.push_back(&node);
-            fn();
-            context_nodes.pop_back();
-        }
-
-        void declare_in_function_enviroment(
-            FunctionEnviroment& env,
-            StringTable::Handle name,
-            AstNode* declaration,
-            DeclarationInfo* declaration_info
-        );
-
-        void declare_in_class_enviroment(ClassEnviroment& env, StringTable::Handle name, const MemberInfo& attributes);
-
-
-        void declare_in_trait_enviroment(TraitEnviroment& env, StringTable::Handle name, const MemberInfo& attributes);
-
-        void declare_in_global_enviroment(
-            GlobalEnviroment& env,
-            StringTable::Handle name,
-            AstNode* declaration,
-            DeclarationInfo* declaration_info
-        );
-
-        // declare variable
-        void declare(StringTable::Handle name, AstNode* declaration, DeclarationInfo* declaration_info);
-
-        ClassEnviroment* current_class_enviroment();
-
-        TraitEnviroment* current_trait_enviroment();
-
-        // TODO: refactor!
-        void declare_in_outer(StringTable::Handle name, AstNode* declaration, DeclarationInfo* declaration_info);
-
-
-        static std::optional<Binding> get_binding_in_function_enviroment(
+        static std::optional<Binding> resolve_in_function_enviroment(
             const FunctionEnviroment& env,
             StringTable::Handle name
         );
-
-        std::optional<Binding> get_binding_in_class_enviroment(
+        std::optional<Binding> resolve_in_class_enviroment(
             const ClassEnviroment& env,
             StringTable::Handle name,
             const SourceSpan& source
         );
-
-        std::optional<Binding> get_binding_in_trait_enviroment(const TraitEnviroment& env, StringTable::Handle name);
-
-
-        static std::optional<Binding> get_binding_in_global_enviroment(
+        static std::optional<Binding> resolve_in_trait_enviroment(const TraitEnviroment& env, StringTable::Handle name);
+        static std::optional<Binding> resolve_in_global_enviroment(
             const GlobalEnviroment& env,
             StringTable::Handle name
         );
 
-        void capture_local(LocalDeclarationInfo* info);
+        Binding propagate_upvalues(LocalBinding binding, const std::vector<FunctionEnviroment*>& enviroments_visited);
 
-        int64_t add_upvalue(FunctionEnviroment& enviroment, const UpValue& upvalue);
-
-        int64_t handle_closure(
-            const std::vector<std::reference_wrapper<FunctionEnviroment>>& enviroments_visited,
-            StringTable::Handle name,
-            int64_t local_index
-        );
-
-        // TODO: refactor?
-        Binding resolve_without_upvalues(StringTable::Handle name, const SourceSpan& span);
-
-        // TODO: refactor!
         Binding resolve(StringTable::Handle name, const SourceSpan& span);
 
-        bool is_in_loop();
 
-        static bool node_is_function(const AstNode* node) {
-            return node->is_function_declaration();
-        }
-
-        bool is_in_function();
-
-        bool is_there_matching_label(StringTable::Handle label_name);
-
-        bool is_in_class();
-
-        bool is_in_class_with_superclass();
 
         void with_scope(const auto& fn) {
             for (auto *node : context_nodes | std::views::reverse) {
@@ -161,7 +134,7 @@ namespace bite {
             ast->enviroment.locals.scopes.pop_back();
         }
 
-        std::optional<AstNode*> find_declaration(StringTable::Handle name, const SourceSpan& span);
+        std::optional<AstNode*> find_declaration(Binding binding);
 
         void trait_usage(
             const auto& fn,
@@ -170,7 +143,7 @@ namespace bite {
         ) {
             TraitDeclaration* item_trait = nullptr;
             trait_usage.binding = resolve(trait_usage.trait.string, trait_usage.trait.span);
-            if (auto declaration = find_declaration(trait_usage.trait.string, trait_usage.span)) {
+            if (auto declaration = find_declaration(trait_usage.binding)) {
                 if (declaration.value()->is_trait_declaration()) {
                     item_trait = declaration.value()->as_trait_declaration();
                 } else {
@@ -231,28 +204,6 @@ namespace bite {
             MemberInfo& info,
             unordered_dense::map<StringTable::Handle, MemberInfo>& overrideable_members
         );
-
-        // // TODO: refactor?
-        // void handle_constructor(
-        //     Constructor& constructor,
-        //     std::vector<Field>& fields,
-        //     bool is_abstract,
-        //     SourceSpan& name_span,
-        //     ClassEnviroment* env,
-        //     unordered_dense::map<StringTable::Handle, MemberInfo>& overrideable_members,
-        //     ClassDeclaration* superclass
-        // );
-        //
-        // // TODO: refactor. put class node in the object
-        // void structure_body(
-        //     StructureBody& body,
-        //     std::optional<Token> super_class,
-        //     Binding& superclass_binding,
-        //     const SourceSpan& super_class_span,
-        //     SourceSpan& name_span,
-        //     ClassEnviroment* env,
-        //     bool is_abstract
-        // );
 
     private:
         std::vector<AstNode*> context_nodes;

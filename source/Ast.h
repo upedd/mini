@@ -97,7 +97,7 @@ struct GlobalDeclarationInfo {
     StringTable::Handle name;
 };
 
-using DeclarationInfo = std::variant<LocalDeclarationInfo, GlobalDeclarationInfo>;
+using DeclarationInfo = std::variant<std::monostate, LocalDeclarationInfo, GlobalDeclarationInfo>;
 
 
 using Binding = std::variant<struct NoBinding, struct LocalBinding, struct GlobalBinding, struct UpvalueBinding, struct
@@ -107,15 +107,17 @@ using Binding = std::variant<struct NoBinding, struct LocalBinding, struct Globa
 struct NoBinding {};
 
 struct LocalBinding {
-    LocalDeclarationInfo* info;
+    AstNode* info;
 };
 
 struct GlobalBinding {
-    GlobalDeclarationInfo* info;
+    StringTable::Handle name;
+    AstNode* info;
 };
 
 struct UpvalueBinding {
     std::int64_t idx;
+    LocalDeclarationInfo* info;
 };
 
 struct ParameterBinding {
@@ -141,7 +143,7 @@ struct SuperBinding {
 
 
 struct Local {
-    LocalDeclarationInfo* declaration;
+    AstNode* declaration;
     StringTable::Handle name;
 };
 
@@ -151,7 +153,7 @@ struct Locals {
 };
 
 struct GlobalEnviroment {
-    bite::unordered_dense::map<StringTable::Handle, GlobalDeclarationInfo*> globals;
+    bite::unordered_dense::map<StringTable::Handle, AstNode*> globals;
     Locals locals;
 };
 
@@ -189,7 +191,7 @@ struct MemberInfo {
 struct ClassEnviroment {
     StringTable::Handle class_name; // TODO: temporary!
     bite::unordered_dense::map<StringTable::Handle, MemberInfo> members;
-    ClassEnviroment* class_object_enviroment = nullptr;
+    ClassEnviroment* metaobject_enviroment = nullptr;
 };
 
 struct TraitEnviroment {
