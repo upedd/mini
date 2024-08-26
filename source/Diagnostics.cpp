@@ -77,14 +77,14 @@ struct CompiledInlineHint {
 };
 
 struct CompiledInlineHintsFile {
-    std::filesystem::path filename;
+    StringTable::Handle filename;
     std::vector<CompiledInlineHint> hints;
 };
 
 
 CompiledInlineHint compile_inline_hint(const InlineHint& hint) {
     // TODO: optimizations (note: displaying these hints is not performance critical as we probably abort after anyways)
-    std::ifstream file(hint.location.file_path);
+    std::ifstream file(*hint.location.file_path);
     BITE_ASSERT(file.is_open());
     std::int64_t file_offset = 0;
     std::string line;
@@ -197,7 +197,7 @@ void print_hint_file(CompiledInlineHintsFile& file, std::ostream& output, bool i
     // print padding
     bite::print("{}", repeated(" ", max_line_number_width + 1));
     auto single_hint = has_single_hint ? file.hints[0] : std::optional<CompiledInlineHint>();
-    print_hint_path(file.filename, single_hint, output, is_terminal);
+    print_hint_path(*file.filename, single_hint, output, is_terminal);
     for (auto& hint : file.hints) {
         // empty line padding
         bite::print("{}", repeated(" ", max_line_number_width + 1));
@@ -215,7 +215,7 @@ void print_hint_file(CompiledInlineHintsFile& file, std::ostream& output, bool i
 
 void print_diagnostic(const Diagnostic& diagnostic, std::ostream& output, bool is_terminal) {
     print_diagnostic_message(diagnostic, output, is_terminal);
-    unordered_dense::map<std::filesystem::path, std::vector<CompiledInlineHint>> compiled_hints;
+    unordered_dense::map<StringTable::Handle, std::vector<CompiledInlineHint>> compiled_hints;
     for (const auto& inline_hint : diagnostic.inline_hints) {
         compiled_hints[inline_hint.location.file_path].push_back(compile_inline_hint(inline_hint));
     }

@@ -22,7 +22,7 @@ public:
     explicit Lexer(bite::file_input_stream&& stream, SharedContext* context) : context(context),
                                                                        stream(std::move(stream)) {};
 
-    std::expected<Token, bite::Message> next_token();
+    std::expected<Token, bite::Diagnostic> next_token();
 
     [[nodiscard]] const std::string& get_filepath() const {
         return stream.get_filepath();
@@ -32,13 +32,13 @@ private:
     void consume_identifier();
 
     [[nodiscard]] Token make_token(Token::Type type);
-    [[nodiscard]] std::unexpected<bite::Message> make_error(
+    [[nodiscard]] std::unexpected<bite::Diagnostic> make_error(
         const std::string& reason,
         const std::string& inline_message = ""
-    ) const;
+    );
 
     Token keyword_or_identifier();
-    std::expected<Token, bite::Message> string();
+    std::expected<Token, bite::Diagnostic> string();
     Token integer_or_number();
     Token label();
 

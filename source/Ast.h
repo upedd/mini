@@ -412,17 +412,14 @@ public:
 
     std::optional<std::unique_ptr<Expr>> expr;
     std::optional<Token> label;
-    bite::SourceSpan label_span;
 
     explicit BreakExpr(
         bite::SourceSpan span,
         std::optional<std::unique_ptr<Expr>> expr,
-        const std::optional<Token>& label,
-        bite::SourceSpan label_span
+        const std::optional<Token>& label
     ) : Expr(std::move(span)),
         expr(std::move(expr)),
-        label(label),
-        label_span(std::move(label_span)) {}
+        label(label) {}
 };
 
 class ContinueExpr final : public Expr {
@@ -432,12 +429,10 @@ public:
     }
 
     std::optional<Token> label;
-    bite::SourceSpan label_span;
 
     ContinueExpr(bite::SourceSpan span, const std::optional<Token>& label, bite::SourceSpan label_span) :
         Expr(std::move(span)),
-        label(label),
-        label_span(std::move(label_span)) {}
+        label(label) {}
 };
 
 class ForExpr final : public Expr {
@@ -602,9 +597,7 @@ public:
     }
 
     Token name;
-    bite::SourceSpan name_span; // TODO: temp
     std::optional<Token> super_class;
-    bite::SourceSpan super_class_span; // TODO: temp
     StructureBody body;
     bool is_abstract = false;
     DeclarationInfo info;
@@ -614,16 +607,12 @@ public:
     ClassDeclaration(
         bite::SourceSpan span,
         const Token& name,
-        bite::SourceSpan name_span,
         const std::optional<Token>& super_class,
-        bite::SourceSpan super_class_span,
         StructureBody body,
         bool is_abstract
     ) : Stmt(std::move(span)),
         name(name),
-        name_span(std::move(name_span)),
         super_class(super_class),
-        super_class_span(std::move(super_class_span)),
         body(std::move(body)),
         is_abstract(is_abstract) {}
 };
@@ -637,8 +626,6 @@ public:
     StructureBody body;
     std::optional<Token> super_class;
     std::vector<std::unique_ptr<Expr>> superclass_arguments;
-    bite::SourceSpan name_span; // TODO: temp
-    bite::SourceSpan super_class_span; // TODO: temp
     ClassEnviroment class_enviroment;
     Binding superclass_binding;
 
@@ -646,15 +633,11 @@ public:
         bite::SourceSpan span,
         StructureBody body,
         const std::optional<Token>& super_class,
-        std::vector<std::unique_ptr<Expr>> superclass_arguments,
-        bite::SourceSpan name_span,
-        bite::SourceSpan super_class_span
+        std::vector<std::unique_ptr<Expr>> superclass_arguments
     ) : Expr(std::move(span)),
         body(std::move(body)),
         super_class(super_class),
-        superclass_arguments(std::move(superclass_arguments)),
-        name_span(std::move(name_span)),
-        super_class_span(std::move(super_class_span)) {}
+        superclass_arguments(std::move(superclass_arguments)) {}
 };
 
 class NativeDeclaration final : public Stmt {

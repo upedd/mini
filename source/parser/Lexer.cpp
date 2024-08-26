@@ -6,7 +6,7 @@
 #include "../base/perfect_map.h"
 #include "../shared/SharedContext.h"
 
-std::expected<Token, bite::Message> Lexer::next_token() {
+std::expected<Token, bite::Diagnostic> Lexer::next_token() {
     skip_whitespace();
     start_pos = stream.position();
     switch (const char c = stream.advance(); c) {
@@ -106,22 +106,35 @@ void Lexer::consume_identifier() {
 Token Lexer::make_token(const Token::Type type) {
     const StringTable::Handle string = buffer.empty() ? nullptr : context->intern(buffer);
     buffer.clear();
-    return { .type = type, .source_start_offset = start_pos, .source_end_offset = stream.position(), .string = string };
+    return {
+            .type = type,
+            .span = bite::SourceSpan {
+                .start_offset = static_cast<int64_t>(start_pos),
+                .end_offset = static_cast<int64_t>(stream.position()),
+                .file_path = context->intern(stream.get_filepath())
+            },
+            .string = string
+        };
 }
 
-std::unexpected<bite::Message> Lexer::make_error(const std::string& reason, const std::string& inline_message) const {
-    return std::unexpected<bite::Message>({
-            .level = bite::Logger::Level::error,
-            .content = reason,
-            .inline_msg = bite::InlineMessage {
-                .location = bite::SourceLocation {
-                    .file_path = get_filepath(),
-                    .start_offset = start_pos,
-                    .end_offset = stream.position()
-                },
-                .content = inline_message
+std::unexpected<bite::Diagnostic> Lexer::make_error(const std::string& reason, const std::string& inline_message) {
+    return std::unexpected(
+        bite::Diagnostic {
+            .level = bite::DiagnosticLevel::ERROR,
+            .message = reason,
+            .inline_hints = {
+                bite::InlineHint {
+                    .location = bite::SourceSpan {
+                        .start_offset = static_cast<int64_t>(start_pos),
+                        .end_offset = static_cast<int64_t>(stream.position()),
+                        .file_path = context->intern(get_filepath()),
+                    },
+                    .message = inline_message,
+                    .level = bite::DiagnosticLevel::ERROR,
+                }
             }
-        });
+        }
+    );
 }
 
 constexpr static perfect_map<Token::Type, 30> identifiers(
@@ -170,7 +183,7 @@ Token Lexer::keyword_or_identifier() {
     return make_token(Token::Type::IDENTIFIER);
 }
 
-std::expected<Token, bite::Message> Lexer::string() {
+std::expected<Token, bite::Diagnostic> Lexer::string() {
     while (!stream.ended() && stream.next() != '"') {
         buffer.push_back(stream.advance());
     }

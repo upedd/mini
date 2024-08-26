@@ -33,11 +33,7 @@ void Parser::error(const Token& token, const std::string& message, const std::st
             .message = message,
             .inline_hints = {
                 bite::InlineHint {
-                    .location = bite::SourceSpan {
-                        .start_offset = static_cast<std::int64_t>(token.source_start_offset),
-                        .end_offset = static_cast<std::int64_t>(token.source_end_offset),
-                        .file_path = lexer.get_filepath()
-                    },
+                    .location = token.span,
                     .message = inline_message,
                     .level = bite::DiagnosticLevel::ERROR
                 }
@@ -54,11 +50,7 @@ void Parser::warning(const Token& token, const std::string& message, const std::
             .message = message,
             .inline_hints = {
                 bite::InlineHint {
-                    .location = bite::SourceSpan {
-                        .start_offset = static_cast<std::int64_t>(token.source_start_offset),
-                        .end_offset = static_cast<std::int64_t>(token.source_end_offset),
-                        .file_path = lexer.get_filepath()
-                    },
+                    .location = token.span,
                     .message = inline_message,
                     .level = bite::DiagnosticLevel::ERROR
                 }
@@ -94,17 +86,14 @@ void Parser::synchronize() {
 Token Parser::advance() {
     current = next;
     for (auto& span : span_stack) {
-        if (span.start_offset == -1) {
-            span.start_offset = next.source_start_offset;
-        }
-        span.end_offset = next.source_end_offset;
+        span.merge(next.span);
     }
     while (true) {
         if (auto token = lexer.next_token()) {
             next = *token;
             break;
         } else {
-            emit_message(token.error());
+            context->diagnostics.add(token.error());
         }
     }
     return current;
@@ -328,28 +317,17 @@ std::vector<std::unique_ptr<Expr>> Parser::call_arguments() {
 std::unique_ptr<ClassDeclaration> Parser::class_declaration(const bool is_abstract) {
     consume(Token::Type::IDENTIFIER, "missing class name");
     Token class_name = current;
-
     std::optional<Token> superclass;
-    bite::SourceSpan superspan = no_span();
     if (match(Token::Type::COLON)) {
-        with_source_span(
-            [this, &superspan] -> int {
                 consume(Token::Type::IDENTIFIER, "missing superclass name");
-                superspan = make_span();
-                return 0; // TODO: temp!
-            }
-        );
         superclass = current;
     }
-    auto span = make_span();
     StructureBody body = structure_body(class_name);
 
     return std::make_unique<ClassDeclaration>(
         make_span(),
         class_name,
-        span,
         superclass,
-        superspan,
         std::move(body),
         is_abstract
     );
@@ -802,21 +780,14 @@ std::unique_ptr<ContinueExpr> Parser::continue_expression() {
 
 std::unique_ptr<BreakExpr> Parser::break_expression() {
     std::optional<Token> label;
-    auto label_span = no_span();
-    with_source_span(
-        [this, &label, &label_span] -> int {
             if (match(Token::Type::LABEL)) {
                 label = current;
             }
-            label_span = make_span();
-            return 0; // TODO
-        }
-    );
 
     if (!is_expression_start(next.type)) {
-        return std::make_unique<BreakExpr>(make_span(), std::optional<std::unique_ptr<Expr>> {}, label, label_span);
+        return std::make_unique<BreakExpr>(make_span(), std::optional<std::unique_ptr<Expr>> {}, label);
     }
-    return std::make_unique<BreakExpr>(make_span(), expression(), label, label_span);
+    return std::make_unique<BreakExpr>(make_span(), expression(), label);
 }
 
 std::unique_ptr<ReturnExpr> Parser::return_expression() {
@@ -831,22 +802,13 @@ std::unique_ptr<ObjectExpr> Parser::object_expression() {
     Token object_token = current;
     std::optional<Token> superclass;
     std::vector<std::unique_ptr<Expr>> superclass_arguments;
-    bite::SourceSpan superspan = no_span();
-    bite::SourceSpan supercall_span = no_span();
-    auto span = make_span();
     if (match(Token::Type::COLON)) {
-        with_source_span(
-            [this, &superspan, &superclass, &superclass_arguments, &supercall_span] -> int {
+
                 consume(Token::Type::IDENTIFIER, "missing superclass name");
-                superspan = make_span();
                 superclass = current;
                 if (match(Token::Type::LEFT_PAREN)) {
                     superclass_arguments = call_arguments();
                 }
-                supercall_span = make_span();
-                return 0; // TODO
-            }
-        );
     }
 
     // TODO: validate consturctor across parser?? (or in analysis)
@@ -860,8 +822,6 @@ std::unique_ptr<ObjectExpr> Parser::object_expression() {
         std::move(body),
         superclass,
         std::move(superclass_arguments),
-        span,
-        superspan
     );
 }
 
