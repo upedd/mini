@@ -13,8 +13,7 @@ trait B {
 
 
 
-class C {
-    using A(exclude get_text), B;
+class C using A(exclude get_text), B {
 
 }
 native print;

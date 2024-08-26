@@ -7,7 +7,6 @@
 #include "Ast.h"
 #include "AstVisitor.h"
 #include "base/logger.h"
-#include "shared/Message.h"
 #include "shared/SharedContext.h"
 
 namespace bite {
@@ -40,11 +39,6 @@ namespace bite {
         void function(FunctionDeclaration& stmt);
         void native_declaration(NativeDeclaration& stmt);
         void class_declaration(ClassDeclaration& box);
-        void trait_usage(
-            ClassEnviroment* env,
-            unordered_dense::map<StringTable::Handle, MemberInfo>& requirements,
-            TraitUsage& trait_usage
-        );
         void class_object(ClassObject& object, bool is_abstract, SourceSpan& name_span);
         void object_declaration(ObjectDeclaration& stmt);
         void unary_expr(UnaryExpr& expr);
@@ -153,7 +147,7 @@ namespace bite {
         bool is_in_class_with_superclass();
 
         void with_scope(const auto& fn) {
-            for (auto node : context_nodes | std::views::reverse) {
+            for (auto *node : context_nodes | std::views::reverse) {
                 if (node->is_function_declaration()) {
                     auto* function = node->as_function_declaration();
                     function->enviroment.locals.scopes.emplace_back();

@@ -532,92 +532,6 @@ public:
                                                                   value(std::move(expr)) {}
 };
 
-// TODO: rethink those
-// struct Field {
-//     std::unique_ptr<VariableDeclaration> variable;
-//     bitflags<ClassAttributes> attributes;
-//     bite::SourceSpan span;
-// };
-//
-// struct Method {
-//     std::unique_ptr<FunctionDeclaration> function;
-//     bitflags<ClassAttributes> attributes;
-//     bite::SourceSpan decl_span;
-// };
-//
-// struct SuperConstructorCall {
-//     std::vector<std::unique_ptr<Expr>> arguments;
-//     bite::SourceSpan span;
-// };
-//
-// struct Constructor {
-//     std::optional<SuperConstructorCall> super_constructor_call;
-//     std::unique_ptr<FunctionDeclaration> function;
-//     bite::SourceSpan decl_span;
-// };
-//
-// class ObjectExpr;
-//
-// // TODO: rethink:
-// // TODO: insane...
-// // find a better way to write this
-// struct UsingStmtMemeberDeclaration {
-//     StringTable::Handle original_name;
-//     StringTable::Handle aliased_name;
-//     bitflags<ClassAttributes> attributes;
-// };
-//
-// struct UsingStmtItem {
-//     Token name;
-//     bite::SourceSpan span;
-//     std::vector<Token> exclusions;
-//     std::vector<std::pair<Token, Token>> aliases;
-//     std::vector<UsingStmtMemeberDeclaration> declarations; // TODO
-//     Binding binding;
-// };
-//
-// // Is not actually a statement?
-// struct UsingStmt {
-//     std::vector<UsingStmtItem> items;
-// };
-//
-// /**
-//  * Shared fields between ObjectExpr and ClassStmt
-//  */
-// struct StructureBody {
-//     std::vector<Method> methods;
-//     std::vector<Field> fields;
-//     std::optional<std::unique_ptr<ObjectExpr>> class_object;
-//     std::vector<UsingStmt> using_statements;
-//     std::optional<Constructor> constructor; // TODO: remove this optional
-// };
-
-// class ClassDeclaration final : public Stmt {
-// public:
-//     [[nodiscard]] NodeKind kind() const override {
-//         return NodeKind::class_declaration;
-//     }
-//
-//     Token name;
-//     std::optional<Token> super_class;
-//     StructureBody body;
-//     bool is_abstract = false;
-//     DeclarationInfo info;
-//     ClassEnviroment enviroment;
-//     Binding superclass_binding;
-//
-//     ClassDeclaration(
-//         bite::SourceSpan span,
-//         const Token& name,
-//         const std::optional<Token>& super_class,
-//         StructureBody body,
-//         bool is_abstract
-//     ) : Stmt(std::move(span)),
-//         name(name),
-//         super_class(super_class),
-//         body(std::move(body)),
-//         is_abstract(is_abstract) {}
-// };
 struct Field {
     bitflags<ClassAttributes> attributes;
     std::unique_ptr<VariableDeclaration> variable;
@@ -714,28 +628,6 @@ public:
     DeclarationInfo info;
 };
 
-// class ObjectExpr : public Expr {
-// public:
-//     [[nodiscard]] NodeKind kind() const override {
-//         return NodeKind::object_expr;
-//     }
-//
-//     StructureBody body;
-//     std::optional<Token> super_class;
-//     ClassEnviroment class_enviroment;
-//     std::optional<SuperConstructorCall> super_constructor_call;
-//
-//     ObjectExpr(
-//         bite::SourceSpan span,
-//         StructureBody body,
-//         const std::optional<Token>& super_class,
-//         std::optional<SuperConstructorCall> super_constructor_call
-//     ) : Expr(std::move(span)),
-//         body(std::move(body)),
-//         super_class(super_class),
-//         super_constructor_call(std::move(super_constructor_call)) {}
-// };
-
 class NativeDeclaration final : public Stmt {
 public:
     [[nodiscard]] NodeKind kind() const override {
@@ -748,21 +640,6 @@ public:
     NativeDeclaration(bite::SourceSpan span, const Token& name) : Stmt(std::move(span)),
                                                                   name(name) {}
 };
-
-// class ObjectDeclaration final : public Stmt {
-// public:
-//     [[nodiscard]] NodeKind kind() const override {
-//         return NodeKind::object_declaration;
-//     }
-//
-//     Token name;
-//     std::unique_ptr<Expr> object;
-//     DeclarationInfo info;
-//
-//     ObjectDeclaration(bite::SourceSpan span, const Token& name, std::unique_ptr<Expr> object) : Stmt(std::move(span)),
-//         name(name),
-//         object(std::move(object)) {}
-// };
 
 class TraitDeclaration final : public Stmt {
 public:

@@ -5,7 +5,6 @@
 
 #include "Token.h"
 #include "../base/stream.h"
-#include "../shared/Message.h"
 
 class SharedContext;
 

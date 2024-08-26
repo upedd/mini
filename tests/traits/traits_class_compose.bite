@@ -15,9 +15,7 @@ trait B {
     }
 }
 
-class C {
-    using A, B;
-
+class C using A, B {
     get_foo() {
         return "C";
     }

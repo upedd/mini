@@ -8,31 +8,25 @@ trait A {
     }
 }
 
-trait B {
-    using A;
-
+trait B using A {
     get a {
         print("B.a");
         return "B";
     }
 }
 
-class C {
-    using A;
-
+class C using A {
     get a {
         print("C.a");
         return "C";
     }
 }
 
-class D {
-    using A;
+class D using A {
     a = "D";
 }
 
-class E {
-    using B;
+class E using B {
 }
 
 let c = C();

@@ -7,9 +7,7 @@ trait A {
     }
 }
 
-trait B {
-    using A;
-
+trait B using A {
     get_foo();
 
     get_text() {
@@ -17,9 +15,7 @@ trait B {
     }
 }
 
-class C {
-    using B;
-
+class C using B {
     get_foo() {
         return "C";
     }

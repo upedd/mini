@@ -16,7 +16,8 @@ class Foo {
     }
 }
 
-object Bar : Foo(20) {
+object Bar : Foo {
+    init() : super(20) {}
     override add() {
         return x * y;
     }

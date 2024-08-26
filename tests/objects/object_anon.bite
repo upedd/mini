@@ -24,7 +24,8 @@ fun modify_and_call_display(x, y, obj) {
     call_display(obj);
 }
 
-let bar = object : Foo(20) {
+let bar = object : Foo {
+    init() : super(20) {}
     override add() {
         return x * y;
     }
@@ -38,13 +39,15 @@ modify_and_call_display(2, 7, bar);
 print(bar.x);
 print(bar.y);
 
-call_display(object : Foo(5) {
+call_display(object : Foo {
+                 init() : super(5) {}
                  override add() {
                      return x - y;
                  }
              });
 
-modify_and_call_display(4, 3, object : Foo(5) {
+modify_and_call_display(4, 3, object : Foo {
+                 init() : super(5) {}
                  override add() {
                      return x - y;
                  }

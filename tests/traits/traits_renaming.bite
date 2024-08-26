@@ -13,9 +13,7 @@ trait B {
 
 native print;
 
-class C {
-    using A(get_text as a_get_text), B;
-
+class C using A(get_text as a_get_text), B {
     display() {
         print(a_get_text());
         print(get_text());

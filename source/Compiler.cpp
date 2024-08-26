@@ -5,19 +5,11 @@
 
 #include "Analyzer.h"
 #include "debug.h"
-#include "api/enhance_messages.h"
 #include "base/overloaded.h"
 #include "shared/SharedContext.h"
 
 bool Compiler::compile() {
     ast = parser.parse();
-    auto messages = parser.get_messages();
-    if (!messages.empty()) {
-        auto enchanced = bite::enchance_messages(messages);
-        for (auto& msg : enchanced) {
-            shared_context->logger.log(bite::Logger::Level::info, msg);
-        }
-    }
     if (parser.has_errors()) {
         shared_context->diagnostics.print(std::cout, true);
         shared_context->logger.log(
@@ -609,7 +601,7 @@ void Compiler::class_object(const std::string& name, bool is_abstract, const Cla
         emit(method.attributes.to_ullong()); // check size?
     }
 
-    constructor(object.constructor, object.fields, static_cast<bool>(object.constructor.super_arguments_call));
+    constructor(object.constructor, object.fields, static_cast<bool>(object.superclass));
     emit(OpCode::CONSTRUCTOR);
 }
 

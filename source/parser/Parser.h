@@ -6,8 +6,6 @@
 #include "Lexer.h"
 #include "../Ast.h"
 #include "../base/debug.h"
-#include "../shared/Message.h"
-
 /**
  * Implementation of Pratt parser
  * References:
@@ -18,14 +16,6 @@
  */
 class Parser {
 public:
-    /**
-     *
-     * @return messages generated during parsing
-     */
-    [[nodiscard]] const std::vector<bite::Message>& get_messages() const {
-        return messages;
-    }
-
     /**
      *
      * @return whetever the parser emitted any error messages
@@ -45,7 +35,6 @@ private:
     // We want to continue parsing in order to provide user multiple issues in their code at once.
     bool panic_mode = false;
     bool m_has_errors = false;
-    std::vector<bite::Message> messages;
 
     std::int64_t current_span_start = -1;
     std::int64_t current_span_end = -1;
@@ -70,7 +59,6 @@ private:
 
     std::vector<bite::SourceSpan> span_stack;
 
-    void emit_message(const bite::Message& message);
     void error(const Token& token, const std::string& message, const std::string& inline_message = "");
     void warning(const Token& token, const std::string& message, const std::string& inline_message = "");
 

@@ -6,20 +6,6 @@
 #include "../Object.h"
 #include "../shared/SharedContext.h"
 
-
-// TODO: refactor message system. this stinks a bit
-void Parser::emit_message(const bite::Message& message) {
-    if (panic_mode) {
-        return;
-    }
-    if (message.level == bite::Logger::Level::error) {
-        panic_mode = true;
-        m_has_errors = true;
-    }
-
-    messages.push_back(message);
-}
-
 void Parser::error(const Token& token, const std::string& message, const std::string& inline_message) {
     // TODO: temporary
     if (panic_mode) {
@@ -359,7 +345,18 @@ Constructor Parser::constructor() {
             if (match(Token::Type::COLON)) {
                 super_constructor_call = this->super_constructor_call();
             }
-            return Constructor { std::move(super_constructor_call), function_declaration_body(init_token), make_span() };
+            consume(Token::Type::LEFT_BRACE, "missing constructor body");
+            auto body = block();
+            return Constructor {
+                    std::move(super_constructor_call),
+                    std::make_unique<FunctionDeclaration>(
+                        make_span(),
+                        init_token,
+                        std::move(parameters),
+                        std::move(body)
+                    ),
+                    make_span()
+                };
         }
     );
 }
@@ -380,12 +377,12 @@ ClassObject Parser::class_object() {
     while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
         if (next.string == context_keyword("init")) {
             object.constructor = this->constructor();
-            break;
+            continue;
         }
 
         if (match(Token::Type::OBJECT)) {
             object.metaobject = object_expression();
-            break;
+            continue;
         }
 
         // TODO: refactor!
@@ -400,18 +397,20 @@ ClassObject Parser::class_object() {
                 bool skip_params = attributes[ClassAttributes::GETTER] && !check(Token::Type::LEFT_PAREN);
                 if (check(Token::Type::LEFT_PAREN) || skip_params) {
                     if (attributes[ClassAttributes::ABSTRACT]) {
-                        object.methods.emplace_back(Method {
-                            .attributes = attributes,
-                            .function = abstract_method(member_name, skip_params),
-                            .span = span
-                        });
-
+                        object.methods.emplace_back(
+                            Method {
+                                .attributes = attributes,
+                                .function = abstract_method(member_name, skip_params),
+                                .span = span
+                            }
+                        );
                     } else {
-                        object.methods.emplace_back(Method {
-                            .attributes = attributes,
-                            .function = function_declaration_body(member_name, skip_params),
-                            .span = span
-                        }
+                        object.methods.emplace_back(
+                            Method {
+                                .attributes = attributes,
+                                .function = function_declaration_body(member_name, skip_params),
+                                .span = span
+                            }
                         );
                     }
                     return 0; // TODO
@@ -420,11 +419,9 @@ ClassObject Parser::class_object() {
                 // Field
                 attributes += ClassAttributes::GETTER;
                 attributes += ClassAttributes::SETTER;
-                object.fields.emplace_back(Field {
-                    .attributes = attributes,
-                    .variable = var_declaration_body(member_name),
-                    .span = span
-                });
+                object.fields.emplace_back(
+                    Field { .attributes = attributes, .variable = var_declaration_body(member_name), .span = span }
+                );
                 return 0; // TODO
             }
         );
@@ -439,125 +436,6 @@ std::unique_ptr<ClassDeclaration> Parser::class_declaration(const bool is_abstra
     Token class_name = current;
     return std::make_unique<ClassDeclaration>(make_span(), is_abstract, class_name, class_object());
 }
-
-// StructureBody Parser::structure_body(const Token& class_token) {
-//     StructureBody body;
-//     consume(Token::Type::LEFT_BRACE, "missing body");
-//     while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
-//         // Using declarataions
-//         if (match(Token::Type::USING)) {
-//             body.using_statements.push_back(using_statement());
-//             continue;
-//         }
-//
-//         // Object definition
-//         bool skip = with_source_span(
-//             [this, &body] -> bool {
-//                 if (match(Token::Type::OBJECT)) {
-//                     body.class_object = object_expression();
-//                     return true;
-//                 }
-//                 return false;
-//             }
-//         );
-//         if (skip) {
-//             continue;
-//         }
-//
-//
-//         // Member
-//         with_source_span(
-//             [this, &body]-> int {
-//                 auto attributes = member_attributes();
-//                 consume(Token::Type::IDENTIFIER, "invalid member");
-//                 Token member_name = current;
-//
-//                 // Constructor
-//                 if (member_name.string == context_keyword("init")) {
-//                     with_source_span(
-//                         [this, &body] -> int {
-//                             body.constructor = constructor_statement();
-//                             return 0; // TODO
-//                         }
-//                     );
-//                     return 0; // TODO
-//                 }
-//
-//                 // Method
-//                 auto span = make_span();
-//                 bool skip_params = attributes[ClassAttributes::GETTER] && !check(Token::Type::LEFT_PAREN);
-//                 if (check(Token::Type::LEFT_PAREN) || skip_params) {
-//                     if (attributes[ClassAttributes::ABSTRACT]) {
-//                         body.methods.emplace_back(abstract_method(member_name, skip_params), attributes, span);
-//                     } else {
-//                         body.methods.emplace_back(
-//                             function_declaration_body(member_name, skip_params),
-//                             attributes,
-//                             span
-//                         );
-//                     }
-//                     return 0; // TODO
-//                 }
-//
-//                 // Field
-//                 attributes += ClassAttributes::GETTER;
-//                 attributes += ClassAttributes::SETTER;
-//                 body.fields.emplace_back(var_declaration_body(member_name), attributes, span);
-//                 return 0; // TODO
-//             }
-//         );
-//     }
-//     if (!body.constructor) {
-//         body.constructor = default_constructor(class_token);
-//     }
-//
-//     consume(Token::Type::RIGHT_BRACE, "unmatched }");
-//     return body;
-// }
-//
-// UsingStmt Parser::using_statement() {
-//     std::vector<UsingStmtItem> items;
-//     do {
-//         items.push_back(using_stmt_item());
-//     } while (match(Token::Type::COMMA));
-//     consume(Token::Type::SEMICOLON, "missing semicolon after statement");
-//     return UsingStmt(std::move(items));
-// }
-//
-// UsingStmtItem Parser::using_stmt_item() {
-//     return with_source_span(
-//         [this] -> UsingStmtItem {
-//             consume(Token::Type::IDENTIFIER, "Identifier expected");
-//             Token item_name = current;
-//             auto span = make_span();
-//             if (match(Token::Type::LEFT_PAREN)) {
-//                 return using_stmt_item_with_params(item_name, span);
-//             }
-//             return { .name = item_name, .span = span };
-//         }
-//     );
-// }
-//
-//
-// UsingStmtItem Parser::using_stmt_item_with_params(const Token& name, const bite::SourceSpan& span) {
-//     UsingStmtItem item { .name = name, .span = span };
-//     do {
-//         if (match(Token::Type::EXCLUDE)) {
-//             consume(Token::Type::IDENTIFIER, "invalid exclusion item");
-//             item.exclusions.push_back(current);
-//         } else {
-//             consume(Token::Type::IDENTIFIER, "invalid trait composition argument");
-//             Token before = current;
-//             consume(Token::Type::AS, "invalid trait composition argument");
-//             consume(Token::Type::IDENTIFIER, "invalid alias");
-//             Token after = current;
-//             item.aliases.emplace_back(before, after);
-//         }
-//     } while (match(Token::Type::COMMA));
-//     consume(Token::Type::RIGHT_PAREN, "unmatched ')'");
-//
-//     return item;
-// }
 
 bitflags<ClassAttributes> Parser::member_attributes() {
     bitflags<ClassAttributes> attributes;
@@ -613,19 +491,6 @@ Constructor Parser::constructor_statement() {
         };
 }
 
-// Constructor Parser::default_constructor(const Token& class_token) {
-//     return {
-//             .super_constructor_call = {},
-//             .function = std::make_unique<FunctionDeclaration>(
-//                 no_span(),
-//                 class_token,
-//                 std::vector<Token>(),
-//                 std::optional<std::unique_ptr<Expr>>()
-//             ),
-//             .decl_span = no_span()
-//         };
-// }
-
 std::unique_ptr<FunctionDeclaration> Parser::abstract_method(const Token& name, const bool skip_params) {
     std::vector<Token> parameters = skip_params ? std::vector<Token>() : functions_parameters();
     consume(Token::Type::SEMICOLON, "missing semicolon after declaration");
@@ -640,15 +505,17 @@ std::unique_ptr<VariableDeclaration> Parser::abstract_field(const Token& name) {
 std::unique_ptr<TraitDeclaration> Parser::trait_declaration() {
     consume(Token::Type::IDENTIFIER, "missing trait name");
     Token trait_name = current;
+    std::vector<TraitUsage> traits_used;
+    if (match(Token::Type::USING)) {
+        do {
+            traits_used.push_back(trait_usage());
+        } while (match(Token::Type::COMMA));
+    }
     consume(Token::Type::LEFT_BRACE, "missing trait body");
     std::vector<Field> fields;
     std::vector<Method> methods;
-    std::vector<TraitUsage> traits_used;
+
     while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
-        if (match(Token::Type::USING)) {
-            traits_used.push_back(trait_usage());
-            continue;
-        }
         with_source_span(
             [this, &methods, &fields] -> int {
                 auto attributes = member_attributes();
@@ -658,11 +525,8 @@ std::unique_ptr<TraitDeclaration> Parser::trait_declaration() {
                 bool skip_params = attributes[ClassAttributes::GETTER] && !check(Token::Type::LEFT_PAREN);
                 auto span = make_span();
                 if (check(Token::Type::LEFT_PAREN) || skip_params) {
-                    methods.emplace_back(Method {
-                        .attributes = attributes,
-                        .function = in_trait_function(member_name, attributes, skip_params),
-                        .span = span
-                    });
+                    auto fn = in_trait_function(member_name, attributes, skip_params);
+                    methods.emplace_back(Method { .attributes = attributes, .function = std::move(fn), .span = span });
                     return 0; // TODO
                 }
 
@@ -670,11 +534,9 @@ std::unique_ptr<TraitDeclaration> Parser::trait_declaration() {
                 attributes += ClassAttributes::GETTER;
                 attributes += ClassAttributes::SETTER;
                 attributes += ClassAttributes::ABSTRACT;
-                fields.emplace_back(Field {
-                    .attributes = attributes,
-                    .variable = abstract_field(member_name),
-                    .span = span
-                });
+                fields.emplace_back(
+                    Field { .attributes = attributes, .variable = abstract_field(member_name), .span = span }
+                );
                 return 0;
             }
         );
@@ -916,20 +778,6 @@ SuperConstructorCall Parser::super_constructor_call() {
 }
 
 std::unique_ptr<ObjectExpr> Parser::object_expression() {
-    // std::optional<SuperConstructorCall> super_constructor;
-    // std::optional<Token> superclass;
-    // if (match(Token::Type::COLON)) {
-    //     with_source_span(
-    //         [this, &superclass, &super_constructor] {
-    //             consume(Token::Type::IDENTIFIER, "missing superclass name");
-    //             superclass = current;
-    //             super_constructor = super_constructor_call();
-    //         }
-    //     );
-    // }
-    //
-    // // TODO: validate consturctor across parser?? (or in analysis)
-    // StructureBody body = structure_body(object_token);
     return std::make_unique<ObjectExpr>(make_span(), class_object());
 }
 

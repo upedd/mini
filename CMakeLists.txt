@@ -45,8 +45,6 @@ add_executable(bite source/main.cpp
         source/base/hash.h
         source/base/print.h
         source/base/logger.h
-        source/shared/Message.h
-        source/api/enhance_messages.h
         source/base/stream.h
         source/base/box.h
         source/base/overloaded.h
@@ -55,6 +53,9 @@ add_executable(bite source/main.cpp
         source/Analyzer.cpp
         source/Analyzer.h
         source/base/debug.h
+        source/Diagnostics.h
+        source/Diagnostics.cpp
+        source/AstVisitor.h
 )
 
 # TODO: disable in release builds
