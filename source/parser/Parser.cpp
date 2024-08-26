@@ -314,23 +314,130 @@ std::vector<std::unique_ptr<Expr>> Parser::call_arguments() {
     return arguments;
 }
 
+TraitUsage Parser::trait_usage() {
+    return with_source_span(
+        [this] {
+            consume(Token::Type::IDENTIFIER, "expected trait name");
+            Token trait = current;
+            std::vector<Token> exclusions;
+            std::vector<std::pair<Token, Token>> aliases;
+            if (match(Token::Type::LEFT_PAREN)) {
+                do {
+                    if (match(Token::Type::EXCLUDE)) {
+                        consume(Token::Type::IDENTIFIER, "invalid exclusion item");
+                        exclusions.push_back(current);
+                    } else {
+                        consume(Token::Type::IDENTIFIER, "invalid trait composition argument");
+                        Token before = current;
+                        consume(Token::Type::AS, "invalid trait composition argument");
+                        consume(Token::Type::IDENTIFIER, "invalid alias");
+                        Token after = current;
+                        aliases.emplace_back(before, after);
+                    }
+                } while (match(Token::Type::COMMA));
+                consume(Token::Type::RIGHT_PAREN, "unmatched ')'");
+            }
+
+            return TraitUsage {
+                    .trait = trait,
+                    .exclusions = std::move(exclusions),
+                    .aliases = std::move(aliases),
+                    .span = make_span()
+                };
+        }
+    );
+}
+
+Constructor Parser::constructor() {
+    return with_source_span(
+        [this] {
+            Token init_token = advance();
+
+            std::vector<Token> parameters = functions_parameters();
+            std::optional<SuperConstructorCall> super_constructor_call;
+            // init(parameters*) : super(arguments*) [block]
+            if (match(Token::Type::COLON)) {
+                super_constructor_call = this->super_constructor_call();
+            }
+            return Constructor { std::move(super_constructor_call), function_declaration_body(init_token), make_span() };
+        }
+    );
+}
+
+ClassObject Parser::class_object() {
+    ClassObject object;
+    if (match(Token::Type::SEMICOLON)) {
+        object.superclass = current;
+    }
+    if (match(Token::Type::USING)) {
+        do {
+            object.traits_used.emplace_back(trait_usage());
+        } while (match(Token::Type::COMMA));
+    }
+
+    consume(Token::Type::LEFT_BRACE, "missing body");
+    while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
+        if (next.string == context_keyword("init")) {
+            object.constructor = this->constructor();
+        }
+
+        // TODO: refactor!
+        with_source_span(
+            [this, &object]-> int {
+                auto attributes = member_attributes();
+                consume(Token::Type::IDENTIFIER, "missing member name");
+                Token member_name = current;
+
+                // Method
+                auto span = make_span();
+                bool skip_params = attributes[ClassAttributes::GETTER] && !check(Token::Type::LEFT_PAREN);
+                if (check(Token::Type::LEFT_PAREN) || skip_params) {
+                    if (attributes[ClassAttributes::ABSTRACT]) {
+                        object.methods.emplace_back(Method {
+                            .attributes = attributes,
+                            .function = abstract_method(member_name, skip_params),
+                            .span = span
+                        });
+
+                    } else {
+                        object.methods.emplace_back(Method {
+                            .attributes = attributes,
+                            .function = function_declaration_body(member_name, skip_params),
+                            .span = span
+                        }
+                        );
+                    }
+                    return 0; // TODO
+                }
+
+                // Field
+                attributes += ClassAttributes::GETTER;
+                attributes += ClassAttributes::SETTER;
+                object.fields.emplace_back(Field {
+                    .attributes = attributes,
+                    .variable = var_declaration_body(member_name),
+                    .span = span
+                });
+                return 0; // TODO
+            }
+        );
+    }
+
+    consume(Token::Type::RIGHT_BRACE, "unmatched }");
+    return Ob
+}
+
 std::unique_ptr<ClassDeclaration> Parser::class_declaration(const bool is_abstract) {
     consume(Token::Type::IDENTIFIER, "missing class name");
     Token class_name = current;
     std::optional<Token> superclass;
     if (match(Token::Type::COLON)) {
-                consume(Token::Type::IDENTIFIER, "missing superclass name");
+        consume(Token::Type::IDENTIFIER, "missing superclass name");
         superclass = current;
     }
     StructureBody body = structure_body(class_name);
 
-    return std::make_unique<ClassDeclaration>(
-        make_span(),
-        class_name,
-        superclass,
-        std::move(body),
-        is_abstract
-    );
+    return std::make_unique<ClassDeclaration>(make_span(), class_name, superclass, std::move(body), is_abstract);
 }
 
 StructureBody Parser::structure_body(const Token& class_token) {
@@ -770,9 +877,9 @@ std::unique_ptr<ContinueExpr> Parser::continue_expression() {
 
 std::unique_ptr<BreakExpr> Parser::break_expression() {
     std::optional<Token> label;
-            if (match(Token::Type::LABEL)) {
-                label = current;
-            }
+    if (match(Token::Type::LABEL)) {
+        label = current;
+    }
 
     if (!is_expression_start(next.type)) {
         return std::make_unique<BreakExpr>(make_span(), std::optional<std::unique_ptr<Expr>> {}, label);
@@ -789,12 +896,16 @@ std::unique_ptr<ReturnExpr> Parser::return_expression() {
 }
 
 SuperConstructorCall Parser::super_constructor_call() {
-                std::vector<std::unique_ptr<Expr>> superclass_arguments;
-                if (match(Token::Type::LEFT_PAREN)) {
-                    superclass_arguments = call_arguments();
-                }
-        return SuperConstructorCall {.arguments = std::move(superclass_arguments), .span = make_span()};
-
+    return with_source_span(
+        [this] {
+            consume(Token::Type::SUPER, "expected superconsturctor call");
+            std::vector<std::unique_ptr<Expr>> superclass_arguments;
+            if (match(Token::Type::LEFT_PAREN)) {
+                superclass_arguments = call_arguments();
+            }
+            return SuperConstructorCall { .arguments = std::move(superclass_arguments), .span = make_span() };
+        }
+    );
 }
 
 std::unique_ptr<ObjectExpr> Parser::object_expression() {
@@ -802,22 +913,19 @@ std::unique_ptr<ObjectExpr> Parser::object_expression() {
     std::optional<SuperConstructorCall> super_constructor;
     std::optional<Token> superclass;
     if (match(Token::Type::COLON)) {
-        with_source_span([this, &superclass, &super_constructor] {
-            consume(Token::Type::IDENTIFIER, "missing superclass name");
-            superclass = current;
-            super_constructor = super_constructor_call();
-        });
+        with_source_span(
+            [this, &superclass, &super_constructor] {
+                consume(Token::Type::IDENTIFIER, "missing superclass name");
+                superclass = current;
+                super_constructor = super_constructor_call();
+            }
+        );
     }
 
     // TODO: validate consturctor across parser?? (or in analysis)
     StructureBody body = structure_body(object_token);
 
-    return std::make_unique<ObjectExpr>(
-        make_span(),
-        std::move(body),
-        superclass,
-        std::move(super_constructor)
-    );
+    return std::make_unique<ObjectExpr>(make_span(), std::move(body), superclass, std::move(super_constructor));
 }
 
 std::unique_ptr<Expr> Parser::labeled_expression() {

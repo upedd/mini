@@ -99,7 +99,10 @@ private:
     std::unique_ptr<FunctionDeclaration> function_declaration_body(const Token& name, bool skip_params = false);
     std::vector<Token> functions_parameters();
     std::vector<std::unique_ptr<Expr>> call_arguments();
+    TraitUsage trait_usage();
 
+    Constructor constructor();
+    ClassObject class_object();
     std::unique_ptr<ClassDeclaration> class_declaration(bool is_abstract = false);
     StructureBody structure_body(const Token& class_token);
 
