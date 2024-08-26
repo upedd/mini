@@ -7,7 +7,6 @@
 #include "Ast.h"
 #include "AstVisitor.h"
 #include "base/logger.h"
-#include "base/overloaded.h"
 #include "shared/Message.h"
 #include "shared/SharedContext.h"
 
@@ -62,28 +61,34 @@ namespace bite {
         void invalid_expr(InvalidExpr& /*unused*/) {}
         void literal_expr(LiteralExpr& /*unused*/) {}
 
-
-        // TODO: mess?
-        DeclarationInfo* set_declaration_info(AstNode* node, DeclarationInfo info);
-
-        void declare_in_function_enviroment(FunctionEnviroment& env, StringTable::Handle name, AstNode* declaration);
+        void declare_in_function_enviroment(
+            FunctionEnviroment& env,
+            StringTable::Handle name,
+            AstNode* declaration,
+            DeclarationInfo* declaration_info
+        );
 
         void declare_in_class_enviroment(ClassEnviroment& env, StringTable::Handle name, const MemberInfo& attributes);
 
 
         void declare_in_trait_enviroment(TraitEnviroment& env, StringTable::Handle name, const MemberInfo& attributes);
 
-        void declare_in_global_enviroment(GlobalEnviroment& env, StringTable::Handle name, AstNode* declaration);
+        void declare_in_global_enviroment(
+            GlobalEnviroment& env,
+            StringTable::Handle name,
+            AstNode* declaration,
+            DeclarationInfo* declaration_info
+        );
 
         // declare variable
-        void declare(StringTable::Handle name, AstNode* declaration);
+        void declare(StringTable::Handle name, AstNode* declaration, DeclarationInfo* declaration_info);
 
         ClassEnviroment* current_class_enviroment();
 
         TraitEnviroment* current_trait_enviroment();
 
         // TODO: refactor!
-        void declare_in_outer(StringTable::Handle name, AstNode* declaration);
+        void declare_in_outer(StringTable::Handle name, AstNode* declaration, DeclarationInfo* declaration_info);
 
 
         static std::optional<Binding> get_binding_in_function_enviroment(

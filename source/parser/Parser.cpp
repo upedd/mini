@@ -298,7 +298,7 @@ std::unique_ptr<FunctionDeclaration> Parser::function_declaration_body(const Tok
     std::vector<Token> parameters = skip_params ? std::vector<Token>() : functions_parameters();
     consume(Token::Type::LEFT_BRACE, "Expected '{' before function body");
     auto body = block();
-    return std::unique_ptr<FunctionDeclaration>(make_span(), name, std::move(parameters), std::move(body));
+    return std::make_unique<FunctionDeclaration>(make_span(), name, std::move(parameters), std::move(body));
 }
 
 std::vector<Token> Parser::functions_parameters() {

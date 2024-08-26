@@ -57,7 +57,7 @@ const std::vector<std::string>& Compiler::get_natives() {
     return natives;
 }
 
-void Compiler::this_expr() {
+void Compiler::this_expr(const ThisExpr&) {
     // safety: check if used in class method context
     emit(OpCode::THIS);
 }
@@ -185,8 +185,7 @@ void Compiler::block_expr(const BlockExpr& expr) {
 }
 
 void Compiler::loop_expr(const LoopExpr& expr) {
-    std::optional<StringTable::Handle> label =
-        expr.label ? expr.label->string : std::optional<StringTable::Handle> {};
+    std::optional<StringTable::Handle> label = expr.label ? expr.label->string : std::optional<StringTable::Handle> {};
     int continue_idx = current_function()->add_empty_jump_destination();
     int break_idx = current_function()->add_empty_jump_destination();
 
@@ -245,8 +244,7 @@ void Compiler::while_expr(const WhileExpr& expr) {
     //     expr->label
     // );
     // loop_expression(desugared_while);
-    std::optional<StringTable::Handle> label =
-        expr.label ? expr.label->string : std::optional<StringTable::Handle> {};
+    std::optional<StringTable::Handle> label = expr.label ? expr.label->string : std::optional<StringTable::Handle> {};
     int continue_idx = current_function()->add_empty_jump_destination();
     int break_idx = current_function()->add_empty_jump_destination();
     int end_idx = current_function()->add_empty_jump_destination();
@@ -768,8 +766,8 @@ void Compiler::binary_expr(const BinaryExpr& expr) {
     if (expr.op == Token::Type::EQUAL) {
         visit(*expr.right);
         // TODO: refactor?
-        if (std::holds_alternative<AstNode<GetPropertyExpr>>(expr.left)) {
-            visit(*std::get<AstNode<GetPropertyExpr>>(expr.left)->left);
+        if (expr.left->is_get_property_expr()) {
+            visit(*expr.left->as_get_property_expr()->left);
         }
         emit_set_variable(expr.binding);
         current_context().on_stack--;
@@ -786,11 +784,11 @@ void Compiler::binary_expr(const BinaryExpr& expr) {
     visit(*expr.right);
 
     // TODO: refactor!!
-    if (std::holds_alternative<AstNode<GetPropertyExpr>>(expr.left) && (expr.op == Token::Type::EQUAL || expr.op ==
-        Token::Type::PLUS_EQUAL || expr.op == Token::Type::MINUS_EQUAL || expr.op == Token::Type::STAR_EQUAL || expr.
-        op == Token::Type::SLASH_EQUAL || expr.op == Token::Type::SLASH_SLASH_EQUAL || expr.op ==
-        Token::Type::AND_EQUAL || expr.op == Token::Type::CARET_EQUAL || expr.op == Token::Type::BAR_EQUAL)) {
-        visit(*std::get<AstNode<GetPropertyExpr>>(expr.left)->left);
+    if (expr.left->is_get_property_expr() && (expr.op == Token::Type::EQUAL || expr.op == Token::Type::PLUS_EQUAL ||
+        expr.op == Token::Type::MINUS_EQUAL || expr.op == Token::Type::STAR_EQUAL || expr.op == Token::Type::SLASH_EQUAL
+        || expr.op == Token::Type::SLASH_SLASH_EQUAL || expr.op == Token::Type::AND_EQUAL || expr.op ==
+        Token::Type::CARET_EQUAL || expr.op == Token::Type::BAR_EQUAL)) {
+        visit(*expr.left->as_get_property_expr());
     }
     switch (expr.op) {
         case Token::Type::PLUS: emit(OpCode::ADD);
@@ -961,7 +959,7 @@ void Compiler::call_expr(const CallExpr& expr) {
     for (auto& argument : expr.arguments) {
         visit(*argument);
     }
-    auto arguments_size = std::ranges::distance(arguments_size);
+    auto arguments_size = std::ranges::distance(expr.arguments);
     emit(OpCode::CALL, arguments_size); // TODO: check
     current_context().on_stack -= arguments_size;
 }

@@ -1,7 +1,5 @@
 #include "Analyzer.h"
 
-#include "base/overloaded.h"
-
 void bite::Analyzer::emit_error_diagnostic(
     const std::string& message,
     const SourceSpan& inline_errror_location,
@@ -41,7 +39,7 @@ void bite::Analyzer::variable_declaration(VariableDeclaration& stmt) {
     if (stmt.value) {
         visit(*stmt.value.value());
     }
-    declare(stmt.name.string, &stmt); // TODO is it safe???
+    declare(stmt.name.string, &stmt, &stmt.info); // TODO is it safe???
 }
 
 void bite::Analyzer::variable_expr(VariableExpr& expr) {
@@ -53,13 +51,13 @@ void bite::Analyzer::expr_stmt(ExprStmt& stmt) {
 }
 
 void bite::Analyzer::function_declaration(FunctionDeclaration& stmt) {
-    declare_in_outer(stmt.name.string, &stmt);
+    declare_in_outer(stmt.name.string, &stmt, &stmt.info);
     function(stmt);
 }
 
 void bite::Analyzer::function(FunctionDeclaration& stmt) {
     for (const auto& param : stmt.params) {
-        declare(param.string, &stmt);
+        declare(param.string, &stmt, &stmt.info);
     }
     if (stmt.body) {
         visit(*stmt.body.value());
@@ -67,11 +65,11 @@ void bite::Analyzer::function(FunctionDeclaration& stmt) {
 }
 
 void bite::Analyzer::native_declaration(NativeDeclaration& stmt) {
-    declare(stmt.name.string, &stmt);
+    declare(stmt.name.string, &stmt, &stmt.info);
 }
 
 void bite::Analyzer::class_declaration(ClassDeclaration& stmt) {
-    declare(stmt.name.string, &stmt);
+    declare(stmt.name.string, &stmt, &stmt.info);
     auto* env = current_class_enviroment(); // assert non-null
     env->class_name = stmt.name.string;
     if (stmt.body.class_object) {
@@ -93,7 +91,7 @@ void bite::Analyzer::class_declaration(ClassDeclaration& stmt) {
 }
 
 void bite::Analyzer::object_declaration(ObjectDeclaration& stmt) {
-    declare(stmt.name.string, &stmt);
+    declare(stmt.name.string, &stmt, &stmt.info);
     visit(*stmt.object);
 }
 
@@ -223,7 +221,7 @@ void bite::Analyzer::while_expr(WhileExpr& expr) {
 void bite::Analyzer::for_expr(ForExpr& expr) {
     with_scope(
         [this, &expr] {
-            declare(expr.name.string, &expr);
+            declare(expr.name.string, &expr, &expr.info);
             visit(*expr.iterable);
             block_expr(*expr.body);
         }
@@ -311,7 +309,7 @@ void bite::Analyzer::object_expr(ObjectExpr& expr) {
 }
 
 void bite::Analyzer::trait_declaration(TraitDeclaration& stmt) {
-    declare(stmt.name.string, &stmt);
+    declare(stmt.name.string, &stmt, &stmt.info);
     auto* env = current_trait_enviroment();
     unordered_dense::map<StringTable::Handle, MemberInfo> requirements; // TODO: should contain attr as well i guess?
     for (auto& using_stmt_node : stmt.using_stmts) {
@@ -350,36 +348,11 @@ void bite::Analyzer::trait_declaration(TraitDeclaration& stmt) {
     }
 }
 
-DeclarationInfo* bite::Analyzer::set_declaration_info(AstNode* node, DeclarationInfo info) {
-    // TODO: stub
-    // if (std::holds_alternative<StmtPtr>(node)) {
-    //     auto statement = std::get<StmtPtr>(node);
-    //     return std::visit(
-    //         overloaded {
-    //             [info](AstNode<VarStmt>* stmt) -> DeclarationInfo* { return &((*stmt)->info = info); },
-    //             [](AstNode<ExprStmt>*) -> DeclarationInfo* { return nullptr; },
-    //             [info](AstNode<FunctionStmt>* stmt) -> DeclarationInfo* { return &((*stmt)->info = info); },
-    //             [info](AstNode<ClassStmt>* stmt) -> DeclarationInfo* { return &((*stmt)->info = info); },
-    //             [info](AstNode<NativeStmt>* stmt) -> DeclarationInfo* { return &((*stmt)->info = info); },
-    //             [info](AstNode<ObjectStmt>* stmt) -> DeclarationInfo* { return &((*stmt)->info = info); },
-    //             [info](AstNode<TraitStmt>* stmt) -> DeclarationInfo* { return &((*stmt)->info = info); },
-    //             [](AstNode<UsingStmt>*) -> DeclarationInfo* { return nullptr; },
-    //             [](AstNode<InvalidStmt>*) -> DeclarationInfo* { return nullptr; }
-    //         },
-    //         statement
-    //     );
-    // }
-    // auto expr = std::get<ExprPtr>(node);
-    // if (std::holds_alternative<AstNode<ForExpr>*>(expr)) {
-    //     return &((*std::get<AstNode<ForExpr>*>(expr))->info = info);
-    // }
-    return nullptr;
-}
-
 void bite::Analyzer::declare_in_function_enviroment(
     FunctionEnviroment& env,
     StringTable::Handle name,
-    AstNode* declaration
+    AstNode* declaration,
+    DeclarationInfo* declaration_info
 ) {
     if (env.locals.scopes.empty()) {
         if (std::ranges::contains(env.parameters, name)) {
@@ -421,12 +394,13 @@ void bite::Analyzer::declare_in_function_enviroment(
             }
         }
         // assert not-null probably
-        DeclarationInfo* info = set_declaration_info(
-            declaration,
-            LocalDeclarationInfo { .declaration = declaration, .idx = env.locals.locals_count++, .is_captured = false }
-        );
+        *declaration_info = LocalDeclarationInfo {
+                .declaration = declaration,
+                .idx = env.locals.locals_count++,
+                .is_captured = false
+            };
         env.locals.scopes.back().push_back(
-            Local { .declaration = reinterpret_cast<LocalDeclarationInfo*>(info), .name = name }
+            Local { .declaration = reinterpret_cast<LocalDeclarationInfo*>(declaration_info), .name = name }
         );
     }
 }
@@ -515,7 +489,8 @@ void bite::Analyzer::declare_in_trait_enviroment(
 void bite::Analyzer::declare_in_global_enviroment(
     GlobalEnviroment& env,
     StringTable::Handle name,
-    AstNode* declaration
+    AstNode* declaration,
+    DeclarationInfo* declaration_info
 ) {
     if (env.locals.scopes.empty()) {
         if (env.globals.contains(name)) {
@@ -539,11 +514,8 @@ void bite::Analyzer::declare_in_global_enviroment(
             );
             m_has_errors = true;
         }
-        DeclarationInfo* info = set_declaration_info(
-            declaration,
-            GlobalDeclarationInfo { .declaration = declaration, .name = name }
-        );
-        env.globals[name] = reinterpret_cast<GlobalDeclarationInfo*>(info);
+        *declaration_info = GlobalDeclarationInfo { .declaration = declaration, .name = name };
+        env.globals[name] = reinterpret_cast<GlobalDeclarationInfo*>(declaration_info);
     } else {
         for (auto& local : env.locals.scopes.back()) {
             if (local.name == name) {
@@ -568,27 +540,33 @@ void bite::Analyzer::declare_in_global_enviroment(
                 m_has_errors = true;
             }
         }
-        DeclarationInfo* info = set_declaration_info(
-            declaration,
-            LocalDeclarationInfo { .declaration = declaration, .idx = env.locals.locals_count++, .is_captured = false }
-        );
+        *declaration_info = LocalDeclarationInfo {
+                .declaration = declaration,
+                .idx = env.locals.locals_count++,
+                .is_captured = false
+            };
         env.locals.scopes.back().push_back(
-            Local { .declaration = reinterpret_cast<LocalDeclarationInfo*>(info), .name = name }
+            Local { .declaration = reinterpret_cast<LocalDeclarationInfo*>(declaration_info), .name = name }
         );
     }
 }
 
-void bite::Analyzer::declare(StringTable::Handle name, AstNode* declaration) {
-    for (auto node : node_stack | std::views::reverse) {
+void bite::Analyzer::declare(StringTable::Handle name, AstNode* declaration, DeclarationInfo* declaration_info) {
+    for (auto* node : node_stack | std::views::reverse) {
         if (node->is_function_declaration()) {
-            declare_in_function_enviroment(node->as_function_declaration()->enviroment, name, declaration);
+            declare_in_function_enviroment(
+                node->as_function_declaration()->enviroment,
+                name,
+                declaration,
+                declaration_info
+            );
         }
     }
-    declare_in_global_enviroment(ast->enviroment, name, declaration);
+    declare_in_global_enviroment(ast->enviroment, name, declaration, declaration_info);
 }
 
 ClassEnviroment* bite::Analyzer::current_class_enviroment() {
-    for (auto node : node_stack | std::views::reverse) {
+    for (auto* node : node_stack | std::views::reverse) {
         if (node->is_class_declaration()) {
             return &node->as_class_declaration()->enviroment;
         }
@@ -600,7 +578,7 @@ ClassEnviroment* bite::Analyzer::current_class_enviroment() {
 }
 
 TraitEnviroment* bite::Analyzer::current_trait_enviroment() {
-    for (auto node : node_stack | std::views::reverse) {
+    for (auto* node : node_stack | std::views::reverse) {
         if (node->is_trait_declaration()) {
             return &node->as_trait_declaration()->enviroment;
         }
@@ -608,19 +586,28 @@ TraitEnviroment* bite::Analyzer::current_trait_enviroment() {
     return nullptr;
 }
 
-void bite::Analyzer::declare_in_outer(StringTable::Handle name, AstNode* declaration) {
+void bite::Analyzer::declare_in_outer(
+    StringTable::Handle name,
+    AstNode* declaration,
+    DeclarationInfo* declaration_info
+) {
     bool skipped = false;
-    for (auto node : node_stack | std::views::reverse) {
+    for (auto* node : node_stack | std::views::reverse) {
         if (node->is_function_declaration()) {
             if (!skipped) {
                 skipped = true;
                 continue;
             }
-            declare_in_function_enviroment(node->as_function_declaration()->enviroment, name, declaration);
+            declare_in_function_enviroment(
+                node->as_function_declaration()->enviroment,
+                name,
+                declaration,
+                declaration_info
+            );
             return;
         }
     }
-    declare_in_global_enviroment(ast->enviroment, name, declaration);
+    declare_in_global_enviroment(ast->enviroment, name, declaration, declaration_info);
 }
 
 std::optional<Binding> bite::Analyzer::get_binding_in_function_enviroment(
@@ -725,7 +712,7 @@ int64_t bite::Analyzer::handle_closure(
 }
 
 Binding bite::Analyzer::resolve_without_upvalues(StringTable::Handle name, const SourceSpan& span) {
-    for (auto node : node_stack | std::views::reverse) {
+    for (auto* node : node_stack | std::views::reverse) {
         if (node->is_function_declaration()) {
             if (auto binding = get_binding_in_function_enviroment(node->as_function_declaration()->enviroment, name)) {
                 return std::move(binding.value());
@@ -754,22 +741,22 @@ Binding bite::Analyzer::resolve_without_upvalues(StringTable::Handle name, const
 
 Binding bite::Analyzer::resolve(StringTable::Handle name, const SourceSpan& span) {
     std::vector<std::reference_wrapper<FunctionEnviroment>> function_enviroments_visited;
-    for (auto node : node_stack | std::views::reverse) {
+    for (auto* node : node_stack | std::views::reverse) {
         if (node->is_function_declaration()) {
             if (auto binding = get_binding_in_function_enviroment(node->as_function_declaration()->enviroment, name)) {
-                    if (std::holds_alternative<LocalBinding>(*binding) && !function_enviroments_visited.empty()) {
-                        capture_local(std::get<LocalBinding>(*binding).info);
-                        return UpvalueBinding {
-                                handle_closure(
-                                    function_enviroments_visited,
-                                    name,
-                                    std::get<LocalBinding>(*binding).info->idx
-                                )
-                            };
-                    }
-
-                    return std::move(binding.value());
+                if (std::holds_alternative<LocalBinding>(*binding) && !function_enviroments_visited.empty()) {
+                    capture_local(std::get<LocalBinding>(*binding).info);
+                    return UpvalueBinding {
+                            handle_closure(
+                                function_enviroments_visited,
+                                name,
+                                std::get<LocalBinding>(*binding).info->idx
+                            )
+                        };
                 }
+
+                return std::move(binding.value());
+            }
         }
         if (node->is_class_declaration()) {
             if (auto binding = get_binding_in_class_enviroment(node->as_class_declaration()->enviroment, name, span)) {
@@ -808,7 +795,7 @@ Binding bite::Analyzer::resolve(StringTable::Handle name, const SourceSpan& span
 }
 
 bool bite::Analyzer::is_in_loop() {
-    for (auto node : node_stack) {
+    for (auto* node : node_stack) {
         if (node->is_loop_expr() || node->is_while_expr() || node->is_for_expr()) {
             return true;
         }
@@ -817,7 +804,7 @@ bool bite::Analyzer::is_in_loop() {
 }
 
 bool bite::Analyzer::is_in_function() {
-    for (auto node : node_stack) {
+    for (auto* node : node_stack) {
         if (node->is_function_declaration()) {
             return true;
         }
@@ -826,7 +813,7 @@ bool bite::Analyzer::is_in_function() {
 }
 
 bool bite::Analyzer::is_there_matching_label(StringTable::Handle label_name) {
-    for (auto node : node_stack | std::views::reverse) {
+    for (auto* node : node_stack | std::views::reverse) {
         // labels do not cross functions
         if (node->is_function_declaration()) {
             break;
@@ -860,7 +847,7 @@ bool bite::Analyzer::is_there_matching_label(StringTable::Handle label_name) {
 }
 
 bool bite::Analyzer::is_in_class() {
-    for (auto node : node_stack) {
+    for (auto* node : node_stack) {
         if (node->is_class_declaration() || node->is_object_expr()) {
             return true;
         }
@@ -869,8 +856,9 @@ bool bite::Analyzer::is_in_class() {
 }
 
 bool bite::Analyzer::is_in_class_with_superclass() {
-    for (auto node : node_stack) {
-        if ((node->is_class_declaration() && node->as_class_declaration()->super_class) || (node->is_object_expr() && node->as_object_expr()->super_class)) {
+    for (auto* node : node_stack) {
+        if ((node->is_class_declaration() && node->as_class_declaration()->super_class) || (node->is_object_expr() &&
+            node->as_object_expr()->super_class)) {
             return true;
         }
     }
@@ -1000,7 +988,10 @@ void bite::Analyzer::handle_constructor(
                 }
             );
         }
-        auto super_arguments_size = std::distance(constructor.super_arguments.begin(), constructor.super_arguments.end());
+        auto super_arguments_size = std::distance(
+            constructor.super_arguments.begin(),
+            constructor.super_arguments.end()
+        );
         if (super_arguments_size != superconstructor.function->params.size()) {
             // TODO: not safe?
             emit_error_diagnostic(
@@ -1031,7 +1022,7 @@ void bite::Analyzer::handle_constructor(
     }
     node_stack.emplace_back(&*constructor.function);
     for (const auto& param : constructor.function->params) {
-        declare(param.string, &*constructor.function);
+        declare(param.string, &*constructor.function, &constructor.function->info);
     }
     for (auto& super_arg : constructor.super_arguments) {
         visit(*super_arg);

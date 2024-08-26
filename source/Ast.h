@@ -67,6 +67,7 @@
 enum class NodeKind : std::uint8_t {
     AST_NODES(DEFINE_TYPE_ENUM)
 };
+
 #define DECLARE_NODE(class_name, type_name) class class_name;
 
 AST_NODES(DECLARE_NODE)
@@ -728,7 +729,7 @@ public:
     explicit InvalidExpr(bite::SourceSpan span) : Expr(std::move(span)) {}
 };
 
-#define DECLARE_AS_METHOD(class_name, type_name) class_name* AstNode::as_##type_name() { return static_cast<class_name*>(this);}
+#define DECLARE_AS_METHOD(class_name, type_name) inline class_name* AstNode::as_##type_name() { return static_cast<class_name*>(this);}
 AST_NODES(DECLARE_AS_METHOD)
 
 // template <typename T>

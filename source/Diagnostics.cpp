@@ -33,6 +33,7 @@ void print_diagnostic_level(const DiagnosticLevel level, std::ostream& output, b
             } else {
                 bite::print(foreground(diagnostic_level_color(level)) | emphasis::bold, output, "warning");
             }
+            break;
         }
         case DiagnosticLevel::ERROR: {
             if (!is_terminal) {
@@ -40,6 +41,7 @@ void print_diagnostic_level(const DiagnosticLevel level, std::ostream& output, b
             } else {
                 bite::print(foreground(diagnostic_level_color(level)) | emphasis::bold, output, "error");
             }
+            break;
         }
         case DiagnosticLevel::INFO: {
             if (!is_terminal) {
@@ -47,6 +49,7 @@ void print_diagnostic_level(const DiagnosticLevel level, std::ostream& output, b
             } else {
                 bite::print(foreground(diagnostic_level_color(level)) | emphasis::bold, output, "info");
             }
+            break;
         }
     }
 }
@@ -90,7 +93,8 @@ CompiledInlineHint compile_inline_hint(const InlineHint& hint) {
         line_number++;
         file_offset += static_cast<std::int64_t>(line.size()) + 1;
         if (file_offset > hint.location.start_offset) {
-            std::int64_t in_line_start = hint.location.start_offset - file_offset + static_cast<std::int64_t>(line.size()) + 1;
+            std::int64_t in_line_start = hint.location.start_offset - file_offset + static_cast<std::int64_t>(line.
+                size()) + 1;
             return CompiledInlineHint {
                     .line_number = line_number,
                     .line = line,
