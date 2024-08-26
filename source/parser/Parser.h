@@ -111,6 +111,7 @@ private:
 
     Constructor constructor_statement();
 
+    SuperConstructorCall super_constructor_call();
     Constructor default_constructor(const Token& class_token);
     std::unique_ptr<FunctionDeclaration> abstract_method(const Token& name, bool skip_params);
     std::unique_ptr<VariableDeclaration> abstract_field(const Token& name);

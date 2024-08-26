@@ -546,11 +546,14 @@ struct Method {
     bite::SourceSpan decl_span;
 };
 
+struct SuperConstructorCall {
+    std::vector<std::unique_ptr<Expr>> arguments;
+    bite::SourceSpan span;
+};
+
 struct Constructor {
-    bool has_super;
-    std::vector<std::unique_ptr<Expr>> super_arguments;
+    std::optional<SuperConstructorCall> super_constructor_call;
     std::unique_ptr<FunctionDeclaration> function;
-    bite::SourceSpan superconstructor_call_span;
     bite::SourceSpan decl_span;
 };
 
@@ -590,55 +593,119 @@ struct StructureBody {
     std::optional<Constructor> constructor; // TODO: remove this optional
 };
 
-class ClassDeclaration final : public Stmt {
-public:
-    [[nodiscard]] NodeKind kind() const override {
-        return NodeKind::class_declaration;
-    }
+// class ClassDeclaration final : public Stmt {
+// public:
+//     [[nodiscard]] NodeKind kind() const override {
+//         return NodeKind::class_declaration;
+//     }
+//
+//     Token name;
+//     std::optional<Token> super_class;
+//     StructureBody body;
+//     bool is_abstract = false;
+//     DeclarationInfo info;
+//     ClassEnviroment enviroment;
+//     Binding superclass_binding;
+//
+//     ClassDeclaration(
+//         bite::SourceSpan span,
+//         const Token& name,
+//         const std::optional<Token>& super_class,
+//         StructureBody body,
+//         bool is_abstract
+//     ) : Stmt(std::move(span)),
+//         name(name),
+//         super_class(super_class),
+//         body(std::move(body)),
+//         is_abstract(is_abstract) {}
+// };
 
-    Token name;
-    std::optional<Token> super_class;
-    StructureBody body;
-    bool is_abstract = false;
-    DeclarationInfo info;
+
+struct ClassObject {
+    struct Field {
+        ClassAttributes attributes;
+        std::unique_ptr<VariableDeclaration> variable;
+        bite::SourceSpan span;
+    };
+
+    struct Method {
+        ClassAttributes attributes;
+        std::unique_ptr<VariableDeclaration> variable;
+        bite::SourceSpan span;
+    };
+
+    struct Constructor {
+        std::unique_ptr<CallExpr> super_arguments_call;
+        std::unique_ptr<FunctionDeclaration> function;
+        bite::SourceSpan span;
+    };
+
+    struct TraitUsage {
+        std::vector<Token> exclusions;
+        std::vector<std::pair<Token, Token>> aliases;
+        bite::SourceSpan span;
+        Binding binding = NoBinding();
+    };
+
+    std::optional<ClassObject> metaobject;
+    std::optional<Token> superclass;
+    std::vector<Field> fields;
+    std::vector<Method> methods;
+    std::vector<TraitUsage> traits_used;
+    Constructor constructor;
     ClassEnviroment enviroment;
-    Binding superclass_binding;
-
-    ClassDeclaration(
-        bite::SourceSpan span,
-        const Token& name,
-        const std::optional<Token>& super_class,
-        StructureBody body,
-        bool is_abstract
-    ) : Stmt(std::move(span)),
-        name(name),
-        super_class(super_class),
-        body(std::move(body)),
-        is_abstract(is_abstract) {}
 };
 
-class ObjectExpr : public Expr {
+class ClassDeclaration : Stmt {
 public:
-    [[nodiscard]] NodeKind kind() const override {
-        return NodeKind::object_expr;
-    }
+    ClassDeclaration(bite::SourceSpan span, bool is_abstract, Token name, ClassObject object, DeclarationInfo info) :
+        Stmt(std::move(span)),
+        is_abstract(is_abstract),
+        name(std::move(name)),
+        object(std::move(object)),
+        info(std::move(info)) {}
 
-    StructureBody body;
-    std::optional<Token> super_class;
-    std::vector<std::unique_ptr<Expr>> superclass_arguments;
-    ClassEnviroment class_enviroment;
-    Binding superclass_binding;
-
-    ObjectExpr(
-        bite::SourceSpan span,
-        StructureBody body,
-        const std::optional<Token>& super_class,
-        std::vector<std::unique_ptr<Expr>> superclass_arguments
-    ) : Expr(std::move(span)),
-        body(std::move(body)),
-        super_class(super_class),
-        superclass_arguments(std::move(superclass_arguments)) {}
+    bool is_abstract;
+    Token name;
+    ClassObject object;
+    DeclarationInfo info;
 };
+
+class ObjectExpr : Expr {
+public:
+
+
+    ClassObject object;
+};
+
+class ObjectDeclaration : Stmt {
+public:
+    Token name;
+    ClassObject object;
+    DeclarationInfo info;
+};
+
+// class ObjectExpr : public Expr {
+// public:
+//     [[nodiscard]] NodeKind kind() const override {
+//         return NodeKind::object_expr;
+//     }
+//
+//     StructureBody body;
+//     std::optional<Token> super_class;
+//     ClassEnviroment class_enviroment;
+//     std::optional<SuperConstructorCall> super_constructor_call;
+//
+//     ObjectExpr(
+//         bite::SourceSpan span,
+//         StructureBody body,
+//         const std::optional<Token>& super_class,
+//         std::optional<SuperConstructorCall> super_constructor_call
+//     ) : Expr(std::move(span)),
+//         body(std::move(body)),
+//         super_class(super_class),
+//         super_constructor_call(std::move(super_constructor_call)) {}
+// };
 
 class NativeDeclaration final : public Stmt {
 public:
@@ -653,20 +720,20 @@ public:
                                                                   name(name) {}
 };
 
-class ObjectDeclaration final : public Stmt {
-public:
-    [[nodiscard]] NodeKind kind() const override {
-        return NodeKind::object_declaration;
-    }
-
-    Token name;
-    std::unique_ptr<Expr> object;
-    DeclarationInfo info;
-
-    ObjectDeclaration(bite::SourceSpan span, const Token& name, std::unique_ptr<Expr> object) : Stmt(std::move(span)),
-        name(name),
-        object(std::move(object)) {}
-};
+// class ObjectDeclaration final : public Stmt {
+// public:
+//     [[nodiscard]] NodeKind kind() const override {
+//         return NodeKind::object_declaration;
+//     }
+//
+//     Token name;
+//     std::unique_ptr<Expr> object;
+//     DeclarationInfo info;
+//
+//     ObjectDeclaration(bite::SourceSpan span, const Token& name, std::unique_ptr<Expr> object) : Stmt(std::move(span)),
+//         name(name),
+//         object(std::move(object)) {}
+// };
 
 class TraitDeclaration final : public Stmt {
 public:

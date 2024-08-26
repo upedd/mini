@@ -486,45 +486,35 @@ bitflags<ClassAttributes> Parser::member_attributes() {
 Constructor Parser::constructor_statement() {
     Token init_token = current;
     std::vector<Token> parameters = functions_parameters();
-    std::vector<std::unique_ptr<Expr>> super_arguments;
-    bool has_super = false;
-    bite::SourceSpan super_span;
+    std::optional<SuperConstructorCall> super_constructor;
     // init(parameters*) : super(arguments*) [block]
     if (match(Token::Type::COLON)) {
-        has_super = true;
         with_source_span(
-            [this, &super_span, &super_arguments] -> int {
+            [this, &super_constructor] -> int {
                 consume(Token::Type::SUPER, "missing superclass constructor call");
-                if (match(Token::Type::LEFT_PAREN)) {
-                    super_arguments = call_arguments();
-                }
-                super_span = make_span();
-                return 0; // TODO
+                super_constructor = super_constructor_call();
+                return 0;
             }
         );
     }
     auto span = make_span();
     consume(Token::Type::LEFT_BRACE, "missing constructor body");
     return {
-            has_super,
-            std::move(super_arguments),
+            std::move(super_constructor),
             std::make_unique<FunctionDeclaration>(make_span(), init_token, std::move(parameters), block()),
-            super_span,
             span
         };
 }
 
 Constructor Parser::default_constructor(const Token& class_token) {
     return {
-            .has_super = false,
-            .super_arguments = {},
+            .super_constructor_call = {},
             .function = std::make_unique<FunctionDeclaration>(
                 no_span(),
                 class_token,
                 std::vector<Token>(),
                 std::optional<std::unique_ptr<Expr>>()
             ),
-            .superconstructor_call_span = no_span(),
             .decl_span = no_span()
         };
 }
@@ -798,30 +788,35 @@ std::unique_ptr<ReturnExpr> Parser::return_expression() {
     return std::make_unique<ReturnExpr>(make_span(), std::move(expr));
 }
 
-std::unique_ptr<ObjectExpr> Parser::object_expression() {
-    Token object_token = current;
-    std::optional<Token> superclass;
-    std::vector<std::unique_ptr<Expr>> superclass_arguments;
-    if (match(Token::Type::COLON)) {
-
-                consume(Token::Type::IDENTIFIER, "missing superclass name");
-                superclass = current;
+SuperConstructorCall Parser::super_constructor_call() {
+                std::vector<std::unique_ptr<Expr>> superclass_arguments;
                 if (match(Token::Type::LEFT_PAREN)) {
                     superclass_arguments = call_arguments();
                 }
+        return SuperConstructorCall {.arguments = std::move(superclass_arguments), .span = make_span()};
+
+}
+
+std::unique_ptr<ObjectExpr> Parser::object_expression() {
+    Token object_token = current;
+    std::optional<SuperConstructorCall> super_constructor;
+    std::optional<Token> superclass;
+    if (match(Token::Type::COLON)) {
+        with_source_span([this, &superclass, &super_constructor] {
+            consume(Token::Type::IDENTIFIER, "missing superclass name");
+            superclass = current;
+            super_constructor = super_constructor_call();
+        });
     }
 
     // TODO: validate consturctor across parser?? (or in analysis)
     StructureBody body = structure_body(object_token);
-    body.constructor->has_super = static_cast<bool>(superclass);
-    body.constructor->super_arguments = std::move(superclass_arguments);
-    body.constructor->superconstructor_call_span = supercall_span;
 
     return std::make_unique<ObjectExpr>(
         make_span(),
         std::move(body),
         superclass,
-        std::move(superclass_arguments),
+        std::move(super_constructor)
     );
 }
 
