@@ -56,7 +56,7 @@ void bite::Analyzer::expr_stmt(ExprStmt& stmt) {
 }
 
 void bite::Analyzer::function_declaration(FunctionDeclaration& stmt) {
-    declare_in_outer(stmt.name.string, &stmt, &stmt.info);
+    declare(stmt.name.string, &stmt, &stmt.info);
     function(stmt);
 }
 
@@ -132,7 +132,7 @@ void bite::Analyzer::binary_expr(BinaryExpr& expr) {
         } else if (expr.left->is_get_property_expr()) {
             expr.binding = PropertyBinding(expr.left->as_get_property_expr()->property.string);
         } else if (expr.left->is_super_expr()) {
-            expr.binding = SuperBinding(expr.as_super_expr()->method.string);
+            expr.binding = SuperBinding(expr.left->as_super_expr()->method.string);
         } else {
             emit_error_diagnostic("expected lvalue", expr.left->span, "is not an lvalue");
         }
@@ -290,7 +290,7 @@ void bite::Analyzer::trait_declaration(TraitDeclaration& stmt) {
                 );
             }
             for (auto& method : stmt.methods) {
-                visit(*method.function);
+                function(*method.function);
             }
             // TODO: check
             // TODO: ranges
@@ -472,6 +472,7 @@ void bite::Analyzer::declare(StringTable::Handle name, AstNode* declaration, Dec
                 declaration,
                 declaration_info
             );
+            return;
         }
     }
     declare_in_global_enviroment(ast->enviroment, name, declaration, declaration_info);
@@ -662,6 +663,7 @@ Binding bite::Analyzer::resolve(StringTable::Handle name, const SourceSpan& span
 
                 return std::move(binding.value());
             }
+            function_enviroments_analyzeed.emplace_back(node->as_function_declaration()->enviroment);
         }
         if (node->is_class_declaration()) {
             if (auto binding = get_binding_in_class_enviroment(node->as_class_declaration()->enviroment, name, span)) {
@@ -793,9 +795,20 @@ void bite::Analyzer::check_member_declaration(
 
     if (overrideable_members.contains(name)) {
         auto& member = overrideable_members[name];
-        // TODO: partial overrides!!!
-        if (!info.attributes[ClassAttributes::OVERRIDE]) {
-            // TODO: maybe point to original method
+        bool emit_override_error = false;
+        // TODO: refactor!
+        if (info.attributes[ClassAttributes::GETTER] || info.attributes[ClassAttributes::ABSTRACT]) {
+            if (!info.attributes[ClassAttributes::OVERRIDE] && ((info.attributes[ClassAttributes::GETTER] && member.
+                attributes[ClassAttributes::GETTER]) || (info.attributes[ClassAttributes::SETTER] && member.attributes[
+                ClassAttributes::SETTER]))) {
+                emit_override_error = true;
+            }
+        } else if (!info.attributes[ClassAttributes::OVERRIDE]) {
+
+            emit_override_error = true;
+        }
+        // TODO: maybe point to original method
+        if (emit_override_error) {
             emit_error_diagnostic(
                 "memeber should override explicitly",
                 info.decl_span,
@@ -804,9 +817,7 @@ void bite::Analyzer::check_member_declaration(
         }
         // auto& member_attr = overrideable_members[method.function->name.string];
         // auto& method_attr = method.attributes;
-        // if (!method.attributes[ClassAttributes::OVERRIDE] && ((member_attr.attributes[ClassAttributes::GETTER] &&
-        //     method_attr[ClassAttributes::GETTER]) || (member_attr.attributes[ClassAttributes::SETTER] && method_attr
-        //     [ClassAttributes::SETTER]))) {
+        // if (!method.attributes[ClassAttributes::OVERRIDE] && () {
         //     // TODO: maybe point to original method
         //     // TODO: fixme!
         //     emit_error_diagnostic(
@@ -949,7 +960,6 @@ void bite::Analyzer::handle_constructor(
             }
 
 
-
             if (constructor.function->body) {
                 visit(**constructor.function->body);
             }
@@ -1054,9 +1064,7 @@ void bite::Analyzer::structure_body(
     }
 
     for (auto& method : body.methods) {
-        with_context(*method.function, [this, &method] {
-            function(*method.function);
-        });
+        function(*method.function);
     }
 
     // TODO: getter and setters requirements workings
