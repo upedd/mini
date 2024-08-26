@@ -83,7 +83,7 @@ public:
     AST_NODES(TYPE_METHODS)
 
     bite::SourceSpan span;
-    explicit AstNode(bite::SourceSpan span) : span(std::move(span)) {}
+    explicit AstNode(const bite::SourceSpan& span) : span(span) {}
 };
 
 struct LocalDeclarationInfo {
@@ -97,7 +97,7 @@ struct GlobalDeclarationInfo {
     StringTable::Handle name;
 };
 
-using DeclarationInfo = std::variant<std::monostate, LocalDeclarationInfo, GlobalDeclarationInfo>;
+using DeclarationInfo = std::variant<LocalDeclarationInfo, GlobalDeclarationInfo>;
 
 
 using Binding = std::variant<struct NoBinding, struct LocalBinding, struct GlobalBinding, struct UpvalueBinding, struct
@@ -107,12 +107,11 @@ using Binding = std::variant<struct NoBinding, struct LocalBinding, struct Globa
 struct NoBinding {};
 
 struct LocalBinding {
-    AstNode* info;
+    LocalDeclarationInfo* info;
 };
 
 struct GlobalBinding {
-    StringTable::Handle name;
-    AstNode* info;
+    GlobalDeclarationInfo* info;
 };
 
 struct UpvalueBinding {
@@ -141,9 +140,10 @@ struct SuperBinding {
     StringTable::Handle property;
 };
 
+class Declaration;
 
 struct Local {
-    AstNode* declaration;
+    Declaration* declaration;
     StringTable::Handle name;
 };
 
@@ -153,7 +153,7 @@ struct Locals {
 };
 
 struct GlobalEnviroment {
-    bite::unordered_dense::map<StringTable::Handle, AstNode*> globals;
+    bite::unordered_dense::map<StringTable::Handle, Declaration*> globals;
     Locals locals;
 };
 
@@ -202,12 +202,18 @@ struct TraitEnviroment {
 
 class Stmt : public AstNode {
 public:
-    explicit Stmt(bite::SourceSpan span) : AstNode(std::move(span)) {}
+    explicit Stmt(const bite::SourceSpan& span) : AstNode(span) {}
 };
 
 class Expr : public AstNode {
 public:
-    explicit Expr(bite::SourceSpan span) : AstNode(std::move(span)) {}
+    explicit Expr(const bite::SourceSpan& span) : AstNode(span) {}
+};
+
+class Declaration : public Stmt {
+public:
+    DeclarationInfo info;
+    explicit Declaration(const bite::SourceSpan& span) : Stmt(span) {}
 };
 
 class Ast {
@@ -226,9 +232,9 @@ public:
     std::unique_ptr<Expr> expr;
     Token::Type op;
 
-    UnaryExpr(bite::SourceSpan span, std::unique_ptr<Expr> expr, Token::Type op) : Expr(std::move(span)),
-        expr(std::move(expr)),
-        op(op) {}
+    UnaryExpr(const bite::SourceSpan& span, std::unique_ptr<Expr> expr, Token::Type op) : Expr(span),
+                                                                                          expr(std::move(expr)),
+                                                                                          op(op) {}
 };
 
 class BinaryExpr final : public Expr {
@@ -242,8 +248,8 @@ public:
     Token::Type op;
     Binding binding;
 
-    BinaryExpr(bite::SourceSpan span, std::unique_ptr<Expr> left, std::unique_ptr<Expr> right, Token::Type op) :
-        Expr(std::move(span)),
+    BinaryExpr(const bite::SourceSpan& span, std::unique_ptr<Expr> left, std::unique_ptr<Expr> right, Token::Type op) :
+        Expr(span),
         left(std::move(left)),
         right(std::move(right)),
         op(op) {}
@@ -258,8 +264,8 @@ public:
     std::unique_ptr<Expr> callee;
     std::vector<std::unique_ptr<Expr>> arguments;
 
-    CallExpr(bite::SourceSpan span, std::unique_ptr<Expr> callee, std::vector<std::unique_ptr<Expr>> arguments) :
-        Expr(std::move(span)),
+    CallExpr(const bite::SourceSpan& span, std::unique_ptr<Expr> callee, std::vector<std::unique_ptr<Expr>> arguments) :
+        Expr(span),
         callee(std::move(callee)),
         arguments(std::move(arguments)) {}
 };
@@ -272,8 +278,8 @@ public:
 
     Value value;
 
-    LiteralExpr(bite::SourceSpan span, Value value) : Expr(std::move(span)),
-                                                      value(std::move(value)) {}
+    LiteralExpr(const bite::SourceSpan& span, Value value) : Expr(span),
+                                                             value(std::move(value)) {}
 };
 
 class StringExpr final : public Expr {
@@ -284,8 +290,8 @@ public:
 
     std::string string;
 
-    StringExpr(bite::SourceSpan span, std::string string) : Expr(std::move(span)),
-                                                            string(std::move(string)) {}
+    StringExpr(const bite::SourceSpan& span, std::string string) : Expr(span),
+                                                                   string(std::move(string)) {}
 };
 
 class VariableExpr final : public Expr {
@@ -297,8 +303,8 @@ public:
     Token identifier;
     Binding binding;
 
-    VariableExpr(bite::SourceSpan span, const Token& identifier) : Expr(std::move(span)),
-                                                                   identifier(identifier) {}
+    VariableExpr(const bite::SourceSpan& span, const Token& identifier) : Expr(span),
+                                                                          identifier(identifier) {}
 };
 
 class GetPropertyExpr final : public Expr {
@@ -310,9 +316,9 @@ public:
     std::unique_ptr<Expr> left;
     Token property;
 
-    GetPropertyExpr(bite::SourceSpan span, std::unique_ptr<Expr> left, const Token& property) : Expr(std::move(span)),
-        left(std::move(left)),
-        property(property) {}
+    GetPropertyExpr(const bite::SourceSpan& span, std::unique_ptr<Expr> left, const Token& property) : Expr(span),
+                                                                                                       left(std::move(left)),
+                                                                                                       property(property) {}
 };
 
 class SuperExpr final : public Expr {
@@ -323,8 +329,8 @@ public:
 
     Token method;
 
-    SuperExpr(bite::SourceSpan span, const Token& method) : Expr(std::move(span)),
-                                                            method(method) {}
+    SuperExpr(const bite::SourceSpan& span, const Token& method) : Expr(span),
+                                                                   method(method) {}
 };
 
 class BlockExpr final : public Expr {
@@ -334,15 +340,15 @@ public:
     }
 
     std::vector<std::unique_ptr<Stmt>> stmts;
-    std::optional<std::unique_ptr<Expr>> expr;
+    std::unique_ptr<Expr> expr;
     std::optional<Token> label;
 
     BlockExpr(
-        bite::SourceSpan span,
+        const bite::SourceSpan& span,
         std::vector<std::unique_ptr<Stmt>> stmts,
-        std::optional<std::unique_ptr<Expr>> expr = {},
+        std::unique_ptr<Expr> expr = {},
         const std::optional<Token>& label = {}
-    ) : Expr(std::move(span)),
+    ) : Expr(span),
         stmts(std::move(stmts)),
         expr(std::move(expr)),
         label(label) {}
@@ -356,14 +362,14 @@ public:
 
     std::unique_ptr<Expr> condition;
     std::unique_ptr<Expr> then_expr;
-    std::optional<std::unique_ptr<Expr>> else_expr;
+    std::unique_ptr<Expr> else_expr;
 
     IfExpr(
-        bite::SourceSpan span,
+        const bite::SourceSpan& span,
         std::unique_ptr<Expr> condition,
         std::unique_ptr<Expr> then_expr,
-        std::optional<std::unique_ptr<Expr>> else_expr = {}
-    ) : Expr(std::move(span)),
+        std::unique_ptr<Expr> else_expr = {}
+    ) : Expr(span),
         condition(std::move(condition)),
         then_expr(std::move(then_expr)),
         else_expr(std::move(else_expr)) {}
@@ -378,8 +384,8 @@ public:
     std::unique_ptr<BlockExpr> body;
     std::optional<Token> label;
 
-    LoopExpr(bite::SourceSpan span, std::unique_ptr<BlockExpr> body, const std::optional<Token>& label = {}) :
-        Expr(std::move(span)),
+    LoopExpr(const bite::SourceSpan& span, std::unique_ptr<BlockExpr> body, const std::optional<Token>& label = {}) :
+        Expr(span),
         body(std::move(body)),
         label(label) {}
 };
@@ -395,11 +401,11 @@ public:
     std::optional<Token> label;
 
     WhileExpr(
-        bite::SourceSpan span,
+        const bite::SourceSpan& span,
         std::unique_ptr<Expr> condition,
         std::unique_ptr<BlockExpr> body,
         const std::optional<Token>& label = {}
-    ) : Expr(std::move(span)),
+    ) : Expr(span),
         condition(std::move(condition)),
         body(std::move(body)),
         label(label) {}
@@ -411,14 +417,14 @@ public:
         return NodeKind::break_expr;
     }
 
-    std::optional<std::unique_ptr<Expr>> expr;
+    std::unique_ptr<Expr> expr;
     std::optional<Token> label;
 
     explicit BreakExpr(
-        bite::SourceSpan span,
-        std::optional<std::unique_ptr<Expr>> expr,
+        const bite::SourceSpan& span,
+        std::unique_ptr<Expr> expr,
         const std::optional<Token>& label
-    ) : Expr(std::move(span)),
+    ) : Expr(span),
         expr(std::move(expr)),
         label(label) {}
 };
@@ -431,8 +437,8 @@ public:
 
     std::optional<Token> label;
 
-    ContinueExpr(bite::SourceSpan span, const std::optional<Token>& label, bite::SourceSpan label_span) :
-        Expr(std::move(span)),
+    ContinueExpr(const bite::SourceSpan& span, const std::optional<Token>& label) :
+        Expr(span),
         label(label) {}
 };
 
@@ -442,20 +448,18 @@ public:
         return NodeKind::for_expr;
     }
 
-    Token name;
+    std::unique_ptr<VariableDeclaration> name;
     std::unique_ptr<Expr> iterable;
     std::unique_ptr<BlockExpr> body;
     std::optional<Token> label;
-    DeclarationInfo info; // For iterator variable
-
     ForExpr(
-        bite::SourceSpan span,
-        const Token& name,
+        const bite::SourceSpan& span,
+        std::unique_ptr<VariableDeclaration> name,
         std::unique_ptr<Expr> iterable,
         std::unique_ptr<BlockExpr> body,
         const std::optional<Token>& label = {}
-    ) : Expr(std::move(span)),
-        name(name),
+    ) : Expr(span),
+        name(std::move(name)),
         iterable(std::move(iterable)),
         body(std::move(body)),
         label(label) {}
@@ -467,10 +471,10 @@ public:
         return NodeKind::return_expr;
     }
 
-    std::optional<std::unique_ptr<Expr>> value;
+    std::unique_ptr<Expr> value;
 
-    explicit ReturnExpr(bite::SourceSpan span, std::optional<std::unique_ptr<Expr>> value) : Expr(std::move(span)),
-        value(std::move(value)) {}
+    explicit ReturnExpr(const bite::SourceSpan& span, std::unique_ptr<Expr> value) : Expr(span),
+                                                                                     value(std::move(value)) {}
 };
 
 class ThisExpr final : public Expr {
@@ -479,11 +483,11 @@ public:
         return NodeKind::this_expr;
     }
 
-    explicit ThisExpr(bite::SourceSpan span) : Expr(std::move(span)) {}
+    explicit ThisExpr(const bite::SourceSpan& span) : Expr(span) {}
 };
 
 
-class FunctionDeclaration final : public Stmt {
+class FunctionDeclaration final : public Declaration {
 public:
     [[nodiscard]] NodeKind kind() const override {
         return NodeKind::function_declaration;
@@ -491,33 +495,31 @@ public:
 
     Token name;
     std::vector<Token> params;
-    std::optional<std::unique_ptr<Expr>> body;
-    DeclarationInfo info;
+    std::unique_ptr<Expr> body;
     FunctionEnviroment enviroment {};
 
     FunctionDeclaration(
-        bite::SourceSpan span,
+        const bite::SourceSpan& span,
         const Token& name,
         std::vector<Token> params,
-        std::optional<std::unique_ptr<Expr>> body = {}
-    ) : Stmt(std::move(span)),
+        std::unique_ptr<Expr> body = {}
+    ) : Declaration(span),
         name(name),
         params(std::move(params)),
         body(std::move(body)) {}
 };
 
-class VariableDeclaration final : public Stmt {
+class VariableDeclaration final : public Declaration {
 public:
     [[nodiscard]] NodeKind kind() const override {
         return NodeKind::variable_declaration;
     }
 
     Token name;
-    std::optional<std::unique_ptr<Expr>> value;
-    DeclarationInfo info;
+    std::unique_ptr<Expr> value;
 
-    VariableDeclaration(bite::SourceSpan span, const Token& name, std::optional<std::unique_ptr<Expr>> value = {}) :
-        Stmt(std::move(span)),
+    VariableDeclaration(const bite::SourceSpan& span, const Token& name, std::unique_ptr<Expr> value = {}) :
+        Declaration(span),
         name(name),
         value(std::move(value)) {}
 };
@@ -530,8 +532,8 @@ public:
 
     std::unique_ptr<Expr> value;
 
-    ExprStmt(bite::SourceSpan span, std::unique_ptr<Expr> expr) : Stmt(std::move(span)),
-                                                                  value(std::move(expr)) {}
+    ExprStmt(const bite::SourceSpan& span, std::unique_ptr<Expr> expr) : Stmt(span),
+                                                                         value(std::move(expr)) {}
 };
 
 struct Field {
@@ -575,7 +577,7 @@ struct TraitUsage {
 class ObjectExpr;
 
 struct ClassObject {
-    std::optional<std::unique_ptr<ObjectExpr>> metaobject;
+    std::unique_ptr<ObjectExpr> metaobject;
     std::optional<Token> superclass;
     std::vector<Field> fields;
     std::vector<Method> methods;
@@ -585,14 +587,14 @@ struct ClassObject {
     ClassEnviroment enviroment;
 };
 
-class ClassDeclaration final : public Stmt {
+class ClassDeclaration final : public Declaration {
 public:
     [[nodiscard]] NodeKind kind() const override {
         return NodeKind::class_declaration;
     }
 
     ClassDeclaration(const bite::SourceSpan& span, bool is_abstract, const Token& name, ClassObject object) :
-        Stmt(span),
+        Declaration(span),
         is_abstract(is_abstract),
         name(name),
         object(std::move(object)) {}
@@ -600,7 +602,6 @@ public:
     bool is_abstract;
     Token name;
     ClassObject object;
-    DeclarationInfo info;
 };
 
 class ObjectExpr final : public Expr {
@@ -615,9 +616,9 @@ public:
     ClassObject object;
 };
 
-class ObjectDeclaration final : public Stmt {
+class ObjectDeclaration final : public Declaration {
 public:
-    ObjectDeclaration(const bite::SourceSpan& span, const Token& name, std::unique_ptr<ObjectExpr> object) : Stmt(span),
+    ObjectDeclaration(const bite::SourceSpan& span, const Token& name, std::unique_ptr<ObjectExpr> object) : Declaration(span),
         name(name),
         object(std::move(object)) {}
 
@@ -627,23 +628,21 @@ public:
 
     Token name;
     std::unique_ptr<ObjectExpr> object;
-    DeclarationInfo info;
 };
 
-class NativeDeclaration final : public Stmt {
+class NativeDeclaration final : public Declaration {
 public:
     [[nodiscard]] NodeKind kind() const override {
         return NodeKind::native_declaration;
     }
 
     Token name;
-    DeclarationInfo info;
 
-    NativeDeclaration(bite::SourceSpan span, const Token& name) : Stmt(std::move(span)),
-                                                                  name(name) {}
+    NativeDeclaration(const bite::SourceSpan& span, const Token& name) : Declaration(span),
+                                                                         name(name) {}
 };
 
-class TraitDeclaration final : public Stmt {
+class TraitDeclaration final : public Declaration {
 public:
     [[nodiscard]] NodeKind kind() const override {
         return NodeKind::trait_declaration;
@@ -653,16 +652,15 @@ public:
     std::vector<Method> methods;
     std::vector<Field> fields;
     std::vector<TraitUsage> using_stmts;
-    DeclarationInfo info;
     TraitEnviroment enviroment;
 
     TraitDeclaration(
-        bite::SourceSpan span,
+        const bite::SourceSpan& span,
         const Token& name,
         std::vector<Method> methods,
         std::vector<Field> fields,
         std::vector<TraitUsage> using_stmts
-    ) : Stmt(std::move(span)),
+    ) : Declaration(span),
         name(name),
         methods(std::move(methods)),
         fields(std::move(fields)),
@@ -675,7 +673,7 @@ public:
         return NodeKind::invalid_stmt;
     }
 
-    explicit InvalidStmt(bite::SourceSpan span) : Stmt(std::move(span)) {}
+    explicit InvalidStmt(const bite::SourceSpan& span) : Stmt(span) {}
 };
 
 class InvalidExpr final : public Expr {
@@ -684,7 +682,7 @@ public:
         return NodeKind::invalid_expr;
     }
 
-    explicit InvalidExpr(bite::SourceSpan span) : Expr(std::move(span)) {}
+    explicit InvalidExpr(const bite::SourceSpan& span) : Expr(span) {}
 };
 
 #define DECLARE_AS_METHOD(class_name, type_name) inline class_name* AstNode::as_##type_name() { return static_cast<class_name*>(this);}

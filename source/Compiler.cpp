@@ -131,7 +131,7 @@ int64_t Compiler::synthetic_variable() {
 
 void Compiler::variable_declaration(const VariableDeclaration& expr) {
     if (expr.value) {
-        visit(**expr.value);
+        visit(*expr.value);
     }
     define_variable(expr.info);
 }
@@ -166,7 +166,7 @@ void Compiler::block_expr(const BlockExpr& expr) {
                 visit(*stmt);
             }
             if (expr.expr) {
-                visit(**expr.expr);
+                visit(*expr.expr);
                 emit(OpCode::SET, get_return_slot(expr_scope));
                 emit(OpCode::POP);
                 current_context().on_stack--;
@@ -193,7 +193,7 @@ void Compiler::loop_expr(const LoopExpr& expr) {
                         visit(*stmt);
                     }
                     if (expr.body->expr) {
-                        visit(**expr.body->expr);
+                        visit(*expr.body->expr);
                     }
                 }
             );
@@ -259,7 +259,7 @@ void Compiler::while_expr(const WhileExpr& expr) {
                         visit(*stmt);
                     }
                     if (expr.body->expr) {
-                        visit(**expr.body->expr);
+                        visit(*expr.body->expr);
                     }
                 }
             );
@@ -307,7 +307,7 @@ void Compiler::for_expr(const ForExpr& expr) {
                     emit(OpCode::GET_PROPERTY, item_constant);
                     emit(OpCode::CALL, 0);
                     current_context().on_stack++;
-                    define_variable(expr.info);
+                    define_variable(expr.name->info);
                     // end item
 
                     with_expression_scope(
@@ -317,7 +317,7 @@ void Compiler::for_expr(const ForExpr& expr) {
                                 visit(*stmt);
                             }
                             if (expr.body->expr) {
-                                visit(**expr.body->expr);
+                                visit(*expr.body->expr);
                             }
                         }
                     );
@@ -352,7 +352,7 @@ void Compiler::break_expr(const BreakExpr& expr) {
     ExpressionScope& scope = current_context().expression_scopes[current_context().expression_scopes.size() -
         pop_out_depth - 1];
     if (expr.expr) {
-        visit(**expr.expr);
+        visit(*expr.expr);
         emit(OpCode::SET, get_return_slot(scope));
         emit(OpCode::POP);
         current_context().on_stack--;
@@ -404,7 +404,7 @@ void Compiler::function(const FunctionDeclaration& stmt, FunctionType type) {
         type,
         [&stmt, this] {
             current_function()->set_upvalue_count(stmt.enviroment.upvalues.size());
-            visit(**stmt.body); // TODO: assert has body?
+            visit(*stmt.body); // TODO: assert has body?
             emit_default_return();
         }
     );
@@ -449,7 +449,7 @@ void Compiler::constructor(const Constructor& stmt, const std::vector<Field>& fi
                 if (field.attributes[ClassAttributes::ABSTRACT]) {
                     continue;
                 }
-                visit(**field.variable->value);
+                visit(*field.variable->value);
                 emit(OpCode::THIS);
                 int property_name = current_function()->add_constant(*field.variable->name.string);
                 emit(OpCode::SET_PROPERTY, property_name);
@@ -457,7 +457,7 @@ void Compiler::constructor(const Constructor& stmt, const std::vector<Field>& fi
             }
             if (stmt.function) {
                 if (stmt.function->body) {
-                    visit(**stmt.function->body);
+                    visit(*stmt.function->body);
                 }
                 current_function()->set_upvalue_count(stmt.function->enviroment.upvalues.size());
             }
@@ -530,7 +530,7 @@ void Compiler::trait_declaration(const TraitDeclaration& stmt) {
 void Compiler::class_object(const std::string& name, bool is_abstract, const ClassObject& object) {
     uint8_t name_constant = current_function()->add_constant(name);
     if (object.metaobject) {
-        object_expr(**object.metaobject);
+        object_expr(*object.metaobject);
     } else {
         emit(OpCode::NIL);
         current_context().on_stack++;
@@ -618,7 +618,7 @@ void Compiler::expr_stmt(const ExprStmt& stmt) {
 
 void Compiler::return_expr(const ReturnExpr& stmt) {
     if (stmt.value) {
-        visit(**stmt.value);
+        visit(*stmt.value);
     } else {
         emit(OpCode::NIL);
         current_context().on_stack++;
@@ -644,7 +644,7 @@ void Compiler::if_expr(const IfExpr& stmt) {
     emit(OpCode::POP); // confusing thing is we don't need to pop this off our stack counter (proof left as a exercise)
     if (stmt.else_expr) {
         current_context().on_stack--; // current result does not exist!
-        visit(**stmt.else_expr);
+        visit(*stmt.else_expr);
     } else {
         emit(OpCode::NIL); // default return value!
     }

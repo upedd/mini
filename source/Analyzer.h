@@ -43,27 +43,19 @@ namespace bite {
         bool is_in_class();
         bool is_in_class_with_superclass();
 
-        DeclarationInfo declare_in_function_enviroment(
+        void declare_in_function_enviroment(
             FunctionEnviroment& env,
             StringTable::Handle name,
-            AstNode* declaration
+            Declaration* declaration
         );
-        DeclarationInfo declare_in_class_enviroment(
-            ClassEnviroment& env,
-            StringTable::Handle name,
-            const MemberInfo& attributes
-        );
-        DeclarationInfo declare_in_trait_enviroment(
-            TraitEnviroment& env,
-            StringTable::Handle name,
-            const MemberInfo& attributes
-        );
-        DeclarationInfo declare_in_global_enviroment(
+        void declare_in_class_enviroment(ClassEnviroment& env, StringTable::Handle name, const MemberInfo& attributes);
+        void declare_in_trait_enviroment(TraitEnviroment& env, StringTable::Handle name, const MemberInfo& attributes);
+        void declare_in_global_enviroment(
             GlobalEnviroment& env,
             StringTable::Handle name,
-            AstNode* declaration
+            Declaration* declaration
         );
-        DeclarationInfo declare(const StringTable::Handle name, AstNode* declaration);
+        void declare(const StringTable::Handle name, Declaration* declaration);
 
         void analyze(Ast& ast);
         void block_expr(BlockExpr& expr);
@@ -92,7 +84,7 @@ namespace bite {
         void super_expr(SuperExpr& expr);
         void object_expr(ObjectExpr& expr);
         void trait_declaration(TraitDeclaration& stmt);
-        DeclarationInfo declare_local(Locals& locals, StringTable::Handle name, AstNode* declaration);
+        void declare_local(Locals& locals, StringTable::Handle name, Declaration* declaration);
         void literal_expr(LiteralExpr& /*unused*/) {}
         void string_expr(StringExpr& /*unused*/) {}
         void invalid_stmt(InvalidStmt& /*unused*/) {BITE_PANIC("got invalid stmt"); }
@@ -134,7 +126,7 @@ namespace bite {
             ast->enviroment.locals.scopes.pop_back();
         }
 
-        std::optional<AstNode*> find_declaration(Binding binding);
+        std::optional<AstNode*> find_declaration(const Binding& binding);
 
         void trait_usage(
             const auto& fn,

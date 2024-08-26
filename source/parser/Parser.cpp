@@ -376,7 +376,14 @@ ClassObject Parser::class_object() {
     consume(Token::Type::LEFT_BRACE, "missing body");
     while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
         if (next.string == context_keyword("init")) {
-            object.constructor = this->constructor();
+            Token init_token = next;
+            auto constructor = this->constructor();
+            if (!object.constructor.function) {
+                object.constructor = std::move(constructor);
+            } else {
+                // TODO: better error
+                error(init_token, "conflicting constructor", "here");
+            }
             continue;
         }
 
@@ -559,7 +566,7 @@ std::unique_ptr<FunctionDeclaration> Parser::in_trait_function(
     bool skip_params
 ) {
     std::vector<Token> parameters = skip_params ? std::vector<Token>() : functions_parameters();
-    std::optional<std::unique_ptr<Expr>> body;
+    std::unique_ptr<Expr> body;
     if (match(Token::Type::LEFT_BRACE)) {
         body = block();
     } else {
@@ -617,17 +624,21 @@ Parser::Precedence Parser::get_precendece(const Token::Type token) {
 }
 
 std::unique_ptr<Expr> Parser::expression(const Precedence precedence) {
-    advance();
-    std::optional<std::unique_ptr<Expr>> left = prefix();
-    if (!left) {
-        error(current, "expression expected", "here");
-        return std::make_unique<InvalidExpr>(make_span());
-    }
-    while (precedence < get_precendece(next.type)) {
-        advance();
-        left = infix(std::move(*left));
-    }
-    return std::move(*left);
+    return with_source_span(
+        [this, precedence] -> std::unique_ptr<Expr> {
+            advance();
+            std::optional<std::unique_ptr<Expr>> left = prefix();
+            if (!left) {
+                error(current, "expression expected", "here");
+                return std::make_unique<InvalidExpr>(make_span());
+            }
+            while (precedence < get_precendece(next.type)) {
+                advance();
+                left = infix(std::move(*left));
+            }
+            return std::move(*left);
+        }
+    );
 }
 
 std::optional<std::unique_ptr<Expr>> Parser::prefix() {
@@ -717,7 +728,7 @@ std::unique_ptr<IfExpr> Parser::if_expression() {
         error(current, "missing 'if' expression body", "expected '{' here");
     }
     auto then_stmt = block();
-    std::optional<std::unique_ptr<Expr>> else_stmt = {};
+    std::unique_ptr<Expr> else_stmt;
     if (match(Token::Type::ELSE)) {
         if (match(Token::Type::IF)) {
             else_stmt = if_expression();
@@ -731,17 +742,11 @@ std::unique_ptr<IfExpr> Parser::if_expression() {
 
 std::unique_ptr<ContinueExpr> Parser::continue_expression() {
     std::optional<Token> label;
-    auto label_span = no_span();
-    with_source_span(
-        [this, &label, &label_span] -> int {
-            if (match(Token::Type::LABEL)) {
-                label = current;
-            }
-            label_span = make_span();
-            return 0; // TODO
-        }
-    );
-    return std::make_unique<ContinueExpr>(make_span(), label, label_span);
+    if (match(Token::Type::LABEL)) {
+        label = current;
+    }
+
+    return std::make_unique<ContinueExpr>(make_span(), label);
 }
 
 std::unique_ptr<BreakExpr> Parser::break_expression() {
@@ -751,13 +756,13 @@ std::unique_ptr<BreakExpr> Parser::break_expression() {
     }
 
     if (!is_expression_start(next.type)) {
-        return std::make_unique<BreakExpr>(make_span(), std::optional<std::unique_ptr<Expr>> {}, label);
+        return std::make_unique<BreakExpr>(make_span(), std::unique_ptr<Expr> {}, label);
     }
     return std::make_unique<BreakExpr>(make_span(), expression(), label);
 }
 
 std::unique_ptr<ReturnExpr> Parser::return_expression() {
-    std::optional<std::unique_ptr<Expr>> expr = {};
+    std::unique_ptr<Expr> expr;
     if (is_expression_start(next.type)) {
         expr = expression();
     }
@@ -823,7 +828,13 @@ std::unique_ptr<ForExpr> Parser::for_expression(const std::optional<Token>& labe
         error(current, "invalid 'for' loop body", "expected '{' here");
     }
     auto body = block();
-    return std::make_unique<ForExpr>(make_span(), name, std::move(iterable), std::move(body), label);
+    return std::make_unique<ForExpr>(
+        make_span(),
+        std::make_unique<VariableDeclaration>(make_span(), name),
+        std::move(iterable),
+        std::move(body),
+        label
+    );
 }
 
 std::unique_ptr<BlockExpr> Parser::block(const std::optional<Token>& label) {
@@ -831,7 +842,7 @@ std::unique_ptr<BlockExpr> Parser::block(const std::optional<Token>& label) {
     // the value that will be returned is the last expression without succeding semicolon.
     // we track that expression here in 'expr_at_end'
     std::vector<std::unique_ptr<Stmt>> stmts;
-    std::optional<std::unique_ptr<Expr>> expr_at_end = {};
+    std::unique_ptr<Expr> expr_at_end;
     while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
         if (auto stmt = statement()) {
             stmts.push_back(std::move(*stmt));
