@@ -40,6 +40,8 @@ namespace bite {
         void function(FunctionDeclaration& stmt);
         void native_declaration(NativeDeclaration& stmt);
         void class_declaration(ClassDeclaration& box);
+        void trait_usage(ClassEnviroment* env, unordered_dense::map<StringTable::Handle, MemberInfo>& requirements, TraitUsage& trait_usage);
+        void class_object(ClassObject& object, bool is_abstract, SourceSpan& name_span);
         void object_declaration(ObjectDeclaration& stmt);
         void unary_expr(UnaryExpr& expr);
         void binary_expr(BinaryExpr& expr);

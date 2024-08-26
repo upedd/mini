@@ -4,7 +4,6 @@
 #include <format>
 #include <vector>
 #include <utility>
-#include <vector>
 
 #include "Diagnostics.h"
 #include "Value.h"
@@ -650,19 +649,20 @@ struct TraitUsage {
     Binding binding = NoBinding();
 };
 
-s
+class ObjectExpr;
 
 struct ClassObject {
-    std::optional<ClassObject> metaobject;
+    std::optional<std::unique_ptr<ObjectExpr>> metaobject;
     std::optional<Token> superclass;
     std::vector<Field> fields;
     std::vector<Method> methods;
     std::vector<TraitUsage> traits_used;
     Constructor constructor;
+    Binding superclass_binding;
     ClassEnviroment enviroment;
 };
 
-class ClassDeclaration final : Stmt {
+class ClassDeclaration final : public Stmt {
 public:
     [[nodiscard]] NodeKind kind() const override {
         return NodeKind::class_declaration;
@@ -680,9 +680,9 @@ public:
     DeclarationInfo info;
 };
 
-class ObjectExpr final : Expr {
+class ObjectExpr final : public Expr {
 public:
-    ObjectExpr(const bite::SourceSpan& span, const ClassObject& object) : Expr(span),
+    ObjectExpr(const bite::SourceSpan& span, ClassObject object) : Expr(span),
                                                                           object(std::move(object)) {}
 
     [[nodiscard]] NodeKind kind() const override {
@@ -692,9 +692,9 @@ public:
     ClassObject object;
 };
 
-class ObjectDeclaration final : Stmt {
+class ObjectDeclaration final : public Stmt {
 public:
-    ObjectDeclaration(const bite::SourceSpan& span, const Token& name, const ClassObject& object) : Stmt(span),
+    ObjectDeclaration(const bite::SourceSpan& span, const Token& name, std::unique_ptr<ObjectExpr> object) : Stmt(span),
         name(name),
         object(std::move(object)) {}
 
@@ -703,7 +703,7 @@ public:
     }
 
     Token name;
-    ClassObject object;
+    std::unique_ptr<ObjectExpr> object;
     DeclarationInfo info;
 };
 

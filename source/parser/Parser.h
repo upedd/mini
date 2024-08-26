@@ -104,18 +104,11 @@ private:
     Constructor constructor();
     ClassObject class_object();
     std::unique_ptr<ClassDeclaration> class_declaration(bool is_abstract = false);
-    StructureBody structure_body(const Token& class_token);
-
-    UsingStmt using_statement();
-    UsingStmtItem using_stmt_item();
-    UsingStmtItem using_stmt_item_with_params(const Token& name, const bite::SourceSpan& span);
-
     bitflags<ClassAttributes> member_attributes();
 
     Constructor constructor_statement();
 
     SuperConstructorCall super_constructor_call();
-    Constructor default_constructor(const Token& class_token);
     std::unique_ptr<FunctionDeclaration> abstract_method(const Token& name, bool skip_params);
     std::unique_ptr<VariableDeclaration> abstract_field(const Token& name);
 
