@@ -163,6 +163,7 @@ public:
     void object_declaration(const ObjectDeclaration& stmt);
 
     void trait_declaration(const TraitDeclaration& stmt);
+    void class_object(const std::string& name, bool is_abstract, const ClassObject& object);
     void variable_declaration(const VariableDeclaration& expr);
     void function_declaration(const FunctionDeclaration& stmt);
     void function(const FunctionDeclaration& stmt, FunctionType type);

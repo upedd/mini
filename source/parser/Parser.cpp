@@ -366,7 +366,8 @@ Constructor Parser::constructor() {
 
 ClassObject Parser::class_object() {
     ClassObject object;
-    if (match(Token::Type::SEMICOLON)) {
+    if (match(Token::Type::COLON)) {
+        consume(Token::Type::IDENTIFIER, "Expected superclass name");
         object.superclass = current;
     }
     if (match(Token::Type::USING)) {
@@ -379,10 +380,12 @@ ClassObject Parser::class_object() {
     while (!check(Token::Type::RIGHT_BRACE) && !check(Token::Type::END)) {
         if (next.string == context_keyword("init")) {
             object.constructor = this->constructor();
+            break;
         }
 
         if (match(Token::Type::OBJECT)) {
             object.metaobject = object_expression();
+            break;
         }
 
         // TODO: refactor!

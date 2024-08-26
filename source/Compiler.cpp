@@ -431,22 +431,21 @@ void Compiler::function(const FunctionDeclaration& stmt, FunctionType type) {
 
 void Compiler::constructor(const Constructor& stmt, const std::vector<Field>& fields, bool has_superclass) {
     // refactor: tons of overlap with function generator
-    auto* function = new Function("constructor", stmt.function->params.size());
+    auto* function = new Function("constructor",stmt.function ?  stmt.function->params.size() : 0);
     functions.push_back(function);
 
     with_context(
         function,
         FunctionType::CONSTRUCTOR,
         [&fields, this, &stmt, has_superclass] {
-            if (stmt.has_super) {
-                for (auto& expr : stmt.super_arguments) {
+            if (stmt.super_arguments_call) {
+                for (auto& expr : stmt.super_arguments_call->arguments) {
                     visit(*expr);
                 }
-                auto super_arguments_size = std::ranges::distance(stmt.super_arguments);
                 // maybe better way to do this instead of this superinstruction?
-                emit(OpCode::CALL_SUPER_CONSTRUCTOR, super_arguments_size);
+                emit(OpCode::CALL_SUPER_CONSTRUCTOR, stmt.super_arguments_call->arguments.size());
                 emit(OpCode::POP); // discard constructor response
-            } else if (has_superclass && stmt.super_arguments.empty()) {
+            } else if (has_superclass && stmt.super_arguments_call->arguments.empty()) {
                 // default superclass construct
                 emit(OpCode::CALL_SUPER_CONSTRUCTOR, 0);
                 emit(OpCode::POP); // discard constructor response
@@ -464,102 +463,32 @@ void Compiler::constructor(const Constructor& stmt, const std::vector<Field>& fi
                 emit(OpCode::SET_PROPERTY, property_name);
                 emit(OpCode::POP); // pop value;
             }
-            if (stmt.function->body) {
-                visit(**stmt.function->body);
+            if (stmt.function) {
+                if (stmt.function->body) {
+                    visit(**stmt.function->body);
+                }
+                current_function()->set_upvalue_count(stmt.function->enviroment.upvalues.size());
             }
-            current_function()->set_upvalue_count(stmt.function->enviroment.upvalues.size());
             emit_default_return();
         }
     );
 
     int constant = current_function()->add_constant(function);
     emit(OpCode::CLOSURE, constant);
-    for (const UpValue& upvalue : stmt.function->enviroment.upvalues) {
-        emit(upvalue.local);
-        if (upvalue.local) {
-            emit(current_context().slots[upvalue.idx].index);
-        } else {
-            emit(upvalue.idx);
+    if (stmt.function) {
+        for (const UpValue& upvalue : stmt.function->enviroment.upvalues) {
+            emit(upvalue.local);
+            if (upvalue.local) {
+                emit(current_context().slots[upvalue.idx].index);
+            } else {
+                emit(upvalue.idx);
+            }
         }
     }
 }
 
 void Compiler::object_expr(const ObjectExpr& expr) {
-    // TODO: refactor! tons of overlap with class
-    std::string name = "object"; // todo: check!
-    uint8_t name_constant = current_function()->add_constant(name);
-    emit(OpCode::NIL);
-    emit(OpCode::CLASS, name_constant);
-
-    if (expr.super_class) {
-        emit_get_variable(expr.superclass_binding);
-        emit(OpCode::INHERIT);
-    }
-
-    // TODO: overlap with trait declaration
-    for (const auto& using_stmt : expr.body.using_statements) {
-        for (const auto& item : using_stmt.items) {
-            for (auto& [original_name, field_name, attr] : item.declarations) {
-                int field_name_constant = current_function()->add_constant(*original_name);
-                // TODO: performance
-                // TODO: shouldn't this be in trait declaration as well
-                // TODO: refactor
-                if (attr[ClassAttributes::GETTER]) {
-                    emit_get_variable(item.binding);
-                    emit(OpCode::GET_TRAIT, field_name_constant);
-                    bitflags<ClassAttributes> hack;
-                    hack += ClassAttributes::GETTER;
-                    emit(hack.to_ullong());
-                    int aliased_name_constant = current_function()->add_constant(*field_name);
-                    emit(OpCode::METHOD, aliased_name_constant);
-                    emit(hack.to_ullong());
-                }
-                if (attr[ClassAttributes::SETTER]) {
-                    emit_get_variable(item.binding);
-                    emit(OpCode::GET_TRAIT, field_name_constant);
-                    bitflags<ClassAttributes> hack;
-                    hack += ClassAttributes::SETTER;
-                    emit(hack.to_ullong());
-                    int aliased_name_constant = current_function()->add_constant(*field_name);
-                    emit(OpCode::METHOD, aliased_name_constant);
-                    emit(hack.to_ullong());
-                }
-                if (!attr[ClassAttributes::GETTER] && !attr[ClassAttributes::SETTER]) {
-                    emit_get_variable(item.binding);
-                    emit(OpCode::GET_TRAIT, field_name_constant);
-                    emit(0);
-                    int aliased_name_constant = current_function()->add_constant(*field_name);
-                    emit(OpCode::METHOD, aliased_name_constant);
-                    emit(attr.to_ullong());
-                }
-            }
-        }
-    }
-
-    for (const auto& field : expr.body.fields) {
-        std::string field_name = *field.variable->name.string;
-        int field_constant = current_function()->add_constant(field_name);
-        emit(OpCode::FIELD, field_constant);
-        emit(field.attributes.to_ullong());
-    }
-
-    for (auto& method : expr.body.methods) {
-        std::string method_name = *method.function->name.string;
-        if (!method.attributes[ClassAttributes::ABSTRACT]) {
-            function(*method.function, FunctionType::METHOD);
-        }
-        int idx = current_function()->add_constant(method_name);
-        emit(OpCode::METHOD, idx);
-        emit(method.attributes.to_ullong()); // check size?
-        current_context().on_stack--;
-    }
-
-    if (expr.body.constructor) { // TODO: always must have constructor!
-        bool has_super_class = static_cast<bool>(expr.super_class);
-        constructor(*expr.body.constructor, expr.body.fields, has_super_class);
-    }
-
-    emit(OpCode::CONSTRUCTOR);
+    class_object("object", false, expr.object);
     emit(OpCode::CALL, 0);
 }
 
@@ -574,17 +503,15 @@ void Compiler::trait_declaration(const TraitDeclaration& stmt) {
     emit(OpCode::TRAIT, name_constanst);
     define_variable(stmt.info);
 
-    for (const auto& using_stmt : stmt.using_stmts) {
-        for (const auto& item : using_stmt.items) {
-            for (const auto& [original_name, field_name, attr] : item.declarations) {
-                int field_name_constant = current_function()->add_constant(*original_name);
-                emit_get_variable(item.binding);
-                emit(OpCode::GET_TRAIT, field_name_constant);
-                emit(0); // TODO HACK
-                int aliased_name_constant = current_function()->add_constant(*field_name);
-                emit(OpCode::TRAIT_METHOD, aliased_name_constant);
-                emit(attr.to_ullong());
-            }
+    for (const auto& trait_used : stmt.using_stmts) {
+        for (const auto& [original_name, field_name, attr] : trait_used.declarations) {
+            int field_name_constant = current_function()->add_constant(*original_name);
+            emit_get_variable(trait_used.binding);
+            emit(OpCode::GET_TRAIT, field_name_constant);
+            emit(0); // TODO HACK
+            int aliased_name_constant = current_function()->add_constant(*field_name);
+            emit(OpCode::TRAIT_METHOD, aliased_name_constant);
+            emit(attr.to_ullong());
         }
     }
 
@@ -608,76 +535,71 @@ void Compiler::trait_declaration(const TraitDeclaration& stmt) {
     }
 }
 
-void Compiler::class_declaration(const ClassDeclaration& stmt) {
-    // TODO: refactor!
-    std::string name = *stmt.name.string;
+void Compiler::class_object(const std::string& name, bool is_abstract, const ClassObject& object) {
     uint8_t name_constant = current_function()->add_constant(name);
-    if (stmt.body.class_object) {
-        object_expr(**stmt.body.class_object);
+    if (object.metaobject) {
+        object_expr(**object.metaobject);
     } else {
         emit(OpCode::NIL);
         current_context().on_stack++;
     }
-    if (stmt.is_abstract) {
+    if (is_abstract) {
         emit(OpCode::ABSTRACT_CLASS, name_constant);
     } else {
         emit(OpCode::CLASS, name_constant);
     }
-    define_variable(stmt.info);
 
-    if (stmt.super_class) {
-        emit_get_variable(stmt.superclass_binding);
+    if (object.superclass) {
+        emit_get_variable(object.superclass_binding);
         emit(OpCode::INHERIT);
     }
 
     // TODO: overlap with trait declaration
-    for (const auto& using_stmt : stmt.body.using_statements) {
-        for (const auto& item : using_stmt.items) {
-            for (auto& [original_name, field_name, attr] : item.declarations) {
-                int field_name_constant = current_function()->add_constant(*original_name);
-                // TODO: performance
-                // TODO: shouldn't this be in trait declaration as well
-                // TODO: refactor
-                if (attr[ClassAttributes::GETTER]) {
-                    emit_get_variable(item.binding);
-                    emit(OpCode::GET_TRAIT, field_name_constant);
-                    bitflags<ClassAttributes> hack;
-                    hack += ClassAttributes::GETTER;
-                    emit(hack.to_ullong());
-                    int aliased_name_constant = current_function()->add_constant(*field_name);
-                    emit(OpCode::METHOD, aliased_name_constant);
-                    emit(hack.to_ullong());
-                }
-                if (attr[ClassAttributes::SETTER]) {
-                    emit_get_variable(item.binding);
-                    emit(OpCode::GET_TRAIT, field_name_constant);
-                    bitflags<ClassAttributes> hack;
-                    hack += ClassAttributes::SETTER;
-                    emit(hack.to_ullong());
-                    int aliased_name_constant = current_function()->add_constant(*field_name);
-                    emit(OpCode::METHOD, aliased_name_constant);
-                    emit(hack.to_ullong());
-                }
-                if (!attr[ClassAttributes::GETTER] && !attr[ClassAttributes::SETTER]) {
-                    emit_get_variable(item.binding);
-                    emit(OpCode::GET_TRAIT, field_name_constant);
-                    emit(0);
-                    int aliased_name_constant = current_function()->add_constant(*field_name);
-                    emit(OpCode::METHOD, aliased_name_constant);
-                    emit(attr.to_ullong());
-                }
+    for (const auto& trait_used : object.traits_used) {
+        for (auto& [original_name, field_name, attr] : trait_used.declarations) {
+            int field_name_constant = current_function()->add_constant(*original_name);
+            // TODO: performance
+            // TODO: shouldn't this be in trait declaration as well
+            // TODO: refactor
+            if (attr[ClassAttributes::GETTER]) {
+                emit_get_variable(trait_used.binding);
+                emit(OpCode::GET_TRAIT, field_name_constant);
+                bitflags<ClassAttributes> hack;
+                hack += ClassAttributes::GETTER;
+                emit(hack.to_ullong());
+                int aliased_name_constant = current_function()->add_constant(*field_name);
+                emit(OpCode::METHOD, aliased_name_constant);
+                emit(hack.to_ullong());
+            }
+            if (attr[ClassAttributes::SETTER]) {
+                emit_get_variable(trait_used.binding);
+                emit(OpCode::GET_TRAIT, field_name_constant);
+                bitflags<ClassAttributes> hack;
+                hack += ClassAttributes::SETTER;
+                emit(hack.to_ullong());
+                int aliased_name_constant = current_function()->add_constant(*field_name);
+                emit(OpCode::METHOD, aliased_name_constant);
+                emit(hack.to_ullong());
+            }
+            if (!attr[ClassAttributes::GETTER] && !attr[ClassAttributes::SETTER]) {
+                emit_get_variable(trait_used.binding);
+                emit(OpCode::GET_TRAIT, field_name_constant);
+                emit(0);
+                int aliased_name_constant = current_function()->add_constant(*field_name);
+                emit(OpCode::METHOD, aliased_name_constant);
+                emit(attr.to_ullong());
             }
         }
     }
 
-    for (const auto& field : stmt.body.fields) {
+    for (const auto& field : object.fields) {
         std::string field_name = *field.variable->name.string;
         int field_constant = current_function()->add_constant(field_name);
         emit(OpCode::FIELD, field_constant);
         emit(field.attributes.to_ullong());
     }
 
-    for (auto& method : stmt.body.methods) {
+    for (auto& method : object.methods) {
         std::string method_name = *method.function->name.string;
         if (!method.attributes[ClassAttributes::ABSTRACT]) {
             function(*method.function, FunctionType::METHOD);
@@ -687,12 +609,13 @@ void Compiler::class_declaration(const ClassDeclaration& stmt) {
         emit(method.attributes.to_ullong()); // check size?
     }
 
-    if (stmt.body.constructor) { // TODO: always must have constructor!
-        bool has_super_class = static_cast<bool>(stmt.super_class);
-        constructor(*stmt.body.constructor, stmt.body.fields, has_super_class);
-    }
-
+    constructor(object.constructor, object.fields, static_cast<bool>(object.constructor.super_arguments_call));
     emit(OpCode::CONSTRUCTOR);
+}
+
+void Compiler::class_declaration(const ClassDeclaration& stmt) {
+    class_object(*stmt.name.string, stmt.is_abstract, stmt.object);
+    define_variable(stmt.info);
 }
 
 void Compiler::expr_stmt(const ExprStmt& stmt) {

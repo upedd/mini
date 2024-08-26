@@ -641,11 +641,18 @@ struct Constructor {
     bite::SourceSpan span;
 };
 
+struct TraitUsageDeclaration {
+    StringTable::Handle original_name;
+    StringTable::Handle aliased_name;
+    bitflags<ClassAttributes> attributes;
+};
+
 struct TraitUsage {
     Token trait;
     std::vector<Token> exclusions;
     std::vector<std::pair<Token, Token>> aliases;
     bite::SourceSpan span;
+    std::vector<TraitUsageDeclaration> declarations; // TODO: elimnate this
     Binding binding = NoBinding();
 };
 

@@ -40,7 +40,11 @@ namespace bite {
         void function(FunctionDeclaration& stmt);
         void native_declaration(NativeDeclaration& stmt);
         void class_declaration(ClassDeclaration& box);
-        void trait_usage(ClassEnviroment* env, unordered_dense::map<StringTable::Handle, MemberInfo>& requirements, TraitUsage& trait_usage);
+        void trait_usage(
+            ClassEnviroment* env,
+            unordered_dense::map<StringTable::Handle, MemberInfo>& requirements,
+            TraitUsage& trait_usage
+        );
         void class_object(ClassObject& object, bool is_abstract, SourceSpan& name_span);
         void object_declaration(ObjectDeclaration& stmt);
         void unary_expr(UnaryExpr& expr);
@@ -165,67 +169,64 @@ namespace bite {
 
         std::optional<AstNode*> find_declaration(StringTable::Handle name, const SourceSpan& span);
 
-        void using_stmt(
-            UsingStmt& stmt,
+        void trait_usage(
+            const auto& fn,
             unordered_dense::map<StringTable::Handle, MemberInfo>& requirements,
-            const auto& fn
+            TraitUsage& trait_usage
         ) {
-            for (auto& item : stmt.items) {
-                // Overlap with class
-                // TODO: better error messages, refactor?
-                TraitDeclaration* item_trait = nullptr;
-                item.binding = resolve(item.name.string, item.span);
-                if (auto declaration = find_declaration(item.name.string, item.span)) {
-                    if (declaration.value()->is_trait_declaration()) {
-                        item_trait = declaration.value()->as_trait_declaration();
-                    } else {
-                        emit_error_diagnostic(
-                            "using item must be a trait",
-                            item.span,
-                            "does not point to trait type",
-                            {
-                                InlineHint {
-                                    .location = declaration.value()->span,
-                                    .message = "defined here",
-                                    .level = DiagnosticLevel::INFO
-                                }
-                            }
-                        );
-                    }
+            TraitDeclaration* item_trait = nullptr;
+            trait_usage.binding = resolve(trait_usage.trait.string, trait_usage.trait.span);
+            if (auto declaration = find_declaration(trait_usage.trait.string, trait_usage.span)) {
+                if (declaration.value()->is_trait_declaration()) {
+                    item_trait = declaration.value()->as_trait_declaration();
                 } else {
                     emit_error_diagnostic(
-                        "using item must be an local or global variable",
-                        item.span,
-                        "is not an local or global variable"
+                        "using item must be a trait",
+                        trait_usage.span,
+                        "does not point to trait type",
+                        {
+                            InlineHint {
+                                .location = declaration.value()->span,
+                                .message = "defined here",
+                                .level = DiagnosticLevel::INFO
+                            }
+                        }
                     );
                 }
+            } else {
+                emit_error_diagnostic(
+                    "using item must be an local or global variable",
+                    trait_usage.span,
+                    "is not an local or global variable"
+                );
+            }
 
-                if (!item_trait) {
+            if (!item_trait) {
+                return;
+            }
+
+            for (auto& [field_name, field_attr] : item_trait->enviroment.members) {
+                //check if excluded
+                bool is_excluded = std::ranges::contains(trait_usage.exclusions, field_name, &Token::string);
+
+                if (is_excluded || field_attr.attributes[ClassAttributes::ABSTRACT]) {
+                    requirements[field_name] = field_attr;
+                    // warn about useless exclude?
                     continue;
                 }
-
-                for (auto& [field_name, field_attr] : item_trait->enviroment.members) {
-                    //check if excluded
-                    bool is_excluded = std::ranges::contains(item.exclusions, field_name, &Token::string);
-
-                    if (is_excluded || field_attr.attributes[ClassAttributes::ABSTRACT]) {
-                        requirements[field_name] = field_attr;
-                        // warn about useless exclude?
-                        continue;
+                // should aliasing methods that are requierments be allowed?
+                StringTable::Handle aliased_name = field_name;
+                for (auto& [before, after] : trait_usage.aliases) {
+                    if (before.string == field_name) {
+                        aliased_name = after.string;
+                        break;
                     }
-                    // should aliasing methods that are requierments be allowed?
-                    StringTable::Handle aliased_name = field_name;
-                    for (auto& [before, after] : item.aliases) {
-                        if (before.string == field_name) {
-                            aliased_name = after.string;
-                            break;
-                        }
-                    }
-                    fn(aliased_name, field_attr);
-                    item.declarations.emplace_back(field_name, aliased_name, field_attr.attributes);
                 }
+                fn(aliased_name, field_attr);
+                trait_usage.declarations.emplace_back(field_name, aliased_name, field_attr.attributes);
             }
         }
+
 
 
         // TODO: refactor
@@ -237,27 +238,27 @@ namespace bite {
             unordered_dense::map<StringTable::Handle, MemberInfo>& overrideable_members
         );
 
-        // TODO: refactor?
-        void handle_constructor(
-            Constructor& constructor,
-            std::vector<Field>& fields,
-            bool is_abstract,
-            SourceSpan& name_span,
-            ClassEnviroment* env,
-            unordered_dense::map<StringTable::Handle, MemberInfo>& overrideable_members,
-            ClassDeclaration* superclass
-        );
-
-        // TODO: refactor. put class node in the object
-        void structure_body(
-            StructureBody& body,
-            std::optional<Token> super_class,
-            Binding& superclass_binding,
-            const SourceSpan& super_class_span,
-            SourceSpan& name_span,
-            ClassEnviroment* env,
-            bool is_abstract
-        );
+        // // TODO: refactor?
+        // void handle_constructor(
+        //     Constructor& constructor,
+        //     std::vector<Field>& fields,
+        //     bool is_abstract,
+        //     SourceSpan& name_span,
+        //     ClassEnviroment* env,
+        //     unordered_dense::map<StringTable::Handle, MemberInfo>& overrideable_members,
+        //     ClassDeclaration* superclass
+        // );
+        //
+        // // TODO: refactor. put class node in the object
+        // void structure_body(
+        //     StructureBody& body,
+        //     std::optional<Token> super_class,
+        //     Binding& superclass_binding,
+        //     const SourceSpan& super_class_span,
+        //     SourceSpan& name_span,
+        //     ClassEnviroment* env,
+        //     bool is_abstract
+        // );
 
     private:
         std::vector<AstNode*> context_nodes;
