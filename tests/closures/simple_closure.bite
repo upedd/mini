@@ -1,7 +1,8 @@
+import print from "os";
+
 fun outer() {
     let a = 5;
     fun inner() {
-        native print;
         print(a);
     }
     inner();

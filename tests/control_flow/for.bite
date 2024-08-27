@@ -1,3 +1,5 @@
+import print from "os";
+
 class Ten {
     iterator() {
         class TenIterator {
@@ -14,8 +16,6 @@ class Ten {
         return TenIterator();
     }
 }
-
-native print;
 
 let a = 0;
 for i in Ten() {

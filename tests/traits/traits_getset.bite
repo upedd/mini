@@ -1,4 +1,4 @@
-native print;
+import print from "os";
 
 trait A {
     get a;

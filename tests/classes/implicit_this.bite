@@ -1,3 +1,5 @@
+import print from "os";
+
 class Foo {
     foo;
     bar;
@@ -15,8 +17,6 @@ class Foo {
         return add() + 10;
     }
 }
-
-native print;
 
 let instance = Foo();
 instance.set_values(10, 5);

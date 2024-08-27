@@ -1,4 +1,5 @@
-native print;
+import print from "os";
+
 # if statements should default to nil
 fun test1(x) {
     let y = if x == 20 { 5 * 4 };

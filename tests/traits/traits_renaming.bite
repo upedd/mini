@@ -1,3 +1,5 @@
+import print from "os";
+
 trait A {
     get_text() {
         return "A";
@@ -10,8 +12,6 @@ trait B {
         return "B";
     }
 }
-
-native print;
 
 class C using A(get_text as a_get_text), B {
     display() {

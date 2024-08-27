@@ -1,3 +1,5 @@
+import print from "os";
+
 class Foo {
     get10() {
         return 10;
@@ -11,7 +13,6 @@ class Foo {
         return this.add(a, this.get10());
     }
 }
-native print;
 
 let instance = Foo();
 

@@ -1,3 +1,5 @@
+import print from "os";
+
 abstract class Foo {
     abstract foo();
 }
@@ -18,8 +20,6 @@ class Baz : Bar {
         return 5;
     }
 }
-
-native print;
 
 let instance = Baz();
 print(instance.baz());

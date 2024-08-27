@@ -940,12 +940,13 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                         new ForeginFunctionObject(*func)
                     ));
                 }
+                break;
             }
         }
-        for (int i = 0; i < stack_index; ++i) {
-            std::cout << '[' << stack[i].to_string() << "] ";
-        }
-        std::cout << '\n';
+        // for (int i = 0; i < stack_index; ++i) {
+        //     std::cout << '[' << stack[i].to_string() << "] ";
+        // }
+        // std::cout << '\n';
     }
     #undef BINARY_OPERATION
 }

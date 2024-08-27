@@ -74,7 +74,12 @@ void bite::Analyzer::function(FunctionDeclaration& stmt) {
         stmt,
         [this, &stmt] {
             for (const auto& param : stmt.params) {
-                declare(&stmt);
+                // TODO: temp
+                if (std::ranges::contains(stmt.enviroment.parameters, param.string)) {
+                    // TODO: better error message, point to original
+                    emit_error_diagnostic("duplicate parameter name", param.span, "here");
+                }
+                stmt.enviroment.parameters.push_back(param.string);
             }
             if (stmt.body) {
                 visit(*stmt.body);
@@ -235,7 +240,12 @@ void bite::Analyzer::class_object(ClassObject& object, bool is_abstract, SourceS
         [&] {
             if (object.constructor.function) {
                 for (const auto& param : object.constructor.function->params) {
-                    declare(&*object.constructor.function);
+                    // TODO: temp
+                    if (std::ranges::contains(object.constructor.function->enviroment.parameters, param.string)) {
+                        // TODO: better error message, point to original
+                        emit_error_diagnostic("duplicate parameter name", param.span, "here");
+                    }
+                    object.constructor.function->enviroment.parameters.push_back(param.string);
                 }
             }
             if (object.constructor.super_arguments_call) {
@@ -710,12 +720,15 @@ std::optional<Binding> bite::Analyzer::resolve_in_function_enviroment(
     const FunctionEnviroment& env,
     const StringTable::Handle name
 ) {
+    if (auto binding = resolve_locals(env.locals, name)) {
+        return binding;
+    }
     for (const auto& [idx, param] : env.parameters | std::views::enumerate) {
         if (param == name) {
             return ParameterBinding { idx };
         }
     }
-    return resolve_locals(env.locals, name);
+    return {};
 }
 
 std::optional<Binding> bite::Analyzer::resolve_in_class_enviroment(
@@ -755,12 +768,15 @@ std::optional<Binding> bite::Analyzer::resolve_in_global_enviroment(
     const GlobalEnviroment& env,
     StringTable::Handle name
 ) {
+    if (auto binding = resolve_locals(env.locals, name)) {
+        return binding;
+    }
     for (const auto& [global_name, declaration] : env.globals) {
         if (global_name == name) {
             return GlobalBinding { .info = &std::get<GlobalDeclarationInfo>(declaration->info) };
         }
     }
-    return resolve_locals(env.locals, name);
+    return {};
 }
 
 inline int64_t add_upvalue(FunctionEnviroment* env, const UpValue upvalue) {

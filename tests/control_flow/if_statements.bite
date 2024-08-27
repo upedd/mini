@@ -1,4 +1,4 @@
-native print;
+import print from "os";
 
 fun test(x) {
     if x > 30 {

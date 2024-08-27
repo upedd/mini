@@ -1,3 +1,5 @@
+import print from "os";
+
 class Foo {
     x;
     init(x) {
@@ -18,8 +20,6 @@ class Baz : Bar {
         this.z = z;
     }
 }
-
-native print;
 
 let instance = Baz(1, 2, 3);
 print(instance.x);

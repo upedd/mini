@@ -1,3 +1,5 @@
+import print from "os";
+
 class Foo {
     object {
         bar;
@@ -18,8 +20,6 @@ class Foo {
 
 # TODO: should also check for access violations
 # but for now test runner does not support this
-native print;
-
 Foo.bar = 5;
 print(Foo.bar);
 print(Foo.get_bar_plus_ten());

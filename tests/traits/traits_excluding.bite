@@ -1,3 +1,5 @@
+import print from "os";
+
 trait A {
     get_text() {
         return "A";
@@ -11,12 +13,9 @@ trait B {
     }
 }
 
-
-
 class C using A(exclude get_text), B {
 
 }
-native print;
 
 let instance = C();
 

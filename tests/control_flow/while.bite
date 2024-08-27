@@ -1,4 +1,4 @@
-native print;
+import print from "os";
 
 let a = 0;
 while a < 10 {

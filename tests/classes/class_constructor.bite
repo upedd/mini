@@ -1,3 +1,5 @@
+import print from "os";
+
 class Foo {
     bar;
     baz = 10;
@@ -12,8 +14,6 @@ class Foo {
         return this.bar + this.baz;
     }
 }
-
-native print;
 
 let instance = Foo(5, "foo");
 

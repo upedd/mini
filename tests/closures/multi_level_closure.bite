@@ -1,4 +1,5 @@
-native print;
+import print from "os";
+
 fun outer() {
     let num = 10;
     fun middle() {

@@ -1,4 +1,5 @@
-native print;
+import print from "os";
+
 let display_fn;
 let add_fn;
 

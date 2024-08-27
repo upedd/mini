@@ -1,9 +1,9 @@
+import print from "os";
+
 class Foo {
     bar;
     baz = "abc";
 }
-
-native print;
 
 let instance = Foo();
 print(instance.bar);
