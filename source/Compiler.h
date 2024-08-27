@@ -142,15 +142,15 @@ public:
 
 
     explicit Compiler(SharedContext* context) :
-        main("", 0),
+        main(new Function("main", 0)),
         shared_context(context) {
-        context_stack.emplace_back(&main, FunctionType::FUNCTION);
-        functions.push_back(&main);
+        context_stack.emplace_back(main, FunctionType::FUNCTION);
+        functions.push_back(main);
     }
 
     bool compile(Ast* ast);
 
-    Function& get_main();
+    Function* get_main();
 
     const std::vector<Function*>& get_functions();
     const std::vector<std::string>& get_natives();
@@ -223,7 +223,7 @@ private:
 
     void emit_get_variable(const Binding& binding);
 
-    Function main;
+    Function* main;
     std::vector<Context> context_stack;
     std::vector<Function*> functions;
     std::vector<std::string> natives;

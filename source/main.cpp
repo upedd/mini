@@ -5,6 +5,12 @@
 #include "debug.h"
 #include "VM.h"
 #include "shared/SharedContext.h"
+// TODO: attributes
+// TODO: duplicates by traits
+// TODO: this closures
+// TODO: proper globals
+// TODO: imports
+// TODO: refactor
 
 // TODO: investigate fun in class infinite loop?
 int main(int argc, char** argv) {
@@ -14,28 +20,11 @@ int main(int argc, char** argv) {
         return -1;
     }
     SharedContext context { bite::Logger(std::cout, true) };
-    Compiler compiler(bite::file_input_stream(argv[1]), &context);
-    if (!compiler.compile()) {
-        return 1;
-    }
-    auto& func = compiler.get_main();
-    // Disassembler disassembler(func);
-    // disassembler.disassemble("main");
-    auto& functions = compiler.get_functions();
-    GarbageCollector gc;
-    for (auto* function : functions) {
-        gc.add_object(function);
-    }
-    VM vm(std::move(gc), &func);
-    vm.add_native_function(
-        "print",
-        [](const std::vector<Value>& args) {
-            std::cout << args[1].to_string() << '\n';
-            return nil_t;
-        }
-    );
-    auto result = vm.run();
-    if (!result) {
-        std::cerr << result.error().what() << '\n';
-    }
+    Module* main_module = context.compile(argv[1]);
+    context.execute(*main_module);
+
+    // auto result = vm.run();
+    // if (!result) {
+    //     std::cerr << result.error().what() << '\n';
+    // }
 }

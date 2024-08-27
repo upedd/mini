@@ -4,8 +4,11 @@
 #include <ranges>
 
 #include "Analyzer.h"
+#include "debug.h"
 #include "base/overloaded.h"
 #include "shared/SharedContext.h"
+
+#define COMPILER_PRINT_BYTECODE
 
 bool Compiler::compile(Ast* ast) {
     this->ast = ast;
@@ -14,10 +17,14 @@ bool Compiler::compile(Ast* ast) {
     }
     // default return at main
     emit_default_return();
+    #ifdef COMPILER_PRINT_BYTECODE
+    Disassembler disassembler(*current_function());
+    disassembler.disassemble(current_function()->to_string());
+    #endif
     return true;
 }
 
-Function& Compiler::get_main() {
+Function* Compiler::get_main() {
     return main;
 }
 
@@ -39,7 +46,6 @@ void Compiler::start_context(Function* function, FunctionType type) {
     current_context().on_stack = function->get_arity() + 1; // plus one for reserved receiver slot!
 }
 
-//#define COMPILER_PRINT_BYTECODE
 
 void Compiler::end_context() {
     #ifdef COMPILER_PRINT_BYTECODE

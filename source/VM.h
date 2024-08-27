@@ -6,7 +6,6 @@
 
 #include "CallFrame.h"
 #include "Object.h"
-#include "shared/SharedContext.h"
 
 #define DEBUG_STRESS_GC
 
@@ -23,7 +22,7 @@ public:
         auto* closure = new Closure(function);
         // todo: maybe start program thru call()
         frames.emplace_back(closure, 0, 0);
-        allocate<Closure>(closure);
+        allocate(closure);
         // adopt_objects(function->get_allocated());
     }
 
@@ -52,8 +51,6 @@ public:
     void mark_roots_for_gc();
     void run_gc();
 
-    template <class T>
-    T* allocate(T* ptr);
     void allocate(std::vector<Object*> ptr);
 
     void adopt_objects(std::vector<Object*> objects);
@@ -110,6 +107,7 @@ public:
 
     void add_native(const std::string& name, const Value& value);
     void add_native_function(const std::string& name, const std::function<Value(const std::vector<Value>&)>& fn);
+    Object* allocate(Object* ptr);
     std::array<Value, 256> stack;
     bite::unordered_dense::map<std::string, Value> globals;
 private:
@@ -125,34 +123,5 @@ private:
     SharedContext* context;
 };
 
-template <typename T>
-T* VM::allocate(T* ptr) {
-    gc->add_object(ptr);
-    gc->mark(ptr);
-    #ifdef DEBUG_STRESS_GC
-    context->run_gc();
-    #endif
-    if (gc->get_memory_used() > next_gc) {
-        mark_roots_for_gc();
-        gc->collect();
-        next_gc = gc->get_memory_used() * HEAP_GROWTH_FACTOR;
-    }
-
-    return ptr;
-}
-
-inline void VM::allocate(std::vector<Object*> ptr) {
-    for (auto* p : ptr) {
-        gc->add_object(p);
-    }
-    #ifdef DEBUG_STRESS_GC
-    run_gc();
-    #endif
-    if (gc->get_memory_used() > next_gc) {
-        mark_roots_for_gc();
-        gc->collect();
-        next_gc = gc->get_memory_used() * HEAP_GROWTH_FACTOR;
-    }
-}
 
 #endif //VM_H

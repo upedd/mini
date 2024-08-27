@@ -82,7 +82,7 @@ std::optional<VM::RuntimeError> VM::call_value(const Value& value, const int arg
         // work around gc and fix duplicate function returns
         if (auto* bound_ptr = dynamic_cast<BoundMethod*>(bound.get<Object*>())) {
             allocate(bound_ptr);
-            allocate<Receiver>(dynamic_cast<Receiver*>(bound_ptr->receiver.get<Object*>()));
+            allocate(dynamic_cast<Receiver*>(bound_ptr->receiver.get<Object*>()));
         }
 
         std::swap(stack[stack_index - 1], stack[stack_index - 2]);
@@ -148,7 +148,7 @@ Upvalue* VM::capture_upvalue(int index) {
     if (upvalue == nullptr) {
         upvalue = new Upvalue(value);
         open_upvalues.push_back(upvalue);
-        allocate<Upvalue>(upvalue);
+        allocate(upvalue);
     }
     return upvalue;
 }
@@ -187,7 +187,7 @@ void VM::mark_roots_for_gc() {
 
 void VM::adopt_objects(std::vector<Object*> objects) {
     for (auto* object : objects) {
-        allocate<Object>(object);
+        allocate(object);
     }
 }
 
@@ -518,7 +518,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                         closure->upvalues.push_back(frames.back().closure->upvalues[index]);
                     }
                 }
-                allocate<Closure>(closure); // wait to add upvalues
+                allocate(closure); // wait to add upvalues
                 // adopt_objects(function->get_allocated());
                 break;
             }
@@ -668,7 +668,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                         klass->fields[name].is_computed = true;
                         auto* property = new ComputedProperty {};
                         klass->fields[name].value = property;
-                        allocate<ComputedProperty>(property);
+                        allocate(property);
                     }
                     auto* computed_property = dynamic_cast<ComputedProperty*>(klass->fields[name].value.get<Object*>());
                     computed_property->get = ClassMethod {
@@ -681,7 +681,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                         klass->fields[name].is_computed = true;
                         auto* property = new ComputedProperty {};
                         klass->fields[name].value = property;
-                        allocate<ComputedProperty>(property);
+                        allocate(property);
                     }
                     klass->fields[name].is_computed = true;
                     auto* computed_property = dynamic_cast<ComputedProperty*>(klass->fields[name].value.get<Object*>());
@@ -950,7 +950,8 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 auto item_name_interned = context->intern(item_name);
                 BITE_ASSERT(context->get_module(module_name_interned) != nullptr);
                 BITE_ASSERT(context->get_module(module_name_interned)->declarations.contains(item_name_interned));
-                push(context->get_value_from_module(module_name_interned, item_name_interned));
+                auto value = context->get_value_from_module(module_name_interned, item_name_interned);
+                push(value);
                 // push(allocate<ForeginFunctionObject>(
                 //     new ForeginFunctionObject(&context->get_module(module_name_interned)->functions[item_name_interned])
                 // ));
@@ -972,4 +973,33 @@ void VM::add_native_function(const std::string& name, const std::function<Value(
     auto* ptr = new NativeFunction(fn);
     natives[name] = ptr;
     allocate(ptr);
+}
+
+Object* VM::allocate(Object* ptr) {
+    gc->add_object(ptr);
+    gc->mark(ptr);
+    #ifdef DEBUG_STRESS_GC
+    context->run_gc();
+    #endif
+    if (gc->get_memory_used() > next_gc) {
+        mark_roots_for_gc();
+        gc->collect();
+        next_gc = gc->get_memory_used() * HEAP_GROWTH_FACTOR;
+    }
+
+    return ptr;
+}
+
+void VM::allocate(std::vector<Object*> ptr) {
+    for (auto* p : ptr) {
+        gc->add_object(p);
+    }
+    #ifdef DEBUG_STRESS_GC
+    context->run_gc();
+    #endif
+    if (gc->get_memory_used() > next_gc) {
+        mark_roots_for_gc();
+        gc->collect();
+        next_gc = gc->get_memory_used() * HEAP_GROWTH_FACTOR;
+    }
 }

@@ -1,24 +1,24 @@
 #ifndef CONTEXT_H
 #define CONTEXT_H
 #include <fstream>
+#include <stack>
 
 #include "StringTable.h"
 #include "../Diagnostics.h"
 #include "../base/logger.h"
 #include "../Ast.h"
+#include "../GarbageCollector.h"
+#include "../VM.h"
 
 // TODO: find better place
 
-class VM;
-
+class Function;
 class FunctionContext {
 public:
     explicit FunctionContext(VM* vm, int64_t frame_pointer) : vm(vm),
                                                               frame_pointer(frame_pointer) {}
 
-    Value get_arg(int64_t pos) {
-        return vm->stack[frame_pointer + pos + 1];
-    }
+    Value get_arg(int64_t pos);
 
 private:
     VM* vm;
@@ -66,8 +66,7 @@ public:
     bite::Logger logger;
     bite::DiagnosticManager diagnostics;
     GarbageCollector gc;
-    std::vector<VM> running_vms;
-
+    std::deque<VM> running_vms;
 private:
     StringTable string_table;
     bite::unordered_dense::segmented_map<StringTable::Handle, Module> modules;
