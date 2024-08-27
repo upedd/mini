@@ -22,15 +22,16 @@ Module* SharedContext::get_module(StringTable::Handle name) {
 
 Module* SharedContext::compile(const std::string& name) {
     Parser parser { bite::file_input_stream(name), this };
-    Ast ast = parser.parse();
+    ast_storage.push_back(parser.parse());
+    auto& ast = ast_storage.back();
     if (parser.has_errors()) {
-        diagnostics.print(std::cout);
+        diagnostics.print(std::cout, true);
         return nullptr;
     }
     bite::Analyzer analyzer { this };
     analyzer.analyze(ast);
     if (analyzer.has_errors()) {
-        diagnostics.print(std::cout);
+        diagnostics.print(std::cout, true);
         return nullptr;
     }
     Compiler compiler { this };

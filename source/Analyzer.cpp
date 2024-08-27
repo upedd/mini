@@ -457,14 +457,20 @@ void bite::Analyzer::import_stmt(ImportStmt& stmt) {
         return;
     }
     for (auto& item : stmt.items) {
-        if (!module->declarations.contains(item->name.string)) {
+        StringTable::Handle name = item->name.string;
+        if (item->original_name) {
+            name = item->original_name->string;
+        }
+
+        if (!module->declarations.contains(name)) {
             emit_error_diagnostic(
-                std::format("module \"{}\" does not declare \"{}\"", stmt.module->string, *item->name.string),
+                std::format("module \"{}\" does not declare \"{}\"", stmt.module->string, *name),
                 item->span,
                 "required here"
             );
             continue;
         }
+        item->item_declaration = module->declarations[name];
         declare(item.get());
     }
 }
@@ -874,17 +880,28 @@ bool bite::Analyzer::is_in_class_with_superclass() {
     return false;
 }
 
+// TODO: refactor
 std::optional<AstNode*> bite::Analyzer::find_declaration(const Binding& binding) {
+    AstNode* declaration = nullptr;
     if (std::holds_alternative<GlobalBinding>(binding)) {
-        return std::get<GlobalBinding>(binding).info->declaration;
+        declaration = std::get<GlobalBinding>(binding).info->declaration;
     }
     if (std::holds_alternative<LocalBinding>(binding)) {
-        return std::get<LocalBinding>(binding).info->declaration;
+        declaration = std::get<LocalBinding>(binding).info->declaration;
     }
     if (std::holds_alternative<UpvalueBinding>(binding)) {
-        return std::get<UpvalueBinding>(binding).info->declaration;
+        declaration = std::get<UpvalueBinding>(binding).info->declaration;
     }
-    return {};
+    if (!declaration) {
+        return {};
+    }
+    if (auto* import_item = dynamic_cast<ImportStmt::Item*>(declaration)) {
+        declaration = import_item->item_declaration;
+    }
+    if (!declaration) {
+        return {};
+    }
+    return declaration;
 }
 
 void bite::Analyzer::check_member_declaration(

@@ -141,8 +141,14 @@ bool is_expression_start(const Token::Type type) {
 std::unique_ptr<Stmt> Parser::import_stmt() {
     std::vector<std::unique_ptr<ImportStmt::Item>> items;
     do {
-        consume(Token::Type::IDENTIFIER, "expected identifier");
-        items.emplace_back(std::make_unique<ImportStmt::Item>(current.span, current));
+        consume(Token::Type::IDENTIFIER, "missing import identifier");
+        Token name = current;
+        if (match(Token::Type::AS)) {
+            consume(Token::Type::IDENTIFIER, "missing import aliasas");
+            items.emplace_back(std::make_unique<ImportStmt::Item>(current.span, current, name));
+        } else {
+            items.emplace_back(std::make_unique<ImportStmt::Item>(current.span, name));
+        }
     } while (match(Token::Type::COMMA));
     consume(Token::Type::FROM, "import does not specify destination");
     advance();

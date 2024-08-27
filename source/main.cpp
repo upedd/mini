@@ -21,10 +21,8 @@ int main(int argc, char** argv) {
     }
     SharedContext context { bite::Logger(std::cout, true) };
     Module* main_module = context.compile(argv[1]);
+    if (!main_module) {
+        return -1;
+    }
     context.execute(*main_module);
-
-    // auto result = vm.run();
-    // if (!result) {
-    //     std::cerr << result.error().what() << '\n';
-    // }
 }

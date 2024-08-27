@@ -883,7 +883,11 @@ void Compiler::super_expr(const SuperExpr& expr) {
 void Compiler::import_stmt(const ImportStmt& stmt) {
     int module_const = current_function()->add_constant(stmt.module->string);
     for (const auto& item : stmt.items) {
-        int item_const = current_function()->add_constant(*item->name.string);
+        auto* name = item->name.string;
+        if (item->original_name) {
+            name = item->original_name->string;
+        }
+        int item_const = current_function()->add_constant(*name);
         emit(OpCode::IMPORT);
         emit(module_const);
         emit(item_const);

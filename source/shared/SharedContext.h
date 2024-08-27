@@ -68,6 +68,8 @@ public:
     GarbageCollector gc;
     std::deque<VM> running_vms;
 private:
+    // need to store them for lifetime reasons
+    std::deque<Ast> ast_storage;
     StringTable string_table;
     bite::unordered_dense::segmented_map<StringTable::Handle, Module> modules;
 };

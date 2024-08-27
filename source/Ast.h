@@ -665,11 +665,19 @@ public:
         [[nodiscard]] NodeKind kind() const override {
             return NodeKind::invalid_stmt;
         }
-        using Declaration::Declaration;
+
+        Declaration* item_declaration = nullptr;
+        std::optional<Token> original_name;
+
+        Item(const bite::SourceSpan& span, const Token& name, const std::optional<Token>& original_name = {}) : Declaration(span, name),
+            original_name(original_name) {}
     };
 
-    ImportStmt(const bite::SourceSpan& span, std::vector<std::unique_ptr<Item>> items, std::unique_ptr<StringExpr> module) :
-        Stmt(span),
+    ImportStmt(
+        const bite::SourceSpan& span,
+        std::vector<std::unique_ptr<Item>> items,
+        std::unique_ptr<StringExpr> module
+    ) : Stmt(span),
         items(std::move(items)),
         module(std::move(module)) {}
 
