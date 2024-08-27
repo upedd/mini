@@ -56,7 +56,6 @@
     V(VariableDeclaration, variable_declaration) \
     V(ExprStmt, expr_stmt) \
     V(ClassDeclaration, class_declaration) \
-    V(NativeDeclaration, native_declaration) \
     V(TraitDeclaration, trait_declaration) \
     V(ObjectDeclaration, object_declaration) \
     V(ImportStmt, import_stmt) \
@@ -622,16 +621,6 @@ public:
     }
 
     std::unique_ptr<ObjectExpr> object;
-};
-
-class NativeDeclaration final : public Declaration {
-public:
-    [[nodiscard]] NodeKind kind() const override {
-        return NodeKind::native_declaration;
-    }
-
-
-    NativeDeclaration(const bite::SourceSpan& span, const Token& name) : Declaration(span, name) {}
 };
 
 class TraitDeclaration final : public Declaration {

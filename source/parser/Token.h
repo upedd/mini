@@ -75,7 +75,6 @@ struct Token {
         LET,
         WHILE,
         TILDE,
-        NATIVE,
         FOR,
         LABEL,
         COLON,
@@ -180,7 +179,6 @@ inline std::string Token::type_to_string(const Type type) {
         case Type::LET: return "LET";
         case Type::WHILE: return "WHILE";
         case Type::TILDE: return "TILDE";
-        case Type::NATIVE: return "NATIVE";
         case Type::FOR: return "FOR";
         case Type::LABEL: return "LABEL";
         case Type::COLON: return "COLON";
@@ -269,7 +267,6 @@ inline std::string Token::type_to_display(const Type type) {
         case Type::LET: return "let";
         case Type::WHILE: return "while";
         case Type::TILDE: return "~";
-        case Type::NATIVE: return "native";
         case Type::FOR: return "for";
         case Type::LABEL: return "label";
         case Type::COLON: return ":";

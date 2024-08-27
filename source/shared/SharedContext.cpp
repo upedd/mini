@@ -12,7 +12,7 @@ Value FunctionContext::get_arg(int64_t pos) {
 // TODO: circular?
 Module* SharedContext::get_module(StringTable::Handle name) {
     if (modules.contains(name)) {
-        return &modules[name];
+        return modules[name].get();
     }
     if (std::filesystem::exists(*name)) {
         return compile(*name);
@@ -20,7 +20,7 @@ Module* SharedContext::get_module(StringTable::Handle name) {
     return nullptr;
 }
 
-Module* SharedContext::compile(const std::string& name) {
+FileModule* SharedContext::compile(const std::string& name) {
     Parser parser { bite::file_input_stream(name), this };
     ast_storage.push_back(parser.parse());
     auto& ast = ast_storage.back();
@@ -40,31 +40,17 @@ Module* SharedContext::compile(const std::string& name) {
         gc.add_object(function);
     }
     // Bite automatically exports all globals declarations, this can change in future.
-    modules[intern(name)] = Module {
-            .m_was_executed = false,
-            .function = compiler.get_main(),
-            .declarations = std::move(ast.enviroment.globals),
-            .values = {}
-        };
-    return &modules[intern(name)];
+    modules[intern(name)] = std::make_unique<FileModule>(compiler.get_main(), std::move(ast.enviroment.globals));
+    return static_cast<FileModule*>(modules[intern(name)].get());
 }
 
-void SharedContext::add_module(const StringTable::Handle& name) {
-    modules[name] = Module();
+void SharedContext::add_module(const StringTable::Handle name, std::unique_ptr<ForeignModule> module) {
+    modules[name] = std::move(module);
 }
 
-void SharedContext::execute(Module& module) {
+void SharedContext::execute(FileModule& module) {
     module.m_was_executed = true;
     running_vms.emplace_back(&gc, module.function, this);
-    // TODO: handle errors
-    running_vms.back().add_native_function(
-        "print",
-        [](const std::vector<Value>& args) {
-            std::cout << args[1].to_string() << '\n';
-            return nil_t;
-        }
-    );
-
     auto result = running_vms.back().run();
     if (!result) {
         logger.log(bite::Logger::Level::error, "uncaught error: {}", result.error().what());
@@ -77,13 +63,24 @@ void SharedContext::execute(Module& module) {
     running_vms.pop_back();
 }
 
-Value SharedContext::get_value_from_module(const StringTable::Handle& module, const StringTable::Handle& name) {
+// TODO: temp
+std::variant<Value, ForeignFunction*> SharedContext::get_value_from_module(
+    const StringTable::Handle& module,
+    const StringTable::Handle& name
+) {
     BITE_ASSERT(modules.contains(module));
-    if (!modules[module].m_was_executed) {
-        execute(modules[module]);
+    if (auto* file_module = dynamic_cast<FileModule*>(modules[module].get())) {
+        if (!file_module->m_was_executed) {
+            execute(*file_module);
+        }
+        BITE_ASSERT(file_module->values.contains(name));
+        return file_module->values[name];
     }
-    BITE_ASSERT(modules[module].values.contains(name));
-    return modules[module].values[name];
+    if (auto* foreign_module = dynamic_cast<ForeignModule*>(modules[module].get())) {
+        BITE_ASSERT(foreign_module->functions.contains(name));
+        return &foreign_module->functions[name];
+    }
+    BITE_PANIC("unknown module type");
 }
 
 void SharedContext::run_gc() {
@@ -91,12 +88,14 @@ void SharedContext::run_gc() {
         vm.mark_roots_for_gc();
     }
     for (auto& [_, module] : modules) {
-        if (module.m_was_executed) {
-            for (auto& [_, value] : module.values) {
-                gc.mark(value);
+        if (auto* file_module = dynamic_cast<FileModule*>(module.get())) {
+            if (file_module->m_was_executed) {
+                for (auto& [_, value] : file_module->values) {
+                    gc.mark(value);
+                }
+            } else {
+                gc.mark(file_module->function);
             }
-        } else {
-            gc.mark(module.function);
         }
     }
     gc.collect();

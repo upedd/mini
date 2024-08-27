@@ -8,8 +8,7 @@
 // TODO: attributes
 // TODO: duplicates by traits
 // TODO: this closures
-// TODO: proper globals
-// TODO: imports
+// TODO: cyclic imports
 // TODO: refactor
 
 // TODO: investigate fun in class infinite loop?
@@ -20,7 +19,20 @@ int main(int argc, char** argv) {
         return -1;
     }
     SharedContext context { bite::Logger(std::cout, true) };
-    Module* main_module = context.compile(argv[1]);
+
+    auto os_module = std::make_unique<ForeignModule>();
+    auto print_symbol = context.intern("print");
+    os_module->functions[print_symbol] = {
+        .arity = 1,
+        .name = print_symbol,
+        .function = [](FunctionContext ctx) {
+            std::cout << ctx.get_arg(0).to_string() << '\n';
+            return nil_t;
+        }
+    };
+
+    context.add_module(context.intern("os"), std::move(os_module));
+    FileModule* main_module = context.compile(argv[1]);
     if (!main_module) {
         return -1;
     }

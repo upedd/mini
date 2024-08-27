@@ -111,16 +111,6 @@ std::optional<VM::RuntimeError> VM::call_value(const Value& value, const int arg
         return call_value(bound->closure, arguments_count);
     }
 
-    if (auto* native = dynamic_cast<NativeFunction*>(*object)) {
-        std::vector<Value> args;
-        for (int i = 0; i < arguments_count + 1; ++i) {
-            args.push_back(stack[stack_index - arguments_count - 1 + i]);
-        }
-        Value result = native->function(args);
-        stack_index -= arguments_count + 1;
-        push(result);
-        return {};
-    }
     if (auto* foreign = dynamic_cast<ForeginFunctionObject*>(*object)) {
         std::vector<Value> args;
         for (int i = 0; i < arguments_count + 1; ++i) {
@@ -179,9 +169,6 @@ void VM::mark_roots_for_gc() {
 
     for (auto* open_upvalue : open_upvalues) {
         gc->mark(open_upvalue);
-    }
-    for (auto& value : std::views::values(natives)) {
-        gc->mark(value);
     }
 }
 
@@ -776,12 +763,6 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 }
                 break;
             }
-            case OpCode::GET_NATIVE: {
-                int constant_idx = fetch();
-                auto name = get_constant(constant_idx).get<std::string>();
-                push(natives[name]);
-                break;
-            }
             case OpCode::FIELD: {
                 int constant_idx = fetch();
                 auto attributes = bitflags<ClassAttributes>(fetch());
@@ -949,12 +930,16 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 auto module_name_interned = context->intern(module_name);
                 auto item_name_interned = context->intern(item_name);
                 BITE_ASSERT(context->get_module(module_name_interned) != nullptr);
-                BITE_ASSERT(context->get_module(module_name_interned)->declarations.contains(item_name_interned));
-                auto value = context->get_value_from_module(module_name_interned, item_name_interned);
-                push(value);
-                // push(allocate<ForeginFunctionObject>(
-                //     new ForeginFunctionObject(&context->get_module(module_name_interned)->functions[item_name_interned])
-                // ));
+                //BITE_ASSERT(context->get_module(module_name_interned)->declarations.contains(item_name_interned));
+                auto res = context->get_value_from_module(module_name_interned, item_name_interned);
+
+                if (auto* value = std::get_if<Value>(&res)) {
+                    push(*value);
+                } else if (auto* func = std::get_if<ForeignFunction*>(&res)) {
+                    push(allocate(
+                        new ForeginFunctionObject(*func)
+                    ));
+                }
             }
         }
         for (int i = 0; i < stack_index; ++i) {
@@ -963,16 +948,6 @@ std::expected<Value, VM::RuntimeError> VM::run() {
         std::cout << '\n';
     }
     #undef BINARY_OPERATION
-}
-
-void VM::add_native(const std::string& name, const Value& value) {
-    natives[name] = value;
-}
-
-void VM::add_native_function(const std::string& name, const std::function<Value(const std::vector<Value>&)>& fn) {
-    auto* ptr = new NativeFunction(fn);
-    natives[name] = ptr;
-    allocate(ptr);
 }
 
 Object* VM::allocate(Object* ptr) {

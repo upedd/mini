@@ -83,9 +83,6 @@ void bite::Analyzer::function(FunctionDeclaration& stmt) {
     );
 }
 
-void bite::Analyzer::native_declaration(NativeDeclaration& stmt) {
-    declare(&stmt);
-}
 
 void bite::Analyzer::class_declaration(ClassDeclaration& stmt) {
     declare(&stmt);
@@ -452,6 +449,7 @@ void bite::Analyzer::import_stmt(ImportStmt& stmt) {
     // TODO: string node should contain interned string
     auto* module = context->get_module(context->intern(stmt.module->string));
 
+    // TODO: refactor!
     if (!module) {
         emit_error_diagnostic(std::format("module \"{}\" not found", stmt.module->string), stmt.span, "required here");
         return;
@@ -462,15 +460,27 @@ void bite::Analyzer::import_stmt(ImportStmt& stmt) {
             name = item->original_name->string;
         }
 
-        if (!module->declarations.contains(name)) {
-            emit_error_diagnostic(
-                std::format("module \"{}\" does not declare \"{}\"", stmt.module->string, *name),
-                item->span,
-                "required here"
-            );
-            continue;
+        if (auto* file_module = dynamic_cast<FileModule*>(context->get_module(name))) {
+            if (!file_module->declarations.contains(name)) {
+                emit_error_diagnostic(
+                    std::format("module \"{}\" does not declare \"{}\"", stmt.module->string, *name),
+                    item->span,
+                    "required here"
+                );
+                continue;
+            }
+            item->item_declaration = file_module->declarations[name];
         }
-        item->item_declaration = module->declarations[name];
+        if (auto* foreign_module = dynamic_cast<ForeignModule*>(context->get_module(name))) {
+            if (!foreign_module->functions.contains(name)) {
+                emit_error_diagnostic(
+                    std::format("module \"{}\" does not declare \"{}\"", stmt.module->string, *name),
+                    item->span,
+                    "required here"
+                );
+                continue;
+            }
+        }
         declare(item.get());
     }
 }

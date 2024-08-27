@@ -171,7 +171,6 @@ public:
 
     void class_declaration(const ClassDeclaration& stmt);
     void expr_stmt(const ExprStmt& stmt);
-    void native_declaration(const NativeDeclaration& stmt);
 
     void if_expr(const IfExpr& stmt);
 
@@ -226,7 +225,6 @@ private:
     Function* main;
     std::vector<Context> context_stack;
     std::vector<Function*> functions;
-    std::vector<std::string> natives;
     SharedContext* shared_context;
     Ast* ast;
 };

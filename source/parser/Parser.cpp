@@ -200,9 +200,6 @@ std::optional<std::unique_ptr<Stmt>> Parser::statement() {
                 consume(Token::Type::CLASS, "missing 'class' keyword");
                 return class_declaration(true);
             }
-            if (match(Token::Type::NATIVE)) {
-                return native_declaration();
-            }
             if (match(Token::Type::OBJECT)) {
                 return object_declaration();
             }
@@ -254,13 +251,6 @@ std::unique_ptr<Stmt> Parser::expr_statement() {
             return stmt;
         }
     );
-}
-
-std::unique_ptr<NativeDeclaration> Parser::native_declaration() {
-    consume(Token::Type::IDENTIFIER, "invalid native statement");
-    Token name = current;
-    consume(Token::Type::SEMICOLON, "missing semicolon");
-    return std::make_unique<NativeDeclaration>(make_span(), name);
 }
 
 std::unique_ptr<ObjectDeclaration> Parser::object_declaration() {

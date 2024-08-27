@@ -13,6 +13,7 @@
 // TODO: find better place
 
 class Function;
+
 class FunctionContext {
 public:
     explicit FunctionContext(VM* vm, int64_t frame_pointer) : vm(vm),
@@ -32,12 +33,28 @@ struct ForeignFunction {
     std::function<Value(FunctionContext)> function;
 };
 
+
+// TODO: temp
 class Module {
+public:
+    virtual ~Module() = default;
+};
+
+class ForeignModule final : public Module {
+public:
+    bite::unordered_dense::segmented_map<StringTable::Handle, ForeignFunction> functions;
+};
+
+class FileModule final : public Module {
 public:
     bool m_was_executed = false;
     Function* function;
     bite::unordered_dense::map<StringTable::Handle, Declaration*> declarations;
     bite::unordered_dense::map<StringTable::Handle, Value> values;
+
+    FileModule(Function* function, bite::unordered_dense::map<StringTable::Handle, Declaration*> declarations) :
+        function(function),
+        declarations(std::move(declarations)) {}
 };
 
 
@@ -53,13 +70,13 @@ public:
     }
 
     Module* get_module(StringTable::Handle name);
-    Module* compile(const std::string& file);
-
-    void add_module(const StringTable::Handle& name);;
-
-    void execute(Module& module);
-
-    Value get_value_from_module(const StringTable::Handle& module, const StringTable::Handle& name);
+    FileModule* compile(const std::string& file);
+    void execute(FileModule& module);
+    void add_module(const StringTable::Handle name, std::unique_ptr<ForeignModule> module);
+    std::variant<Value, ForeignFunction*> get_value_from_module(
+        const StringTable::Handle& module,
+        const StringTable::Handle& name
+    );
 
     void run_gc();
 
@@ -67,10 +84,11 @@ public:
     bite::DiagnosticManager diagnostics;
     GarbageCollector gc;
     std::deque<VM> running_vms;
+
 private:
     // need to store them for lifetime reasons
     std::deque<Ast> ast_storage;
     StringTable string_table;
-    bite::unordered_dense::segmented_map<StringTable::Handle, Module> modules;
+    bite::unordered_dense::segmented_map<StringTable::Handle, std::unique_ptr<Module>> modules;
 };
 #endif //CONTEXT_H

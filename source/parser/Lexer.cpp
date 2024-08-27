@@ -137,7 +137,7 @@ std::unexpected<bite::Diagnostic> Lexer::make_error(const std::string& reason, c
     );
 }
 
-constexpr static perfect_map<Token::Type, 32> identifiers(
+constexpr static perfect_map<Token::Type, 31> identifiers(
     {
         {
             { "class", Token::Type::CLASS },
@@ -158,7 +158,6 @@ constexpr static perfect_map<Token::Type, 32> identifiers(
             { "nil", Token::Type::NIL },
             { "let", Token::Type::LET },
             { "while", Token::Type::WHILE },
-            { "native", Token::Type::NATIVE },
             { "for", Token::Type::FOR },
             { "private", Token::Type::PRIVATE },
             { "abstract", Token::Type::ABSTRACT },

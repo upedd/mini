@@ -62,7 +62,6 @@ namespace bite {
         void expr_stmt(ExprStmt& stmt);
         void function_declaration(FunctionDeclaration& box);
         void function(FunctionDeclaration& stmt);
-        void native_declaration(NativeDeclaration& stmt);
         void class_declaration(ClassDeclaration& box);
         void class_object(ClassObject& object, bool is_abstract, SourceSpan& name_span);
         void object_declaration(ObjectDeclaration& stmt);

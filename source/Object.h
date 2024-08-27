@@ -96,21 +96,6 @@ private:
     int upvalue_count{0};
 };
 
-class NativeFunction final : public Object {
-public:
-    explicit NativeFunction(std::function<Value(const std::vector<Value>&)> function) : function(std::move(function)) {}
-
-    std::size_t get_size() override {
-        return sizeof(NativeFunction);
-    }
-
-    std::string to_string() override {
-        return "<Native>";
-    }
-
-    std::function<Value(const std::vector<Value>&)> function;
-};
-
 struct ForeignFunction;
 
 class ForeginFunctionObject final : public Object {
@@ -118,7 +103,7 @@ public:
     explicit ForeginFunctionObject(ForeignFunction* function) : function(function) {}
 
     std::size_t get_size() override {
-        return sizeof(NativeFunction);
+        return sizeof(ForeginFunctionObject);
     }
 
     std::string to_string() override {

@@ -105,8 +105,6 @@ public:
 
     std::expected<Value, RuntimeError> run();
 
-    void add_native(const std::string& name, const Value& value);
-    void add_native_function(const std::string& name, const std::function<Value(const std::vector<Value>&)>& fn);
     Object* allocate(Object* ptr);
     std::array<Value, 256> stack;
     bite::unordered_dense::map<std::string, Value> globals;
@@ -119,7 +117,6 @@ private:
     int stack_index = 0;
     std::vector<CallFrame> frames;
     std::list<Upvalue*> open_upvalues;
-    std::unordered_map<std::string, Value> natives;
     SharedContext* context;
 };
 

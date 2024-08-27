@@ -32,9 +32,6 @@ const std::vector<Function*>& Compiler::get_functions() {
     return functions;
 }
 
-const std::vector<std::string>& Compiler::get_natives() {
-    return natives;
-}
 
 void Compiler::this_expr(const ThisExpr&) {
     // safety: check if used in class method context
@@ -125,16 +122,6 @@ void Compiler::variable_declaration(const VariableDeclaration& expr) {
 void Compiler::function_declaration(const FunctionDeclaration& stmt) {
     function(stmt, FunctionType::FUNCTION);
     current_context().on_stack++;
-    define_variable(stmt.info);
-}
-
-void Compiler::native_declaration(const NativeDeclaration& stmt) {
-    std::string name = *stmt.name.string;
-    natives.push_back(name);
-    int idx = current_function()->add_constant(name);
-    emit(OpCode::GET_NATIVE, idx);
-    current_context().on_stack++;
-    // TODO: better way to get those bindings
     define_variable(stmt.info);
 }
 

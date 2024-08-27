@@ -79,7 +79,6 @@ private:
     std::optional<std::unique_ptr<Stmt>> control_flow_expression_statement();
     std::unique_ptr<Stmt> expr_statement();
 
-    std::unique_ptr<NativeDeclaration> native_declaration();
     std::unique_ptr<ObjectDeclaration> object_declaration();
 
     std::unique_ptr<VariableDeclaration> var_declaration();
