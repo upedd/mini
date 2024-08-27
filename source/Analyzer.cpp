@@ -53,7 +53,7 @@ void bite::Analyzer::variable_declaration(VariableDeclaration& stmt) {
     if (stmt.value) {
         visit(*stmt.value);
     }
-    declare(&stmt); // TODO is it safe???
+    declare(&stmt);
 }
 
 void bite::Analyzer::variable_expr(VariableExpr& expr) {
@@ -115,7 +115,6 @@ void bite::Analyzer::class_object(ClassObject& object, bool is_abstract, SourceS
     unordered_dense::map<StringTable::Handle, MemberInfo> overrideable_members;
     ClassDeclaration* superclass = nullptr;
     if (object.superclass) {
-        // TODO: refactor? better error message?
         object.superclass_binding = resolve(object.superclass->string, object.superclass->span);
         if (auto declaration = find_declaration(object.superclass_binding)) {
             if (declaration && declaration.value()->is_class_declaration()) {
@@ -151,13 +150,27 @@ void bite::Analyzer::class_object(ClassObject& object, bool is_abstract, SourceS
         }
     }
 
-    // TODO: confilcts with superclass methods and overrides
-    // TODO: disallow override in trait, and validate member attributes better through whole analyzer
+    // TODO: disallow override and abstract in traits
     unordered_dense::map<StringTable::Handle, MemberInfo> requirements;
     for (auto& trait_used : object.traits_used) {
         // refactor?
         trait_usage(
-            [&object](const auto& name, const auto& info) {
+            [&object, this](const auto& name, const auto& info) {
+                // TODO: better error message!
+                if (object.enviroment.members.contains(name)) {
+                    emit_error_diagnostic(
+                        "member declaration conflict",
+                        info.decl_span,
+                        "redeclered here",
+                        {
+                            InlineHint {
+                                .location = object.enviroment.members[name].decl_span,
+                                .message = "orignally declared here",
+                                .level = DiagnosticLevel::INFO
+                            }
+                        }
+                    );
+                }
                 object.enviroment.members[name] = info;
             },
             requirements,
@@ -186,27 +199,47 @@ void bite::Analyzer::class_object(ClassObject& object, bool is_abstract, SourceS
         if (has_super_constructor && !object.constructor.super_arguments_call) {
             // TODO: better diagnostic in default constructor
             // TODO: better constructor declspan
-            emit_error_diagnostic(
-                "subclass must call it's superclass constructor",
-                object.constructor.function->name.span,
-                "must add superconstructor call here",
-                {
-                    InlineHint {
-                        .location = object.superclass->span,
-                        .message = "declares superclass here",
-                        .level = DiagnosticLevel::INFO
-                    },
-                    InlineHint {
-                        .location = superconstructor.function->name.span,
-                        .message = "superclass defines constructor here",
-                        .level = DiagnosticLevel::INFO
+            if (object.constructor.function) {
+                emit_error_diagnostic(
+                    "subclass must call it's superclass constructor",
+                    object.constructor.function->name.span,
+                    "must add superconstructor to this consturctor",
+                    {
+                        InlineHint {
+                            .location = object.superclass->span,
+                            .message = "declares superclass here",
+                            .level = DiagnosticLevel::INFO
+                        },
+                        InlineHint {
+                            .location = superconstructor.function->name.span,
+                            .message = "superclass defines constructor here",
+                            .level = DiagnosticLevel::INFO
+                        }
                     }
-                }
-            );
+                );
+            } else {
+                emit_error_diagnostic(
+                    "subclass must call it's superclass constructor",
+                    name_span,
+                    "add consturctor which calls superconsturtor to this class",
+                    {
+                        InlineHint {
+                            .location = object.superclass->span,
+                            .message = "declares superclass here",
+                            .level = DiagnosticLevel::INFO
+                        },
+                        InlineHint {
+                            .location = superconstructor.function->name.span,
+                            .message = "superclass defines constructor here",
+                            .level = DiagnosticLevel::INFO
+                        }
+                    }
+                );
+            }
         }
 
-        if (has_super_constructor && object.constructor.super_arguments_call->arguments.size() != superconstructor.
-            function->params.size()) {
+        if (has_super_constructor && object.constructor.super_arguments_call && object.constructor.super_arguments_call
+            ->arguments.size() != superconstructor.function->params.size()) {
             // TODO: not safe?
             emit_error_diagnostic(
                 std::format(
@@ -218,12 +251,12 @@ void bite::Analyzer::class_object(ClassObject& object, bool is_abstract, SourceS
                 std::format("provides {} arguments", object.constructor.super_arguments_call->arguments.size()),
                 {
                     InlineHint {
-                        .location = name_span,
+                        .location = object.superclass->span,
                         .message = "superclass declared here",
                         .level = DiagnosticLevel::INFO
                     },
                     InlineHint {
-                        .location = superconstructor.span,
+                        .location = superconstructor.function->name.span,
                         .message = std::format(
                             "superclass constructor expected {} arguments",
                             superconstructor.function->params.size()
@@ -261,7 +294,8 @@ void bite::Analyzer::class_object(ClassObject& object, bool is_abstract, SourceS
                     is_abstract,
                     field.variable->name.string,
                     info,
-                    overrideable_members
+                    overrideable_members,
+                    false
                 );
                 declare_in_class_enviroment(
                     object.enviroment,
@@ -282,7 +316,14 @@ void bite::Analyzer::class_object(ClassObject& object, bool is_abstract, SourceS
     // hoist methods
     for (const auto& method : object.methods) {
         MemberInfo info(method.attributes, method.span);
-        check_member_declaration(name_span, is_abstract, method.function->name.string, info, overrideable_members);
+        check_member_declaration(
+            name_span,
+            is_abstract,
+            method.function->name.string,
+            info,
+            overrideable_members,
+            true
+        );
         declare_in_class_enviroment(object.enviroment, method.function->name.string, info);
     }
 
@@ -505,15 +546,20 @@ void bite::Analyzer::object_expr(ObjectExpr& expr) {
     with_context(
         expr,
         [this, &expr] {
+            // TODO: better object span
+            // TODO: metaobject span
             if (expr.object.metaobject) {
-                // TODO: better error message
-                // TODO: multiline error!
-                emit_error_diagnostic("object must not contain metaobject", expr.object.metaobject->span, "");
+                emit_error_diagnostic(
+                    "object cannot contain metaobject",
+                    expr.object.metaobject->span,
+                    "remove this",
+                    { InlineHint { .location = expr.span, .message = "is an object", .level = DiagnosticLevel::INFO } }
+                );
             }
             if (expr.object.constructor.function && !expr.object.constructor.function->params.empty()) {
                 emit_error_diagnostic(
                     "object constructor must not declare any parameters",
-                    expr.object.constructor.function->span,
+                    expr.object.constructor.function->name.span,
                     ""
                 );
             }
@@ -530,7 +576,22 @@ void bite::Analyzer::trait_declaration(TraitDeclaration& stmt) {
             unordered_dense::map<StringTable::Handle, MemberInfo> requirements;
             for (auto& using_stmt_node : stmt.using_stmts) {
                 trait_usage(
-                    [&stmt](const auto& name, const auto& info) {
+                    [&stmt, this](const auto& name, const auto& info) {
+                        // TODO: better error message!
+                        if (stmt.enviroment.members.contains(name)) {
+                            emit_error_diagnostic(
+                                "member declaration conflict",
+                                info.decl_span,
+                                "redeclered here",
+                                {
+                                    InlineHint {
+                                        .location = stmt.enviroment.members[name].decl_span,
+                                        .message = "orignally declared here",
+                                        .level = DiagnosticLevel::INFO
+                                    }
+                                }
+                            );
+                        }
                         stmt.enviroment.members[name] = info;
                     },
                     requirements,
@@ -935,7 +996,8 @@ void bite::Analyzer::check_member_declaration(
     bool is_abstract,
     StringTable::Handle name,
     MemberInfo& info,
-    unordered_dense::map<StringTable::Handle, MemberInfo>& overrideable_members
+    unordered_dense::map<StringTable::Handle, MemberInfo>& overrideable_members,
+    bool is_method
 ) {
     if (info.attributes[ClassAttributes::ABSTRACT] && !is_abstract) {
         emit_error_diagnostic(
@@ -946,6 +1008,16 @@ void bite::Analyzer::check_member_declaration(
         );
     }
 
+    if (info.attributes[ClassAttributes::ABSTRACT] && info.attributes[ClassAttributes::PRIVATE]) {
+        emit_error_diagnostic("member cannot be both abstract and private", info.decl_span, "here");
+    }
+    if (info.attributes[ClassAttributes::ABSTRACT] && info.attributes[ClassAttributes::OVERRIDE]) {
+        emit_error_diagnostic("abstract member cannot be an override", info.decl_span, "here");
+    }
+    if (info.attributes[ClassAttributes::GETTER] && info.attributes[ClassAttributes::SETTER] && is_method) {
+        emit_error_diagnostic("method cannot be both an getter and a setter", info.decl_span, "here");
+    }
+    // TODO: check getter and setter arguments count
 
     if (overrideable_members.contains(name)) {
         auto& member = overrideable_members[name];
@@ -960,24 +1032,29 @@ void bite::Analyzer::check_member_declaration(
         } else if (!info.attributes[ClassAttributes::OVERRIDE]) {
             emit_override_error = true;
         }
-        // TODO: maybe point to original method
+        // maybe more inline hints?
         if (emit_override_error) {
             emit_error_diagnostic(
                 "memeber should override explicitly",
                 info.decl_span,
-                "add 'override' attribute to this field"
+                "add 'override' attribute to this member",
+                {
+                    InlineHint {
+                        .location = overrideable_members[name].decl_span,
+                        .message = "function originally declared here",
+                        .level = DiagnosticLevel::INFO
+                    }
+                }
             );
         }
         // TODO: refactor!
         if (member.attributes[ClassAttributes::GETTER] && member.attributes[ClassAttributes::SETTER] && info.attributes[
-            ClassAttributes::GETTER] && !info.attributes[ClassAttributes::SETTER] && info.attributes[
-            ClassAttributes::OVERRIDE]) {
+            ClassAttributes::GETTER] && !info.attributes[ClassAttributes::SETTER]) {
             member.attributes -= ClassAttributes::GETTER;
         } else if (member.attributes[ClassAttributes::GETTER] && member.attributes[ClassAttributes::SETTER] && !info.
-            attributes[ClassAttributes::GETTER] && info.attributes[ClassAttributes::SETTER] && info.attributes[
-                ClassAttributes::OVERRIDE]) {
+            attributes[ClassAttributes::GETTER] && info.attributes[ClassAttributes::SETTER]) {
             member.attributes -= ClassAttributes::SETTER;
-        } else if (info.attributes[ClassAttributes::OVERRIDE]) {
+        } else {
             // TODO: performance?
             overrideable_members.erase(name);
         }

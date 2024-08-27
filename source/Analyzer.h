@@ -9,6 +9,9 @@
 #include "base/logger.h"
 #include "shared/SharedContext.h"
 
+// TODO: grammar fixes in error messages
+// TODO: better inline hints
+
 namespace bite {
     /**
      * Performs semantic analysis
@@ -192,7 +195,8 @@ namespace bite {
             bool is_abstract,
             StringTable::Handle name,
             MemberInfo& info,
-            unordered_dense::map<StringTable::Handle, MemberInfo>& overrideable_members
+            unordered_dense::map<StringTable::Handle, MemberInfo>& overrideable_members,
+            bool is_method
         );
 
     private:

@@ -2,10 +2,8 @@
 #include <fstream>
 #include <iostream>
 #include "Compiler.h"
-#include "debug.h"
-#include "VM.h"
 #include "shared/SharedContext.h"
-// TODO: attributes
+// TODO: getters and setters refactor and traits tests
 // TODO: duplicates by traits
 // TODO: this closures
 // TODO: cyclic imports
