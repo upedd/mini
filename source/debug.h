@@ -14,6 +14,7 @@ public:
 private:
     void simple_opcode(const std::string& name);
     void constant_inst(const std::string& name);
+    void double_constant_inst(const std::string& name);
     void class_inst(const std::string& name);
     void arg_inst(const std::string& name);
     void jump_inst(const std::string& name);
@@ -29,6 +30,12 @@ inline void Disassembler::simple_opcode(const std::string& name) {
 inline void Disassembler::constant_inst(const std::string& name) {
     int x = function.get_program().get_at(offset++);
     std::cout << offset - 2 << ": " << name << ' ' << x << ' ' << function.get_constant(x).to_string() << '\n';
+}
+
+inline void Disassembler::double_constant_inst(const std::string& name) {
+    int x = function.get_program().get_at(offset++);
+    int y = function.get_program().get_at(offset++);
+    std::cout << offset - 3 << ": " << name << ' ' << x << ' ' << function.get_constant(x).to_string() << ' ' << y << ' ' << function.get_constant(y).to_string() << '\n';
 }
 
 inline void Disassembler::class_inst(const std::string& name) {
@@ -211,6 +218,10 @@ inline void Disassembler::disassemble(const std::string& name) {
             }
             case OpCode::SET_GLOBAL: {
                 constant_inst("SET_GLOBAL");
+                break;
+            }
+            case OpCode::IMPORT: {
+                double_constant_inst("IMPORT");
                 break;
             }
         }

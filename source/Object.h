@@ -111,6 +111,23 @@ public:
     std::function<Value(const std::vector<Value>&)> function;
 };
 
+struct ForeignFunction;
+
+class ForeginFunctionObject final : public Object {
+public:
+    explicit ForeginFunctionObject(ForeignFunction* function) : function(function) {}
+
+    std::size_t get_size() override {
+        return sizeof(NativeFunction);
+    }
+
+    std::string to_string() override {
+        return "<Foregin>";
+    }
+
+    ForeignFunction* function;
+};
+
 class Upvalue : public Object {
 public:
     explicit Upvalue(Value* location) : location(location) {}

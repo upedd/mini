@@ -895,5 +895,12 @@ void Compiler::super_expr(const SuperExpr& expr) {
 }
 
 void Compiler::import_stmt(const ImportStmt& stmt) {
-    // TODO: stub
+    int module_const = current_function()->add_constant(stmt.module->string);
+    for (const auto& item : stmt.items) {
+        int item_const = current_function()->add_constant(*item->name.string);
+        emit(OpCode::IMPORT);
+        emit(module_const);
+        emit(item_const);
+        define_variable(item->info);
+    }
 }

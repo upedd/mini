@@ -454,7 +454,14 @@ void bite::Analyzer::import_stmt(ImportStmt& stmt) {
         return;
     }
     for (auto& item : stmt.items) {
-        declare(module->items[item.string]);
+        if (!module->functions.contains(item->name.string)) {
+            emit_error_diagnostic(
+                std::format("module \"{}\" does not declare \"{}\"", stmt.module->string, *item->name.string),
+                item->span,
+                "required here"
+            );
+        }
+        declare(item.get());
     }
 }
 

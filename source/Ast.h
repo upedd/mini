@@ -659,7 +659,16 @@ public:
 
 class ImportStmt final : public Stmt {
 public:
-    ImportStmt(const bite::SourceSpan& span, std::vector<Token> items, std::unique_ptr<StringExpr> module) :
+    // TODO: workaround?
+    class Item final : public Declaration {
+    public:
+        [[nodiscard]] NodeKind kind() const override {
+            return NodeKind::invalid_stmt;
+        }
+        using Declaration::Declaration;
+    };
+
+    ImportStmt(const bite::SourceSpan& span, std::vector<std::unique_ptr<Item>> items, std::unique_ptr<StringExpr> module) :
         Stmt(span),
         items(std::move(items)),
         module(std::move(module)) {}
@@ -668,7 +677,7 @@ public:
         return NodeKind::import_stmt;
     }
 
-    std::vector<Token> items;
+    std::vector<std::unique_ptr<Item>> items;
     std::unique_ptr<StringExpr> module;
 };
 

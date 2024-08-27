@@ -9,6 +9,8 @@
 
 #define DEBUG_STRESS_GC
 
+class SharedContext;
+
 class VM {
 public:
     class RuntimeError : public std::runtime_error {
@@ -16,7 +18,7 @@ public:
         explicit RuntimeError(const std::string& message) : std::runtime_error(message) {};
     };
 
-    explicit VM(GarbageCollector gc, Function* function) : gc(std::move(gc)) {
+    explicit VM(GarbageCollector gc, Function* function, SharedContext* context) : gc(std::move(gc)), context(context) {
         auto* closure = new Closure(function);
         // todo: maybe start program thru call()
         frames.emplace_back(closure, 0, 0);
@@ -107,7 +109,7 @@ public:
 
     void add_native(const std::string& name, const Value& value);
     void add_native_function(const std::string& name, const std::function<Value(const std::vector<Value>&)>& fn);
-
+    std::array<Value, 256> stack;
 private:
     GarbageCollector gc;
     std::size_t next_gc = 1024 * 1024;
@@ -115,11 +117,11 @@ private:
     static constexpr std::size_t HEAP_GROWTH_FACTOR = 2;
     // stack dynamic allocation breaks upvalues!
     int stack_index = 0;
-    std::array<Value, 256> stack;
     std::vector<CallFrame> frames;
     std::list<Upvalue*> open_upvalues;
     std::unordered_map<std::string, Value> natives;
     bite::unordered_dense::map<std::string, Value> globals;
+    SharedContext* context;
 };
 
 template <typename T>

@@ -139,13 +139,16 @@ bool is_expression_start(const Token::Type type) {
 }
 
 std::unique_ptr<Stmt> Parser::import_stmt() {
-    std::vector<Token> items;
+    std::vector<std::unique_ptr<ImportStmt::Item>> items;
     do {
         consume(Token::Type::IDENTIFIER, "expected identifier");
-        items.push_back(current);
+        items.emplace_back(std::make_unique<ImportStmt::Item>(current.span, current));
     } while (match(Token::Type::COMMA));
     consume(Token::Type::FROM, "import does not specify destination");
-    return std::make_unique<ImportStmt>(make_span(), std::move(items), string());
+    advance();
+    auto stmt = std::make_unique<ImportStmt>(make_span(), std::move(items), string());
+    consume(Token::Type::SEMICOLON, "missing semicolon after import");
+    return stmt;
 }
 
 Ast Parser::parse() {

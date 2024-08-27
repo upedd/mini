@@ -3,6 +3,8 @@
 #include <iostream>
 #include <algorithm>
 
+#include "shared/SharedContext.h"
+
 // TODO: maybe add asserts
 
 uint8_t VM::fetch() {
@@ -119,6 +121,17 @@ std::optional<VM::RuntimeError> VM::call_value(const Value& value, const int arg
         push(result);
         return {};
     }
+    if (auto* foreign = dynamic_cast<ForeignFunction*>(*object)) {
+        std::vector<Value> args;
+        for (int i = 0; i < arguments_count + 1; ++i) {
+            args.push_back(stack[stack_index - arguments_count - 1 + i]);
+        }
+        Value result = foreign->function(FunctionContext(this, stack_index - arguments_count - 1));
+        stack_index -= arguments_count + 1;
+        push(result);
+        return {};
+    }
+
     return RuntimeError("Expected callable value such as function or class.");
 }
 
@@ -584,7 +597,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                     // this will wait for gc refactoring
                     if (property->is<Object*>()) {
                         if (auto* bound = dynamic_cast<BoundMethod*>(property->get<Object*>())) {
-                            allocate({bound, bound->receiver.get<Object*>()});
+                            allocate({ bound, bound->receiver.get<Object*>() });
                             if (is_computed_property) {
                                 if (auto error = call_value(bound, 0)) {
                                     return std::unexpected(*error);
@@ -627,7 +640,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                         // gc rewrite!
                         if (property.is<Object*>()) {
                             if (auto* bound = dynamic_cast<BoundMethod*>(property.get<Object*>())) {
-                                allocate({bound, bound->receiver.get<Object*>()});
+                                allocate({ bound, bound->receiver.get<Object*>() });
                             }
                         }
                         pop(); // pop bound for now
@@ -725,7 +738,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 push(*property);
                 if (property->is<Object*>()) {
                     if (auto* bound = dynamic_cast<BoundMethod*>(property->get<Object*>())) {
-                        allocate({bound, bound->receiver.get<Object*>()});
+                        allocate({ bound, bound->receiver.get<Object*>() });
 
                         if (is_computed_property) {
                             if (auto error = call_value(bound, 0)) {
@@ -753,7 +766,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                     // gc rewrite!
                     if (property.is<Object*>()) {
                         if (auto* bound = dynamic_cast<BoundMethod*>(property.get<Object*>())) {
-                            allocate({bound, bound->receiver.get<Object*>()});
+                            allocate({ bound, bound->receiver.get<Object*>() });
                         }
                     }
                     pop(); // pop bound for now
@@ -823,7 +836,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 // TODO: temp fix
                 // work around gc and fix duplicate function returns
                 if (auto* bound_ptr = dynamic_cast<BoundMethod*>(bound.get<Object*>())) {
-                    allocate({bound_ptr, bound_ptr->receiver.get<Object*>()});
+                    allocate({ bound_ptr, bound_ptr->receiver.get<Object*>() });
                 }
 
                 std::swap(stack[stack_index - 1], stack[stack_index - 2]);
@@ -934,6 +947,17 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 auto name = get_constant(constant_idx).get<std::string>();
                 globals[name] = peek();
                 break;
+            }
+            case OpCode::IMPORT: {
+                auto module_name = get_constant(fetch()).get<std::string>();
+                auto item_name = get_constant(fetch()).get<std::string>();
+                auto module_name_interned = context->intern(module_name);
+                auto item_name_interned = context->intern(item_name);
+                BITE_ASSERT(context->get_module(module_name_interned) != nullptr);
+                BITE_ASSERT(context->get_module(module_name_interned)->functions.contains(item_name_interned));
+                allocate<ForeginFunctionObject>(
+                    new ForeginFunctionObject(&context->get_module(module_name_interned)->functions[item_name_interned])
+                );
             }
         }
         // for (int i = 0; i < stack_index; ++i) {
