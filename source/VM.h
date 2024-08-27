@@ -18,7 +18,7 @@ public:
         explicit RuntimeError(const std::string& message) : std::runtime_error(message) {};
     };
 
-    explicit VM(GarbageCollector gc, Function* function, SharedContext* context) : gc(std::move(gc)), context(context) {
+    explicit VM(GarbageCollector* gc, Function* function, SharedContext* context) : gc(gc), context(context) {
         auto* closure = new Closure(function);
         // todo: maybe start program thru call()
         frames.emplace_back(closure, 0, 0);
@@ -111,7 +111,7 @@ public:
     void add_native_function(const std::string& name, const std::function<Value(const std::vector<Value>&)>& fn);
     std::array<Value, 256> stack;
 private:
-    GarbageCollector gc;
+    GarbageCollector* gc;
     std::size_t next_gc = 1024 * 1024;
     std::vector<int> block_stack;
     static constexpr std::size_t HEAP_GROWTH_FACTOR = 2;
@@ -126,14 +126,15 @@ private:
 
 template <typename T>
 T* VM::allocate(T* ptr) {
-    gc.add_object(ptr);
+    gc->add_object(ptr);
+    gc->mark(ptr);
     #ifdef DEBUG_STRESS_GC
     run_gc();
     #endif
-    if (gc.get_memory_used() > next_gc) {
+    if (gc->get_memory_used() > next_gc) {
         mark_roots_for_gc();
-        gc.collect();
-        next_gc = gc.get_memory_used() * HEAP_GROWTH_FACTOR;
+        gc->collect();
+        next_gc = gc->get_memory_used() * HEAP_GROWTH_FACTOR;
     }
 
     return ptr;
@@ -141,15 +142,15 @@ T* VM::allocate(T* ptr) {
 
 inline void VM::allocate(std::vector<Object*> ptr) {
     for (auto* p : ptr) {
-        gc.add_object(p);
+        gc->add_object(p);
     }
     #ifdef DEBUG_STRESS_GC
     run_gc();
     #endif
-    if (gc.get_memory_used() > next_gc) {
+    if (gc->get_memory_used() > next_gc) {
         mark_roots_for_gc();
-        gc.collect();
-        next_gc = gc.get_memory_used() * HEAP_GROWTH_FACTOR;
+        gc->collect();
+        next_gc = gc->get_memory_used() * HEAP_GROWTH_FACTOR;
     }
 }
 

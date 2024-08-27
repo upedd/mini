@@ -20,6 +20,9 @@ void bite::Analyzer::analyze(Ast& ast) {
         if (auto* declaration = dynamic_cast<Declaration*>(stmt.get())) {
             declare_in_global_enviroment(ast.enviroment, declaration);
         }
+        if (auto* import = dynamic_cast<ImportStmt*>(stmt.get())) {
+            import_stmt(*import);
+        }
     }
     m_globals_hoisted = true;
     for (auto& stmt : ast.stmts) {
@@ -460,6 +463,7 @@ void bite::Analyzer::import_stmt(ImportStmt& stmt) {
                 item->span,
                 "required here"
             );
+            continue;
         }
         declare(item.get());
     }

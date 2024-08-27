@@ -125,6 +125,8 @@ public:
         return "<Foregin>";
     }
 
+    void mark_references(GarbageCollector& /*unused*/) override {}
+
     ForeignFunction* function;
 };
 

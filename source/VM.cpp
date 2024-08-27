@@ -121,12 +121,12 @@ std::optional<VM::RuntimeError> VM::call_value(const Value& value, const int arg
         push(result);
         return {};
     }
-    if (auto* foreign = dynamic_cast<ForeignFunction*>(*object)) {
+    if (auto* foreign = dynamic_cast<ForeginFunctionObject*>(*object)) {
         std::vector<Value> args;
         for (int i = 0; i < arguments_count + 1; ++i) {
             args.push_back(stack[stack_index - arguments_count - 1 + i]);
         }
-        Value result = foreign->function(FunctionContext(this, stack_index - arguments_count - 1));
+        Value result = foreign->function->function(FunctionContext(this, stack_index - arguments_count - 1));
         stack_index -= arguments_count + 1;
         push(result);
         return {};
@@ -170,18 +170,18 @@ void VM::close_upvalues(const Value& value) {
 
 void VM::mark_roots_for_gc() {
     for (int i = 0; i < stack_index; ++i) {
-        gc.mark(stack[i]);
+        gc->mark(stack[i]);
     }
 
     for (auto& frame : frames) {
-        gc.mark(frame.closure);
+        gc->mark(frame.closure);
     }
 
     for (auto* open_upvalue : open_upvalues) {
-        gc.mark(open_upvalue);
+        gc->mark(open_upvalue);
     }
     for (auto& value : std::views::values(natives)) {
-        gc.mark(value);
+        gc->mark(value);
     }
 }
 
@@ -955,15 +955,15 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 auto item_name_interned = context->intern(item_name);
                 BITE_ASSERT(context->get_module(module_name_interned) != nullptr);
                 BITE_ASSERT(context->get_module(module_name_interned)->functions.contains(item_name_interned));
-                allocate<ForeginFunctionObject>(
+                push(allocate<ForeginFunctionObject>(
                     new ForeginFunctionObject(&context->get_module(module_name_interned)->functions[item_name_interned])
-                );
+                ));
             }
         }
-        // for (int i = 0; i < stack_index; ++i) {
-        //     std::cout << '[' << stack[i].to_string() << "] ";
-        // }
-        // std::cout << '\n';
+        for (int i = 0; i < stack_index; ++i) {
+            std::cout << '[' << stack[i].to_string() << "] ";
+        }
+        std::cout << '\n';
     }
     #undef BINARY_OPERATION
 }

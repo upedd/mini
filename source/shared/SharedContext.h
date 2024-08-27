@@ -1,5 +1,7 @@
 #ifndef CONTEXT_H
 #define CONTEXT_H
+#include <fstream>
+
 #include "StringTable.h"
 #include "../Diagnostics.h"
 #include "../base/logger.h"
@@ -46,12 +48,7 @@ public:
         return string_table.intern(string);
     }
 
-    Module* get_module(StringTable::Handle name) {
-        if (modules.contains(name)) {
-            return &modules[name];
-        }
-        return nullptr;
-    }
+    Module* get_module(StringTable::Handle name);
 
 
     void add_module(const StringTable::Handle& name) {
@@ -68,9 +65,10 @@ public:
 
     bite::Logger logger;
     bite::DiagnosticManager diagnostics;
-
+    GarbageCollector gc;
 private:
     StringTable string_table;
+    bite::unordered_dense::map<StringTable::Handle, Ast> ast_storage;
     bite::unordered_dense::segmented_map<StringTable::Handle, Module> modules;
 };
 #endif //CONTEXT_H
