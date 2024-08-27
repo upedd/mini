@@ -6,6 +6,7 @@
 
 #include "CallFrame.h"
 #include "Object.h"
+#include "shared/SharedContext.h"
 
 #define DEBUG_STRESS_GC
 
@@ -110,6 +111,7 @@ public:
     void add_native(const std::string& name, const Value& value);
     void add_native_function(const std::string& name, const std::function<Value(const std::vector<Value>&)>& fn);
     std::array<Value, 256> stack;
+    bite::unordered_dense::map<std::string, Value> globals;
 private:
     GarbageCollector* gc;
     std::size_t next_gc = 1024 * 1024;
@@ -120,7 +122,6 @@ private:
     std::vector<CallFrame> frames;
     std::list<Upvalue*> open_upvalues;
     std::unordered_map<std::string, Value> natives;
-    bite::unordered_dense::map<std::string, Value> globals;
     SharedContext* context;
 };
 
@@ -129,7 +130,7 @@ T* VM::allocate(T* ptr) {
     gc->add_object(ptr);
     gc->mark(ptr);
     #ifdef DEBUG_STRESS_GC
-    run_gc();
+    context->run_gc();
     #endif
     if (gc->get_memory_used() > next_gc) {
         mark_roots_for_gc();

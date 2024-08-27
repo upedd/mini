@@ -6,7 +6,6 @@
 #include "../Diagnostics.h"
 #include "../base/logger.h"
 #include "../Ast.h"
-#include "../VM.h"
 
 // TODO: find better place
 
@@ -14,11 +13,13 @@ class VM;
 
 class FunctionContext {
 public:
-    explicit FunctionContext(VM* vm, int64_t frame_pointer) : vm(vm), frame_pointer(frame_pointer) {}
+    explicit FunctionContext(VM* vm, int64_t frame_pointer) : vm(vm),
+                                                              frame_pointer(frame_pointer) {}
 
     Value get_arg(int64_t pos) {
         return vm->stack[frame_pointer + pos + 1];
     }
+
 private:
     VM* vm;
     int64_t frame_pointer;
@@ -33,7 +34,10 @@ struct ForeignFunction {
 
 class Module {
 public:
-    bite::unordered_dense::segmented_map<StringTable::Handle, ForeignFunction> functions;
+    bool m_was_executed = false;
+    Function* function;
+    bite::unordered_dense::map<StringTable::Handle, Declaration*> declarations;
+    bite::unordered_dense::map<StringTable::Handle, Value> values;
 };
 
 
@@ -49,26 +53,23 @@ public:
     }
 
     Module* get_module(StringTable::Handle name);
+    Module* compile(const std::string& file);
 
+    void add_module(const StringTable::Handle& name);;
 
-    void add_module(const StringTable::Handle& name) {
-        modules[name] = Module();
-    };
+    void execute(Module& module);
 
-    void add_function(
-        const StringTable::Handle& module,
-        ForeignFunction function
-    ) {
-        BITE_ASSERT(modules.contains(module));
-        modules[module].functions[function.name] = std::move(function);
-    };
+    Value get_value_from_module(const StringTable::Handle& module, const StringTable::Handle& name);
+
+    void run_gc();
 
     bite::Logger logger;
     bite::DiagnosticManager diagnostics;
     GarbageCollector gc;
+    std::vector<VM> running_vms;
+
 private:
     StringTable string_table;
-    bite::unordered_dense::map<StringTable::Handle, Ast> ast_storage;
     bite::unordered_dense::segmented_map<StringTable::Handle, Module> modules;
 };
 #endif //CONTEXT_H

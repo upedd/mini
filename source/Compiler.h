@@ -141,15 +141,14 @@ public:
     }
 
 
-    explicit Compiler(bite::file_input_stream&& stream, SharedContext* context) : parser(std::move(stream), context),
+    explicit Compiler(SharedContext* context) :
         main("", 0),
-        shared_context(context),
-        analyzer(context) {
+        shared_context(context) {
         context_stack.emplace_back(&main, FunctionType::FUNCTION);
         functions.push_back(&main);
     }
 
-    bool compile();
+    bool compile(Ast* ast);
 
     Function& get_main();
 
@@ -224,14 +223,12 @@ private:
 
     void emit_get_variable(const Binding& binding);
 
-    Parser parser;
     Function main;
     std::vector<Context> context_stack;
     std::vector<Function*> functions;
     std::vector<std::string> natives;
     SharedContext* shared_context;
-    bite::Analyzer analyzer;
-    Ast ast;
+    Ast* ast;
 };
 
 

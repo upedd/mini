@@ -4,32 +4,12 @@
 #include <ranges>
 
 #include "Analyzer.h"
-#include "debug.h"
 #include "base/overloaded.h"
 #include "shared/SharedContext.h"
 
-bool Compiler::compile() {
-    ast = parser.parse();
-    if (parser.has_errors()) {
-        shared_context->diagnostics.print(std::cout, true);
-        shared_context->logger.log(
-            bite::Logger::Level::error,
-            "compiliation aborted because of above errors",
-            nullptr
-        ); // TODO: workaround
-        return false;
-    }
-    analyzer.analyze(ast);
-    if (analyzer.has_errors()) {
-        shared_context->diagnostics.print(std::cout, true);
-        shared_context->logger.log(
-            bite::Logger::Level::error,
-            "compiliation aborted because of above errors",
-            nullptr
-        ); // TODO: workaround
-        return false;
-    }
-    for (auto& stmt : ast.stmts) {
+bool Compiler::compile(Ast* ast) {
+    this->ast = ast;
+    for (auto& stmt : ast->stmts) {
         visit(*stmt);
     }
     // default return at main
