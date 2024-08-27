@@ -17,6 +17,12 @@ void bite::Analyzer::emit_error_diagnostic(
 void bite::Analyzer::analyze(Ast& ast) {
     this->ast = &ast;
     for (auto& stmt : ast.stmts) {
+        if (auto* declaration = dynamic_cast<Declaration*>(stmt.get())) {
+            declare_in_global_enviroment(ast.enviroment, declaration);
+        }
+    }
+    m_globals_hoisted = true;
+    for (auto& stmt : ast.stmts) {
         visit(*stmt);
     }
 }
@@ -44,7 +50,7 @@ void bite::Analyzer::variable_declaration(VariableDeclaration& stmt) {
     if (stmt.value) {
         visit(*stmt.value);
     }
-    declare(stmt.name.string, &stmt); // TODO is it safe???
+    declare(&stmt); // TODO is it safe???
 }
 
 void bite::Analyzer::variable_expr(VariableExpr& expr) {
@@ -56,7 +62,7 @@ void bite::Analyzer::expr_stmt(ExprStmt& stmt) {
 }
 
 void bite::Analyzer::function_declaration(FunctionDeclaration& stmt) {
-    declare(stmt.name.string, &stmt);
+    declare(&stmt);
     function(stmt);
 }
 
@@ -65,7 +71,7 @@ void bite::Analyzer::function(FunctionDeclaration& stmt) {
         stmt,
         [this, &stmt] {
             for (const auto& param : stmt.params) {
-                declare(param.string, &stmt);
+                declare(&stmt);
             }
             if (stmt.body) {
                 visit(*stmt.body);
@@ -75,11 +81,11 @@ void bite::Analyzer::function(FunctionDeclaration& stmt) {
 }
 
 void bite::Analyzer::native_declaration(NativeDeclaration& stmt) {
-    declare(stmt.name.string, &stmt);
+    declare(&stmt);
 }
 
 void bite::Analyzer::class_declaration(ClassDeclaration& stmt) {
-    declare(stmt.name.string, &stmt);
+    declare(&stmt);
     with_context(
         stmt,
         [this, &stmt] {
@@ -229,7 +235,7 @@ void bite::Analyzer::class_object(ClassObject& object, bool is_abstract, SourceS
         [&] {
             if (object.constructor.function) {
                 for (const auto& param : object.constructor.function->params) {
-                    declare(param.string, &*object.constructor.function);
+                    declare(&*object.constructor.function);
                 }
             }
             if (object.constructor.super_arguments_call) {
@@ -319,7 +325,7 @@ void bite::Analyzer::class_object(ClassObject& object, bool is_abstract, SourceS
 }
 
 void bite::Analyzer::object_declaration(ObjectDeclaration& stmt) {
-    declare(stmt.name.string, &stmt);
+    declare(&stmt);
     visit(*stmt.object);
 }
 
@@ -378,7 +384,7 @@ void bite::Analyzer::loop_expr(LoopExpr& expr) {
 }
 
 void bite::Analyzer::break_expr(BreakExpr& expr) {
-    if (expr.label ) {
+    if (expr.label) {
         if (!is_there_matching_label(expr.label->string)) {
             emit_error_diagnostic("unresolved label", expr.label->span, "no matching label found");
         }
@@ -455,7 +461,11 @@ void bite::Analyzer::object_expr(ObjectExpr& expr) {
                 emit_error_diagnostic("object must not contain metaobject", expr.object.metaobject->span, "");
             }
             if (expr.object.constructor.function && !expr.object.constructor.function->params.empty()) {
-                emit_error_diagnostic("object constructor must not declare any parameters", expr.object.constructor.function->span, "");
+                emit_error_diagnostic(
+                    "object constructor must not declare any parameters",
+                    expr.object.constructor.function->span,
+                    ""
+                );
             }
             class_object(expr.object, false, expr.span);
         }
@@ -463,7 +473,7 @@ void bite::Analyzer::object_expr(ObjectExpr& expr) {
 }
 
 void bite::Analyzer::trait_declaration(TraitDeclaration& stmt) {
-    declare(stmt.name.string, &stmt);
+    declare(&stmt);
     with_context(
         stmt,
         [this, &stmt] {
@@ -505,49 +515,41 @@ void bite::Analyzer::trait_declaration(TraitDeclaration& stmt) {
     );
 }
 
-void bite::Analyzer::declare_local(
-    Locals& locals,
-    StringTable::Handle name,
-    Declaration* declaration
-) {
+void bite::Analyzer::declare_local(Locals& locals, Declaration* declaration) {
     auto current_scope = locals.scopes.back();
-    if (auto conflict = std::ranges::find(current_scope, name, &Local::name); conflict != std::ranges::end(current_scope)) {
+    if (auto conflict = std::ranges::find(current_scope, declaration->name.string, &Local::name); conflict !=
+        std::ranges::end(current_scope)) {
         emit_error_diagnostic(
-                    "variable redeclared in the same scope",
-                    declaration->span,
-                    "new declaration here",
-                    {
-                        InlineHint {
-                            .location = conflict->declaration->span,
-                            .message = "originally declared here",
-                            .level = DiagnosticLevel::INFO
-                        }
-                    }
-                );
+            "variable redeclared in the same scope",
+            declaration->span,
+            "new declaration here",
+            {
+                InlineHint {
+                    .location = conflict->declaration->span,
+                    .message = "originally declared here",
+                    .level = DiagnosticLevel::INFO
+                }
+            }
+        );
     }
     declaration->info = LocalDeclarationInfo {
-        .declaration = declaration,
-        .idx = locals.locals_count++,
-        .is_captured = false
-    };
-    locals.scopes.back().push_back(Local {.declaration = declaration, .name = name});
+            .declaration = declaration,
+            .idx = locals.locals_count++,
+            .is_captured = false
+        };
+    locals.scopes.back().push_back(Local { .declaration = declaration, .name = declaration->name.string });
 }
 
-void bite::Analyzer::declare_in_function_enviroment(
-    FunctionEnviroment& env,
-    StringTable::Handle name,
-    Declaration* declaration
-) {
+void bite::Analyzer::declare_in_function_enviroment(FunctionEnviroment& env, Declaration* declaration) {
     if (env.locals.scopes.empty()) {
-        if (std::ranges::contains(env.parameters, name)) {
+        if (std::ranges::contains(env.parameters, declaration->name.string)) {
             // TODO: better error message, point to original
             emit_error_diagnostic("duplicate parameter name", declaration->span, "here");
         }
-        env.parameters.push_back(name);
+        env.parameters.push_back(declaration->name.string);
     } else {
-        declare_local(env.locals, name, declaration);
+        declare_local(env.locals, declaration);
     }
-
 }
 
 void bite::Analyzer::declare_in_class_enviroment(
@@ -617,45 +619,40 @@ void bite::Analyzer::declare_in_trait_enviroment(
     env.members[name] = attributes;
 }
 
-void bite::Analyzer::declare_in_global_enviroment(
-    GlobalEnviroment& env,
-    StringTable::Handle name,
-    Declaration* declaration
-) {
+void bite::Analyzer::declare_in_global_enviroment(GlobalEnviroment& env, Declaration* declaration) {
     if (env.locals.scopes.empty()) {
-        if (env.globals.contains(name)) {
+        if (m_globals_hoisted) {
+            return; // already declared
+        }
+        if (env.globals.contains(declaration->name.string)) {
             emit_error_diagnostic(
                 "global variable name conflict",
                 declaration->span,
                 "new declaration here",
                 {
                     InlineHint {
-                        .location = env.globals[name]->span,
+                        .location = env.globals[declaration->name.string]->span,
                         .message = "originally declared here",
                         .level = DiagnosticLevel::INFO
                     }
                 }
             );
         }
-        declaration->info = GlobalDeclarationInfo { .declaration = declaration, .name = name };
-        env.globals[name] = declaration;
+        declaration->info = GlobalDeclarationInfo { .declaration = declaration, .name = declaration->name.string };
+        env.globals[declaration->name.string] = declaration;
     } else {
-        declare_local(env.locals, name, declaration);
+        declare_local(env.locals, declaration);
     }
 }
 
-void bite::Analyzer::declare(const StringTable::Handle name, Declaration* declaration) {
+void bite::Analyzer::declare(Declaration* declaration) {
     for (auto* node : context_nodes | std::views::reverse) {
         if (node->is_function_declaration()) {
-             declare_in_function_enviroment(
-                node->as_function_declaration()->enviroment,
-                name,
-                declaration
-            );
+            declare_in_function_enviroment(node->as_function_declaration()->enviroment, declaration);
             return;
         }
     }
-    declare_in_global_enviroment(ast->enviroment, name, declaration);
+    declare_in_global_enviroment(ast->enviroment, declaration);
 }
 
 inline std::optional<Binding> resolve_locals(const Locals& locals, const StringTable::Handle name) {
@@ -734,7 +731,10 @@ inline int64_t add_upvalue(FunctionEnviroment* env, const UpValue upvalue) {
     return static_cast<int64_t>(env->upvalues.size() - 1);
 }
 
-Binding bite::Analyzer::propagate_upvalues(const LocalBinding binding, const std::vector<FunctionEnviroment*>& enviroments_visited) {
+Binding bite::Analyzer::propagate_upvalues(
+    const LocalBinding binding,
+    const std::vector<FunctionEnviroment*>& enviroments_visited
+) {
     binding.info->is_captured = true;
     bool is_local = true;
     int64_t value = binding.info->idx;
@@ -745,7 +745,7 @@ Binding bite::Analyzer::propagate_upvalues(const LocalBinding binding, const std
             is_local = false;
         }
     }
-    return UpvalueBinding {.idx = value, .info = binding.info};
+    return UpvalueBinding { .idx = value, .info = binding.info };
 }
 
 Binding bite::Analyzer::resolve(StringTable::Handle name, const SourceSpan& span) {
@@ -802,9 +802,12 @@ bool bite::Analyzer::is_in_loop() {
 }
 
 bool bite::Analyzer::is_in_function() {
-    return std::ranges::any_of(context_nodes, [](const AstNode* node) {
-        return node->is_function_declaration();
-    });
+    return std::ranges::any_of(
+        context_nodes,
+        [](const AstNode* node) {
+            return node->is_function_declaration();
+        }
+    );
 }
 
 bool bite::Analyzer::is_there_matching_label(StringTable::Handle label_name) {

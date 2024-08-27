@@ -45,17 +45,15 @@ namespace bite {
 
         void declare_in_function_enviroment(
             FunctionEnviroment& env,
-            StringTable::Handle name,
             Declaration* declaration
         );
         void declare_in_class_enviroment(ClassEnviroment& env, StringTable::Handle name, const MemberInfo& attributes);
         void declare_in_trait_enviroment(TraitEnviroment& env, StringTable::Handle name, const MemberInfo& attributes);
         void declare_in_global_enviroment(
             GlobalEnviroment& env,
-            StringTable::Handle name,
             Declaration* declaration
         );
-        void declare(const StringTable::Handle name, Declaration* declaration);
+        void declare(Declaration* declaration);
 
         void analyze(Ast& ast);
         void block_expr(BlockExpr& expr);
@@ -84,7 +82,7 @@ namespace bite {
         void super_expr(SuperExpr& expr);
         void object_expr(ObjectExpr& expr);
         void trait_declaration(TraitDeclaration& stmt);
-        void declare_local(Locals& locals, StringTable::Handle name, Declaration* declaration);
+        void declare_local(Locals& locals, Declaration* declaration);
         void literal_expr(LiteralExpr& /*unused*/) {}
         void string_expr(StringExpr& /*unused*/) {}
         void invalid_stmt(InvalidStmt& /*unused*/) {BITE_PANIC("got invalid stmt"); }
@@ -200,7 +198,7 @@ namespace bite {
     private:
         std::vector<AstNode*> context_nodes;
         Ast* ast;
-
+        bool m_globals_hoisted = false;
         bool m_has_errors = false;
         SharedContext* context;
     };
