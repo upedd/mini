@@ -59,6 +59,7 @@
     V(NativeDeclaration, native_declaration) \
     V(TraitDeclaration, trait_declaration) \
     V(ObjectDeclaration, object_declaration) \
+    V(ImportStmt, import_stmt) \
     V(InvalidStmt, invalid_stmt) \
     V(InvalidExpr, invalid_expr)
 #define DEFINE_TYPE_ENUM(class_name, type_name) type_name,
@@ -654,6 +655,21 @@ public:
         methods(std::move(methods)),
         fields(std::move(fields)),
         using_stmts(std::move(using_stmts)) {}
+};
+
+class ImportStmt final : public Stmt {
+public:
+    ImportStmt(const bite::SourceSpan& span, std::vector<Token> items, std::unique_ptr<StringExpr> module) :
+        Stmt(span),
+        items(std::move(items)),
+        module(std::move(module)) {}
+
+    [[nodiscard]] NodeKind kind() const override {
+        return NodeKind::import_stmt;
+    }
+
+    std::vector<Token> items;
+    std::unique_ptr<StringExpr> module;
 };
 
 class InvalidStmt final : public Stmt {

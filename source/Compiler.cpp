@@ -893,3 +893,7 @@ void Compiler::super_expr(const SuperExpr& expr) {
     emit(OpCode::GET_SUPER, constant);
     current_context().on_stack++;
 }
+
+void Compiler::import_stmt(const ImportStmt& stmt) {
+    // TODO: stub
+}

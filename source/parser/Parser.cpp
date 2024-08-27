@@ -138,6 +138,16 @@ bool is_expression_start(const Token::Type type) {
     }
 }
 
+std::unique_ptr<Stmt> Parser::import_stmt() {
+    std::vector<Token> items;
+    do {
+        consume(Token::Type::IDENTIFIER, "expected identifier");
+        items.push_back(current);
+    } while (match(Token::Type::COMMA));
+    consume(Token::Type::FROM, "import does not specify destination");
+    return std::make_unique<ImportStmt>(make_span(), std::move(items), string());
+}
+
 Ast Parser::parse() {
     advance(); // populate next
     std::vector<std::unique_ptr<Stmt>> stmts;
@@ -189,6 +199,9 @@ std::optional<std::unique_ptr<Stmt>> Parser::statement() {
             }
             if (match(Token::Type::TRAIT)) {
                 return trait_declaration();
+            }
+            if (match(Token::Type::IMPORT)) {
+                return import_stmt();
             }
             return {};
         }

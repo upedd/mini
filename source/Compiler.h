@@ -198,6 +198,8 @@ public:
     void get_property_expr(const GetPropertyExpr& expr);
     void super_expr(const SuperExpr& expr);
 
+    void import_stmt(const ImportStmt& stmt);
+
     void invalid_stmt(const InvalidStmt& /*unused*/) {}
     void invalid_expr(const InvalidExpr& /*unused*/) {}
 

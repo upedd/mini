@@ -87,6 +87,8 @@ struct Token {
         USING,
         AS,
         EXCLUDE,
+        IMPORT,
+        FROM,
         END // NOTE: Type END must always be last element in this enum.
     };
 
@@ -190,6 +192,8 @@ inline std::string Token::type_to_string(const Type type) {
         case Type::ABSTRACT: return "ABSTRACT";
         case Type::AS: return "AS";
         case Type::EXCLUDE: return "EXCLUDE";
+        case Type::IMPORT: return "IMPORT";
+        case Type::FROM: return "FROM";
     }
     return "INVALID_TOKEN";
 }
@@ -278,6 +282,8 @@ inline std::string Token::type_to_display(const Type type) {
         case Type::AS: return "as";
         case Type::EXCLUDE: return "exclude";
         case Type::END: return "end";
+        case Type::IMPORT: return "import";
+        case Type::FROM: return "from";
         default: std::unreachable();
     }
 }

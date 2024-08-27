@@ -445,6 +445,19 @@ void bite::Analyzer::this_expr(ThisExpr& expr) {
     }
 }
 
+void bite::Analyzer::import_stmt(ImportStmt& stmt) {
+    // TODO: string node should contain interned string
+    auto* module = context->get_module(context->intern(stmt.module->string));
+
+    if (!module) {
+        emit_error_diagnostic(std::format("module \"{}\" not found", stmt.module->string), stmt.span, "required here");
+        return;
+    }
+    for (auto& item : stmt.items) {
+        declare(module->items[item.string]);
+    }
+}
+
 void bite::Analyzer::super_expr(SuperExpr& expr) {
     if (!is_in_class_with_superclass()) {
         emit_error_diagnostic("'super' outside of class with superclass", expr.span, "here");
