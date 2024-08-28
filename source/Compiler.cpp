@@ -8,7 +8,7 @@
 #include "base/overloaded.h"
 #include "shared/SharedContext.h"
 
-//#define COMPILER_PRINT_BYTECODE
+#define COMPILER_PRINT_BYTECODE
 
 bool Compiler::compile(Ast* ast) {
     this->ast = ast;
@@ -672,12 +672,15 @@ void Compiler::binary_expr(const BinaryExpr& expr) {
     visit(*expr.right);
 
     // TODO: refactor!!
-    if (expr.left->is_get_property_expr() && (expr.op == Token::Type::EQUAL || expr.op == Token::Type::PLUS_EQUAL ||
+    auto fix = [&, this] {
+        if (expr.left->is_get_property_expr() && (expr.op == Token::Type::EQUAL || expr.op == Token::Type::PLUS_EQUAL ||
         expr.op == Token::Type::MINUS_EQUAL || expr.op == Token::Type::STAR_EQUAL || expr.op == Token::Type::SLASH_EQUAL
         || expr.op == Token::Type::SLASH_SLASH_EQUAL || expr.op == Token::Type::AND_EQUAL || expr.op ==
         Token::Type::CARET_EQUAL || expr.op == Token::Type::BAR_EQUAL)) {
-        visit(*expr.left->as_get_property_expr());
-    }
+            visit(*expr.left->as_get_property_expr()->left);
+        }
+    };
+
     switch (expr.op) {
         case Token::Type::PLUS: emit(OpCode::ADD);
             break;
@@ -714,36 +717,47 @@ void Compiler::binary_expr(const BinaryExpr& expr) {
         case Token::Type::SLASH_SLASH: emit(OpCode::FLOOR_DIVISON);
             break;
         case Token::Type::PLUS_EQUAL: emit(OpCode::ADD);
+            fix();
             emit_set_variable(expr.binding);
             break;
         case Token::Type::MINUS_EQUAL: emit(OpCode::SUBTRACT);
+            fix();
             emit_set_variable(expr.binding);
             break;
         case Token::Type::STAR_EQUAL: emit(OpCode::MULTIPLY);
+            fix();
             emit_set_variable(expr.binding);
             break;
         case Token::Type::SLASH_EQUAL: emit(OpCode::DIVIDE);
+            fix();
             emit_set_variable(expr.binding);
             break;
         case Token::Type::SLASH_SLASH_EQUAL: emit(OpCode::FLOOR_DIVISON);
+            fix();
             emit_set_variable(expr.binding);
             break;
         case Token::Type::PERCENT_EQUAL: emit(OpCode::MODULO);
+            fix();
             emit_set_variable(expr.binding);
             break;
         case Token::Type::LESS_LESS_EQUAL: emit(OpCode::LEFT_SHIFT);
+            fix();
             emit_set_variable(expr.binding);
             break;
         case Token::Type::GREATER_GREATER_EQUAL: emit(OpCode::RIGHT_SHIFT);
+            fix();
             emit_set_variable(expr.binding);
             break;
         case Token::Type::AND_EQUAL: emit(OpCode::BITWISE_AND);
+            fix();
             emit_set_variable(expr.binding);
             break;
         case Token::Type::CARET_EQUAL: emit(OpCode::BITWISE_XOR);
+            fix();
             emit_set_variable(expr.binding);
             break;
         case Token::Type::BAR_EQUAL: emit(OpCode::BITWISE_OR);
+            fix();
             emit_set_variable(expr.binding);
             break;
         default: std::unreachable(); // panic

@@ -495,7 +495,6 @@ std::expected<Value, VM::RuntimeError> VM::run() {
             case OpCode::CLOSURE: {
                 Function* function = reinterpret_cast<Function*>(*get_constant(fetch()).as<Object*>());
                 auto* closure = new Closure(function);
-                push(closure);
                 for (int i = 0; i < closure->get_function()->get_upvalue_count(); ++i) {
                     int is_local = fetch();
                     int index = fetch();
@@ -505,8 +504,15 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                         closure->upvalues.push_back(frames.back().closure->upvalues[index]);
                     }
                 }
-                allocate(closure); // wait to add upvalues
-                // adopt_objects(function->get_allocated());
+                // TODO: temp
+                if (auto receiver = get_current_receiver()) {
+                    auto bound = bind_method(closure, receiver.value()->klass, receiver.value()->instance);
+                    push(bound);
+                    allocate({bound.get<Object*>(), closure, reinterpret_cast<BoundMethod*>(bound.get<Object*>())->receiver.get<Object*>()});
+                } else {
+                    push(closure);
+                    allocate(closure);
+                }
                 break;
             }
             case OpCode::GET_UPVALUE: {
@@ -943,10 +949,10 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 break;
             }
         }
-        // for (int i = 0; i < stack_index; ++i) {
-        //     std::cout << '[' << stack[i].to_string() << "] ";
-        // }
-        // std::cout << '\n';
+        for (int i = 0; i < stack_index; ++i) {
+            std::cout << '[' << stack[i].to_string() << "] ";
+        }
+        std::cout << '\n';
     }
     #undef BINARY_OPERATION
 }
