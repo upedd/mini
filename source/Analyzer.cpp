@@ -155,23 +155,9 @@ void bite::Analyzer::class_object(ClassObject& object, bool is_abstract, SourceS
     for (auto& trait_used : object.traits_used) {
         // refactor?
         trait_usage(
-            [&object, this](const auto& name, const auto& info) {
-                // TODO: better error message!
-                if (object.enviroment.members.contains(name)) {
-                    emit_error_diagnostic(
-                        "member declaration conflict",
-                        info.decl_span,
-                        "redeclered here",
-                        {
-                            InlineHint {
-                                .location = object.enviroment.members[name].decl_span,
-                                .message = "orignally declared here",
-                                .level = DiagnosticLevel::INFO
-                            }
-                        }
-                    );
-                }
-                object.enviroment.members[name] = info;
+            [&object, this, &trait_used](const auto& name, auto& info) {
+                info.inclusion_span = trait_used.span;
+                declare_in_class_enviroment(object.enviroment, name, info);
             },
             requirements,
             trait_used
@@ -197,8 +183,6 @@ void bite::Analyzer::class_object(ClassObject& object, bool is_abstract, SourceS
         auto& superconstructor = superclass->object.constructor;
         bool has_super_constructor = superconstructor.function && !superconstructor.function->params.empty();
         if (has_super_constructor && !object.constructor.super_arguments_call) {
-            // TODO: better diagnostic in default constructor
-            // TODO: better constructor declspan
             if (object.constructor.function) {
                 emit_error_diagnostic(
                     "subclass must call it's superclass constructor",
@@ -240,7 +224,6 @@ void bite::Analyzer::class_object(ClassObject& object, bool is_abstract, SourceS
 
         if (has_super_constructor && object.constructor.super_arguments_call && object.constructor.super_arguments_call
             ->arguments.size() != superconstructor.function->params.size()) {
-            // TODO: not safe?
             emit_error_diagnostic(
                 std::format(
                     "expected {} arguments, but got {} in superconstructor call",
@@ -288,7 +271,7 @@ void bite::Analyzer::class_object(ClassObject& object, bool is_abstract, SourceS
             }
             // analyze in this env to support upvalues!
             for (auto& field : object.fields) {
-                MemberInfo info = MemberInfo(field.attributes, field.span);
+                MemberInfo info = MemberInfo(field.attributes, field.span, name_span);
                 check_member_declaration(
                     name_span,
                     is_abstract,
@@ -300,7 +283,7 @@ void bite::Analyzer::class_object(ClassObject& object, bool is_abstract, SourceS
                 declare_in_class_enviroment(
                     object.enviroment,
                     field.variable->name.string,
-                    MemberInfo(field.attributes, field.span)
+                    MemberInfo(field.attributes, field.span, name_span)
                 );
                 if (field.variable->value) {
                     visit(*field.variable->value);
@@ -315,7 +298,7 @@ void bite::Analyzer::class_object(ClassObject& object, bool is_abstract, SourceS
 
     // hoist methods
     for (const auto& method : object.methods) {
-        MemberInfo info(method.attributes, method.span);
+        MemberInfo info(method.attributes, method.span, name_span);
         check_member_declaration(
             name_span,
             is_abstract,
@@ -347,7 +330,8 @@ void bite::Analyzer::class_object(ClassObject& object, bool is_abstract, SourceS
         }
     }
 
-    for (const auto& [name, attr] : overrideable_members) {
+    for (auto& [name, attr] : overrideable_members) {
+        attr.inclusion_span = object.superclass->span;
         declare_in_class_enviroment(object.enviroment, name, attr);
     }
 
@@ -355,7 +339,6 @@ void bite::Analyzer::class_object(ClassObject& object, bool is_abstract, SourceS
         function(*method.function);
     }
 
-    // TODO: getter and setters requirements workings
     for (auto& [requirement, info] : requirements) {
         if (!object.enviroment.members.contains(requirement)) {
             // TODO: point to trait as well
@@ -364,6 +347,11 @@ void bite::Analyzer::class_object(ClassObject& object, bool is_abstract, SourceS
                 name_span,
                 std::format("add member {} in this class", *requirement),
                 {
+                    InlineHint {
+                        .location = info.decl_span,
+                        .message = "requirement declared here",
+                        .level = DiagnosticLevel::INFO
+                    },
                     InlineHint {
                         .location = info.decl_span,
                         .message = "requirement declared here",
@@ -576,23 +564,9 @@ void bite::Analyzer::trait_declaration(TraitDeclaration& stmt) {
             unordered_dense::map<StringTable::Handle, MemberInfo> requirements;
             for (auto& using_stmt_node : stmt.using_stmts) {
                 trait_usage(
-                    [&stmt, this](const auto& name, const auto& info) {
-                        // TODO: better error message!
-                        if (stmt.enviroment.members.contains(name)) {
-                            emit_error_diagnostic(
-                                "member declaration conflict",
-                                info.decl_span,
-                                "redeclered here",
-                                {
-                                    InlineHint {
-                                        .location = stmt.enviroment.members[name].decl_span,
-                                        .message = "orignally declared here",
-                                        .level = DiagnosticLevel::INFO
-                                    }
-                                }
-                            );
-                        }
-                        stmt.enviroment.members[name] = info;
+                    [&stmt, this, &using_stmt_node](const auto& name, auto& info) {
+                        info.inclusion_span = using_stmt_node.span;
+                        declare_in_trait_enviroment(stmt.enviroment, name, info);
                     },
                     requirements,
                     using_stmt_node
@@ -603,7 +577,7 @@ void bite::Analyzer::trait_declaration(TraitDeclaration& stmt) {
                 declare_in_trait_enviroment(
                     stmt.enviroment,
                     field.variable->name.string,
-                    MemberInfo(field.attributes, field.span)
+                    MemberInfo(field.attributes, field.span, stmt.name.span)
                 );
             }
             // hoist methods
@@ -611,7 +585,7 @@ void bite::Analyzer::trait_declaration(TraitDeclaration& stmt) {
                 declare_in_trait_enviroment(
                     stmt.enviroment,
                     method.function->name.string,
-                    MemberInfo(method.attributes, method.span)
+                    MemberInfo(method.attributes, method.span, stmt.name.span)
                 );
             }
             for (auto& method : stmt.methods) {
@@ -680,19 +654,73 @@ void bite::Analyzer::declare_in_class_enviroment(
             member_attr.attributes += ClassAttributes::SETTER;
             return;
         }
-
-        emit_error_diagnostic(
-            "class member name conflict",
-            attributes.decl_span,
-            "new declaration here",
-            {
-                InlineHint {
-                    .location = env.members[name].decl_span,
-                    .message = "originally declared here",
-                    .level = DiagnosticLevel::INFO
-                }
+        if (member_attr.inclusion_span) {
+            if (attributes.inclusion_span) {
+                emit_error_diagnostic(
+                    "class member name conflict",
+                    attributes.decl_span,
+                    " 1. declared here",
+                    {
+                        InlineHint {
+                            .location = member_attr.decl_span,
+                            .message = "2. declared here",
+                            .level = DiagnosticLevel::INFO
+                        },
+                        InlineHint {
+                            .location = *member_attr.inclusion_span,
+                            .message = "2. included from here",
+                            .level = DiagnosticLevel::INFO,
+                        },
+                        InlineHint {
+                            .location = *attributes.inclusion_span,
+                            .message = "1. included from here",
+                            .level = DiagnosticLevel::INFO
+                        }
+                    }
+                );
+            } else {
+                emit_error_diagnostic(
+                    "class member name conflict",
+                    attributes.decl_span,
+                    "new declaration here",
+                    {
+                        InlineHint {
+                            .location = member_attr.decl_span,
+                            .message = "originally declared here",
+                            .level = DiagnosticLevel::INFO
+                        },
+                        InlineHint {
+                            .location = *member_attr.inclusion_span,
+                            .message = "included from here",
+                            .level = DiagnosticLevel::INFO,
+                        },
+                        InlineHint {
+                            .location = attributes.parent_span,
+                            .message = "conflict in this class",
+                            .level = DiagnosticLevel::INFO
+                        }
+                    }
+                );
             }
-        );
+        } else {
+            emit_error_diagnostic(
+                "class member name conflict",
+                attributes.decl_span,
+                "new declaration here",
+                {
+                    InlineHint {
+                        .location = env.members[name].decl_span,
+                        .message = "originally declared here",
+                        .level = DiagnosticLevel::INFO
+                    },
+                    InlineHint {
+                        .location = attributes.parent_span,
+                        .message = "conflict in this class",
+                        .level = DiagnosticLevel::INFO
+                    }
+                }
+            );
+        }
     }
     env.members[name] = attributes;
 }
@@ -714,18 +742,73 @@ void bite::Analyzer::declare_in_trait_enviroment(
             member_attr.attributes += ClassAttributes::SETTER;
             return;
         }
-        emit_error_diagnostic(
-            "trait member name conflict",
-            attributes.decl_span,
-            "new declaration here",
-            {
-                InlineHint {
-                    .location = env.members[name].decl_span,
-                    .message = "originally declared here",
-                    .level = DiagnosticLevel::INFO
-                }
+        if (member_attr.inclusion_span) {
+            if (attributes.inclusion_span) {
+                emit_error_diagnostic(
+                    "trait member name conflict",
+                    attributes.decl_span,
+                    " 1. declared here",
+                    {
+                        InlineHint {
+                            .location = member_attr.decl_span,
+                            .message = "2. declared here",
+                            .level = DiagnosticLevel::INFO
+                        },
+                        InlineHint {
+                            .location = *member_attr.inclusion_span,
+                            .message = "2. included from here",
+                            .level = DiagnosticLevel::INFO,
+                        },
+                        InlineHint {
+                            .location = *attributes.inclusion_span,
+                            .message = "1. included from here",
+                            .level = DiagnosticLevel::INFO
+                        }
+                    }
+                );
+            } else {
+                emit_error_diagnostic(
+                    "trait member name conflict",
+                    attributes.decl_span,
+                    "new declaration here",
+                    {
+                        InlineHint {
+                            .location = member_attr.decl_span,
+                            .message = "originally declared here",
+                            .level = DiagnosticLevel::INFO
+                        },
+                        InlineHint {
+                            .location = *member_attr.inclusion_span,
+                            .message = "included from here",
+                            .level = DiagnosticLevel::INFO,
+                        },
+                        InlineHint {
+                            .location = attributes.parent_span,
+                            .message = "conflict in this trait",
+                            .level = DiagnosticLevel::INFO
+                        }
+                    }
+                );
             }
-        );
+        } else {
+            emit_error_diagnostic(
+                "trait member name conflict",
+                attributes.decl_span,
+                "new declaration here",
+                {
+                    InlineHint {
+                        .location = env.members[name].decl_span,
+                        .message = "originally declared here",
+                        .level = DiagnosticLevel::INFO
+                    },
+                    InlineHint {
+                        .location = attributes.parent_span,
+                        .message = "conflict in this trait",
+                        .level = DiagnosticLevel::INFO
+                    }
+                }
+            );
+        }
     }
     env.members[name] = attributes;
 }
@@ -1018,6 +1101,7 @@ void bite::Analyzer::check_member_declaration(
         emit_error_diagnostic("method cannot be both an getter and a setter", info.decl_span, "here");
     }
     // TODO: check getter and setter arguments count
+    // TODO: better line hints
 
     // 1. Decide whetever is override needed or not
     bool is_override_nedded = false;
@@ -1036,9 +1120,34 @@ void bite::Analyzer::check_member_declaration(
     // 2. emit overrides errors
     if (is_override_nedded && !info.attributes[ClassAttributes::OVERRIDE]) {
         emit_error_diagnostic(
-                "memeber should override explicitly",
+            "memeber should override explicitly",
+            info.decl_span,
+            "add 'override' attribute to this member",
+            {
+                InlineHint {
+                    .location = overrideable_members[name].decl_span,
+                    .message = "function originally declared here",
+                    .level = DiagnosticLevel::INFO
+                }
+            }
+        );
+    }
+    if (!is_override_nedded && info.attributes[ClassAttributes::OVERRIDE]) {
+        emit_error_diagnostic(
+            "memeber does not override anything",
+            info.decl_span,
+            "remove 'override' attribute from this field"
+        );
+    }
+    // 3. Decide is override allowed
+    if (overrideable_members.contains(name)) {
+        auto& member = overrideable_members[name];
+        if (info.attributes[ClassAttributes::OVERRIDE] && info.attributes[ClassAttributes::GETTER] && !member.attributes
+            [ClassAttributes::GETTER]) {
+            emit_error_diagnostic(
+                "cannot override function with a getter",
                 info.decl_span,
-                "add 'override' attribute to this member",
+                "here",
                 {
                     InlineHint {
                         .location = overrideable_members[name].decl_span,
@@ -1047,53 +1156,21 @@ void bite::Analyzer::check_member_declaration(
                     }
                 }
             );
-        return; // TODO: check?
-    }
-    if (!is_override_nedded && info.attributes[ClassAttributes::OVERRIDE]) {
-        emit_error_diagnostic(
-                "memeber should override explicitly",
+        }
+        if (info.attributes[ClassAttributes::OVERRIDE] && info.attributes[ClassAttributes::SETTER] && !member.attributes
+            [ClassAttributes::SETTER]) {
+            emit_error_diagnostic(
+                "cannot override function with a setter",
                 info.decl_span,
-                "add 'override' attribute to this member",
+                "here",
                 {
                     InlineHint {
                         .location = overrideable_members[name].decl_span,
-                        .message = "member originally declared here",
+                        .message = "function originally declared here",
                         .level = DiagnosticLevel::INFO
                     }
                 }
             );
-        return;
-    }
-    // 3. Decide is override allowed
-    if (overrideable_members.contains(name)) {
-        auto& member = overrideable_members[name];
-        if (info.attributes[ClassAttributes::OVERRIDE] && info.attributes[ClassAttributes::GETTER] && !member.attributes[ClassAttributes::GETTER]) {
-            emit_error_diagnostic(
-              "cannot override function with a getter",
-              info.decl_span,
-              "here",
-              {
-                  InlineHint {
-                      .location = overrideable_members[name].decl_span,
-                      .message = "function originally declared here",
-                      .level = DiagnosticLevel::INFO
-                  }
-              }
-          );
-        }
-        if (info.attributes[ClassAttributes::OVERRIDE] && info.attributes[ClassAttributes::SETTER] && !member.attributes[ClassAttributes::SETTER]) {
-            emit_error_diagnostic(
-              "cannot override function with a setter",
-              info.decl_span,
-              "here",
-              {
-                  InlineHint {
-                      .location = overrideable_members[name].decl_span,
-                      .message = "function originally declared here",
-                      .level = DiagnosticLevel::INFO
-                  }
-              }
-          );
         }
     }
     if (overrideable_members.contains(name)) {

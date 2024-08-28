@@ -186,6 +186,8 @@ enum class ClassAttributes: std::uint8_t {
 struct MemberInfo {
     bitflags<ClassAttributes> attributes;
     bite::SourceSpan decl_span;
+    bite::SourceSpan parent_span;
+    std::optional<bite::SourceSpan> inclusion_span;
 };
 
 struct ClassEnviroment {

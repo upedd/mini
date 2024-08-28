@@ -11,6 +11,7 @@
 
 // TODO: grammar fixes in error messages
 // TODO: better inline hints
+// TODO: better errors for multiple conflicts
 
 namespace bite {
     /**
