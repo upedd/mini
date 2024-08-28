@@ -88,6 +88,8 @@ struct Token {
         EXCLUDE,
         IMPORT,
         FROM,
+        MODULE,
+        COLON_COLON,
         END // NOTE: Type END must always be last element in this enum.
     };
 
@@ -192,6 +194,8 @@ inline std::string Token::type_to_string(const Type type) {
         case Type::EXCLUDE: return "EXCLUDE";
         case Type::IMPORT: return "IMPORT";
         case Type::FROM: return "FROM";
+        case Type::MODULE: return "MODULE";
+        case Type::COLON_COLON: return "COLON_COLON";
     }
     return "INVALID_TOKEN";
 }
@@ -281,6 +285,8 @@ inline std::string Token::type_to_display(const Type type) {
         case Type::END: return "end";
         case Type::IMPORT: return "import";
         case Type::FROM: return "from";
+        case Type::MODULE: return "module";
+        case Type::COLON_COLON: return "::";
         default: std::unreachable();
     }
 }

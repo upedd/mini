@@ -157,6 +157,19 @@ std::unique_ptr<Stmt> Parser::import_stmt() {
     return stmt;
 }
 
+std::unique_ptr<ModuleStmt> Parser::module_stmt() {
+    consume(Token::Type::IDENTIFIER, "missing module name");
+    std::vector<std::unique_ptr<Stmt>> stmts;
+    while (!match(Token::Type::RIGHT_BRACE)) {
+        if (auto stmt = statement()) {
+            stmts.emplace_back(std::move(*stmt));
+        } else {
+            error(current, "only declarations are allowed inside of modules", "is not a declaration");
+        }
+    }
+
+}
+
 Ast Parser::parse() {
     advance(); // populate next
     std::vector<std::unique_ptr<Stmt>> stmts;
@@ -208,6 +221,9 @@ std::optional<std::unique_ptr<Stmt>> Parser::statement() {
             }
             if (match(Token::Type::IMPORT)) {
                 return import_stmt();
+            }
+            if (match(Token::Type::MODULE)) {
+                return module_stmt();
             }
             return {};
         }

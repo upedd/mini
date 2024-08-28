@@ -20,7 +20,7 @@ std::expected<Token, bite::Diagnostic> Lexer::next_token() {
         case ',': return make_token(Token::Type::COMMA);
         case ';': return make_token(Token::Type::SEMICOLON);
         case '~': return make_token(Token::Type::TILDE);
-        case ':': return make_token(Token::Type::COLON);
+        case ':': return make_token(stream.match(':') ? Token::Type::COLON_COLON : Token::Type::COLON);
         case '!': return make_token(stream.match('=') ? Token::Type::BANG_EQUAL : Token::Type::BANG);
         case '+': return make_token(stream.match('=') ? Token::Type::PLUS_EQUAL : Token::Type::PLUS);
         case '-': return make_token(stream.match('=') ? Token::Type::MINUS_EQUAL : Token::Type::MINUS);
@@ -137,7 +137,7 @@ std::unexpected<bite::Diagnostic> Lexer::make_error(const std::string& reason, c
     );
 }
 
-constexpr static perfect_map<Token::Type, 31> identifiers(
+constexpr static perfect_map<Token::Type, 32> identifiers(
     {
         {
             { "class", Token::Type::CLASS },
@@ -170,7 +170,8 @@ constexpr static perfect_map<Token::Type, 31> identifiers(
             { "as", Token::Type::AS },
             { "using", Token::Type::USING },
             {"import", Token::Type::IMPORT},
-            {"from", Token::Type::FROM}
+            {"from", Token::Type::FROM},
+            {"module", Token::Type::MODULE}
         }
     }
 );

@@ -59,6 +59,8 @@
     V(TraitDeclaration, trait_declaration) \
     V(ObjectDeclaration, object_declaration) \
     V(ImportStmt, import_stmt) \
+    V(ModuleStmt, module_stmt) \
+    V(ModuleResolutionExpr, module_resolution_expr) \
     V(InvalidStmt, invalid_stmt) \
     V(InvalidExpr, invalid_expr)
 #define DEFINE_TYPE_ENUM(class_name, type_name) type_name,
@@ -151,6 +153,7 @@ struct Locals {
     int64_t locals_count = 0;
     std::vector<std::vector<Local>> scopes;
 };
+
 struct Global {
     Declaration* declaration = nullptr;
     bool is_defined = false;
@@ -609,11 +612,13 @@ class ObjectExpr final : public Expr {
 public:
     bite::SourceSpan name_span; // TODO: temp?
     ObjectExpr(const bite::SourceSpan& span, ClassObject object, const bite::SourceSpan& name_span) : Expr(span),
-                                                                   object(std::move(object)), name_span(name_span) {}
+        object(std::move(object)),
+        name_span(name_span) {}
 
     [[nodiscard]] NodeKind kind() const override {
         return NodeKind::object_expr;
     }
+
     ClassObject object;
 };
 
@@ -665,7 +670,8 @@ public:
         Declaration* item_declaration = nullptr;
         std::optional<Token> original_name;
 
-        Item(const bite::SourceSpan& span, const Token& name, const std::optional<Token>& original_name = {}) : Declaration(span, name),
+        Item(const bite::SourceSpan& span, const Token& name, const std::optional<Token>& original_name = {}) :
+            Declaration(span, name),
             original_name(original_name) {}
     };
 
@@ -683,6 +689,32 @@ public:
 
     std::vector<std::unique_ptr<Item>> items;
     std::unique_ptr<StringExpr> module;
+};
+
+class ModuleStmt final : public Stmt {
+public:
+    ModuleStmt(const bite::SourceSpan& span, const Token& name, std::vector<Stmt> stmts) : Stmt(span),
+        name(name),
+        stmts(std::move(stmts)) {}
+
+    [[nodiscard]] NodeKind kind() const override {
+        return NodeKind::module_stmt;
+    }
+
+    Token name;
+    std::vector<Stmt> stmts;
+};
+
+class ModuleResolutionExpr final : public Expr {
+public:
+    ModuleResolutionExpr(const bite::SourceSpan& span, std::vector<Token> path) : Expr(span),
+        path(std::move(path)) {}
+
+    [[nodiscard]] NodeKind kind() const override {
+        return NodeKind::module_resolution_expr;
+    }
+
+    std::vector<Token> path;
 };
 
 class InvalidStmt final : public Stmt {

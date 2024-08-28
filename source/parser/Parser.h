@@ -25,6 +25,7 @@ public:
     }
 
     std::unique_ptr<Stmt> import_stmt();
+    std::unique_ptr<ModuleStmt> module_stmt();
 
     // ReSharper disable once CppPossiblyUninitializedMember
     explicit Parser(bite::file_input_stream&& stream, SharedContext* context) : lexer(std::move(stream), context),
