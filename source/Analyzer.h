@@ -171,7 +171,7 @@ namespace bite {
                 //check if excluded
                 bool is_excluded = std::ranges::contains(trait_usage.exclusions, field_name, &Token::string);
                 field_attr.inclusion_span = trait_usage.span;
-                if (is_excluded || field_attr.attributes[ClassAttributes::ABSTRACT]) {
+                if (is_excluded || item_trait->enviroment.requirements.contains(field_name)) {
                     requirements[field_name] = field_attr;
                     // warn about useless exclude?
                     continue;
@@ -198,7 +198,8 @@ namespace bite {
             StringTable::Handle name,
             MemberInfo& info,
             unordered_dense::map<StringTable::Handle, MemberInfo>& overrideable_members,
-            bool is_method
+            bool is_method,
+            int arity = 0
         );
 
     private:

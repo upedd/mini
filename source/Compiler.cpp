@@ -485,12 +485,12 @@ void Compiler::trait_declaration(const TraitDeclaration& stmt) {
     }
 
     for (const auto& method : stmt.methods) {
-        if (!method.attributes[ClassAttributes::ABSTRACT]) {
+        if (!stmt.enviroment.requirements.contains(method.function->name.string)) {
             function(*method.function, FunctionType::METHOD);
+            int method_name_constant = current_function()->add_constant(*method.function->name.string);
+            emit(OpCode::TRAIT_METHOD, method_name_constant);
+            emit(method.attributes.to_ullong()); // check!
         }
-        int method_name_constant = current_function()->add_constant(*method.function->name.string);
-        emit(OpCode::TRAIT_METHOD, method_name_constant);
-        emit(method.attributes.to_ullong()); // check!
     }
 
     for (const auto& [name, info] : stmt.enviroment.requirements) {

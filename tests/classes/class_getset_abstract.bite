@@ -3,7 +3,7 @@ import print from "os";
 abstract class Foo {
     abstract get x;
 
-    abstract set z();
+    abstract set z(value);
 
     abstract y;
 

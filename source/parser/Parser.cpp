@@ -552,7 +552,6 @@ std::unique_ptr<TraitDeclaration> Parser::trait_declaration() {
                 // TODO: This probably should not be here
                 attributes += ClassAttributes::GETTER;
                 attributes += ClassAttributes::SETTER;
-                attributes += ClassAttributes::ABSTRACT;
                 fields.emplace_back(
                     Field { .attributes = attributes, .variable = abstract_field(member_name), .span = span }
                 );
@@ -583,7 +582,6 @@ std::unique_ptr<FunctionDeclaration> Parser::in_trait_function(
         body = block();
     } else {
         // TODO: this probably should not be here but must wait for compiler refactor!
-        attributes += ClassAttributes::ABSTRACT;
         consume(Token::Type::SEMICOLON, "missing semicolon after declaration");
     }
     return std::make_unique<FunctionDeclaration>(make_span(), name, std::move(parameters), std::move(body));

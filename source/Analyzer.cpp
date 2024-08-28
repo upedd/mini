@@ -80,7 +80,6 @@ void bite::Analyzer::function(FunctionDeclaration& stmt) {
                     param.string,
                     &std::pair<StringTable::Handle, SourceSpan>::first
                 )) {
-                    // TODO: better error message, point to original
                     emit_error_diagnostic(
                         "duplicate parameter name",
                         param.span,
@@ -164,18 +163,20 @@ void bite::Analyzer::class_object(ClassObject& object, bool is_abstract, SourceS
                 if (info.attributes[ClassAttributes::PRIVATE]) {
                     continue;
                 }
+                info.inclusion_span = object.superclass->span;
                 overrideable_members[name] = info;
             }
         }
     }
-
-    // TODO: disallow override and abstract in traits
+    // TODO: requirements and getters and setters working!
     unordered_dense::map<StringTable::Handle, MemberInfo> requirements;
     for (auto& trait_used : object.traits_used) {
         // refactor?
         trait_usage(
-            [&object, this](const auto& name, const auto& info) {
-                declare_in_class_enviroment(object.enviroment, name, info);
+            [&object, this, &requirements](const auto& name, const auto& info) {
+                if (!requirements.contains(name)) {
+                    declare_in_class_enviroment(object.enviroment, name, info);
+                }
             },
             requirements,
             trait_used
@@ -280,7 +281,6 @@ void bite::Analyzer::class_object(ClassObject& object, bool is_abstract, SourceS
                         param.string,
                         &std::pair<StringTable::Handle, SourceSpan>::first
                     )) {
-                        // TODO: better error message, point to original
                         emit_error_diagnostic(
                             "duplicate parameter name",
                             param.span,
@@ -342,7 +342,8 @@ void bite::Analyzer::class_object(ClassObject& object, bool is_abstract, SourceS
             method.function->name.string,
             info,
             overrideable_members,
-            true
+            true,
+            method.function->params.size()
         );
         declare_in_class_enviroment(object.enviroment, method.function->name.string, info);
     }
@@ -378,7 +379,6 @@ void bite::Analyzer::class_object(ClassObject& object, bool is_abstract, SourceS
 
     for (auto& [requirement, info] : requirements) {
         if (!object.enviroment.members.contains(requirement)) {
-            // TODO: point to trait as well
             emit_error_diagnostic(
                 std::format("trait requirement not satisifed: {}", *requirement),
                 name_span,
@@ -612,23 +612,29 @@ void bite::Analyzer::trait_declaration(TraitDeclaration& stmt) {
                     using_stmt_node
                 );
             }
-
+            // TODO: redefined requirements conflicts
             for (auto& field : stmt.fields) {
-                check_trait_member(stmt, field.span, field.attributes, true);
+                check_trait_member(stmt, field.span, field.attributes, false);
+                MemberInfo info(field.attributes, field.span, stmt.name.span);
                 declare_in_trait_enviroment(
                     stmt.enviroment,
                     field.variable->name.string,
-                    MemberInfo(field.attributes, field.span, stmt.name.span)
+                    info
                 );
+                stmt.enviroment.requirements[field.variable->name.string] = info;
             }
             // hoist methods
             for (auto& method : stmt.methods) {
                 check_trait_member(stmt, method.span, method.attributes, true);
+                MemberInfo info(method.attributes, method.span, stmt.name.span);
                 declare_in_trait_enviroment(
                     stmt.enviroment,
                     method.function->name.string,
-                    MemberInfo(method.attributes, method.span, stmt.name.span)
+                    info
                 );
+                if (!method.function->body) {
+                    stmt.enviroment.requirements[method.function->name.string] = info;
+                }
             }
             for (auto& method : stmt.methods) {
                 function(*method.function);
@@ -701,8 +707,6 @@ void bite::Analyzer::declare_in_function_enviroment(FunctionEnviroment& env, Dec
             declaration->name.string,
             &std::pair<StringTable::Handle, SourceSpan>::first
         )) {
-            // TODO: better error message, point to original
-
             emit_error_diagnostic(
                 "duplicate parameter name",
                 declaration->span,
@@ -1169,7 +1173,8 @@ void bite::Analyzer::check_member_declaration(
     StringTable::Handle name,
     MemberInfo& info,
     unordered_dense::map<StringTable::Handle, MemberInfo>& overrideable_members,
-    bool is_method
+    bool is_method,
+    int arity
 ) {
     if (info.attributes[ClassAttributes::ABSTRACT] && !is_abstract) {
         emit_error_diagnostic(
@@ -1189,9 +1194,60 @@ void bite::Analyzer::check_member_declaration(
     if (info.attributes[ClassAttributes::GETTER] && info.attributes[ClassAttributes::SETTER] && is_method) {
         emit_error_diagnostic("method cannot be both an getter and a setter", info.decl_span, "here");
     }
-    // TODO: check getter and setter arguments count
-    // TODO: better line hints
 
+    if (info.attributes[ClassAttributes::GETTER] && !info.attributes[ClassAttributes::SETTER] && arity != 0) {
+        emit_error_diagnostic("getter method cannot take any arguments", info.decl_span, "here");
+    }
+
+    if (info.attributes[ClassAttributes::SETTER] && !info.attributes[ClassAttributes::GETTER] && arity != 1) {
+        emit_error_diagnostic("setter method must take exactly one argument", info.decl_span, "here");
+    }
+    // TODO: better cascade errors
+
+    // 3. Decide is override allowed
+    if (overrideable_members.contains(name)) {
+        auto& member = overrideable_members[name];
+        if (info.attributes[ClassAttributes::OVERRIDE] && info.attributes[ClassAttributes::GETTER] && !member.attributes
+            [ClassAttributes::GETTER]) {
+            emit_error_diagnostic(
+                "cannot override method with a getter",
+                info.decl_span,
+                "here",
+                {
+                    InlineHint {
+                        .location = overrideable_members[name].decl_span,
+                        .message = "method declared here",
+                        .level = DiagnosticLevel::INFO
+                    },
+                    InlineHint {
+                        .location = *member.inclusion_span,
+                        .message = "included here",
+                        .level = DiagnosticLevel::INFO,
+                    }
+                }
+            );
+            }
+        if (info.attributes[ClassAttributes::OVERRIDE] && info.attributes[ClassAttributes::SETTER] && !member.attributes
+            [ClassAttributes::SETTER]) {
+            emit_error_diagnostic(
+                "cannot override method with a setter",
+                info.decl_span,
+                "here",
+                {
+                    InlineHint {
+                        .location = overrideable_members[name].decl_span,
+                        .message = "method declared here",
+                        .level = DiagnosticLevel::INFO
+                    },
+                    InlineHint {
+                        .location = *member.inclusion_span,
+                        .message = "included here",
+                        .level = DiagnosticLevel::INFO,
+                    }
+                }
+            );
+            }
+    }
     // 1. Decide whetever is override needed or not
     bool is_override_nedded = false;
     if (overrideable_members.contains(name)) {
@@ -1215,9 +1271,14 @@ void bite::Analyzer::check_member_declaration(
             {
                 InlineHint {
                     .location = overrideable_members[name].decl_span,
-                    .message = "function originally declared here",
+                    .message = "member first declared here",
                     .level = DiagnosticLevel::INFO
-                }
+                },
+                    InlineHint {
+                        .location = *overrideable_members[name].inclusion_span,
+                        .message = "included here",
+                        .level = DiagnosticLevel::INFO,
+                    }
             }
         );
     }
@@ -1228,40 +1289,7 @@ void bite::Analyzer::check_member_declaration(
             "remove 'override' attribute from this field"
         );
     }
-    // 3. Decide is override allowed
-    if (overrideable_members.contains(name)) {
-        auto& member = overrideable_members[name];
-        if (info.attributes[ClassAttributes::OVERRIDE] && info.attributes[ClassAttributes::GETTER] && !member.attributes
-            [ClassAttributes::GETTER]) {
-            emit_error_diagnostic(
-                "cannot override function with a getter",
-                info.decl_span,
-                "here",
-                {
-                    InlineHint {
-                        .location = overrideable_members[name].decl_span,
-                        .message = "function originally declared here",
-                        .level = DiagnosticLevel::INFO
-                    }
-                }
-            );
-        }
-        if (info.attributes[ClassAttributes::OVERRIDE] && info.attributes[ClassAttributes::SETTER] && !member.attributes
-            [ClassAttributes::SETTER]) {
-            emit_error_diagnostic(
-                "cannot override function with a setter",
-                info.decl_span,
-                "here",
-                {
-                    InlineHint {
-                        .location = overrideable_members[name].decl_span,
-                        .message = "function originally declared here",
-                        .level = DiagnosticLevel::INFO
-                    }
-                }
-            );
-        }
-    }
+
     if (overrideable_members.contains(name)) {
         // 4. Update override list
         auto& member = overrideable_members[name];
