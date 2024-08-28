@@ -1019,6 +1019,52 @@ void bite::Analyzer::check_member_declaration(
     }
     // TODO: check getter and setter arguments count
 
+    // 1. Decide whetever is override needed or not
+    bool is_override_nedded = false;
+    if (overrideable_members.contains(name)) {
+        auto& member = overrideable_members[name];
+        if (info.attributes[ClassAttributes::GETTER] && member.attributes[ClassAttributes::GETTER]) {
+            is_override_nedded = true;
+        }
+        if (info.attributes[ClassAttributes::SETTER] && member.attributes[ClassAttributes::SETTER]) {
+            is_override_nedded = true;
+        }
+        if (!info.attributes[ClassAttributes::GETTER] && !info.attributes[ClassAttributes::SETTER]) {
+            is_override_nedded = true;
+        }
+    }
+    // 2. emit overrides errors
+    if (is_override_nedded && !info.attributes[ClassAttributes::OVERRIDE]) {
+        emit_error_diagnostic(
+                "memeber should override explicitly",
+                info.decl_span,
+                "add 'override' attribute to this member",
+                {
+                    InlineHint {
+                        .location = overrideable_members[name].decl_span,
+                        .message = "function originally declared here",
+                        .level = DiagnosticLevel::INFO
+                    }
+                }
+            );
+        return; // TODO: check?
+    }
+    if (!is_override_nedded && info.attributes[ClassAttributes::OVERRIDE]) {
+        emit_error_diagnostic(
+                "memeber should override explicitly",
+                info.decl_span,
+                "add 'override' attribute to this member",
+                {
+                    InlineHint {
+                        .location = overrideable_members[name].decl_span,
+                        .message = "member originally declared here",
+                        .level = DiagnosticLevel::INFO
+                    }
+                }
+            );
+        return;
+    }
+    // 3. Decide is override allowed
     if (overrideable_members.contains(name)) {
         auto& member = overrideable_members[name];
         if (info.attributes[ClassAttributes::OVERRIDE] && info.attributes[ClassAttributes::GETTER] && !member.attributes[ClassAttributes::GETTER]) {
@@ -1049,33 +1095,10 @@ void bite::Analyzer::check_member_declaration(
               }
           );
         }
-        bool emit_override_error = false;
-        // TODO: refactor!
-        if (info.attributes[ClassAttributes::GETTER] || info.attributes[ClassAttributes::SETTER]) {
-            if (!info.attributes[ClassAttributes::OVERRIDE] && ((info.attributes[ClassAttributes::GETTER] && member.
-                attributes[ClassAttributes::GETTER]) || (info.attributes[ClassAttributes::SETTER] && member.attributes[
-                ClassAttributes::SETTER]))) {
-                emit_override_error = true;
-            }
-        } else if (!info.attributes[ClassAttributes::OVERRIDE]) {
-            emit_override_error = true;
-        }
-        // maybe more inline hints?
-        if (emit_override_error) {
-            emit_error_diagnostic(
-                "memeber should override explicitly",
-                info.decl_span,
-                "add 'override' attribute to this member",
-                {
-                    InlineHint {
-                        .location = overrideable_members[name].decl_span,
-                        .message = "function originally declared here",
-                        .level = DiagnosticLevel::INFO
-                    }
-                }
-            );
-        }
-        // TODO: refactor!
+    }
+    if (overrideable_members.contains(name)) {
+        // 4. Update override list
+        auto& member = overrideable_members[name];
         if (info.attributes[ClassAttributes::GETTER] || info.attributes[ClassAttributes::SETTER]) {
             if (member.attributes[ClassAttributes::GETTER] && info.attributes[ClassAttributes::GETTER]) {
                 member.attributes -= ClassAttributes::GETTER;
@@ -1090,11 +1113,5 @@ void bite::Analyzer::check_member_declaration(
             // TODO: performance?
             overrideable_members.erase(name);
         }
-    } else if (info.attributes[ClassAttributes::OVERRIDE]) {
-        emit_error_diagnostic(
-            "memeber does not override anything",
-            info.decl_span,
-            "remove 'override' attribute from this field"
-        );
     }
 }
