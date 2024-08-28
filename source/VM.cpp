@@ -948,11 +948,27 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 }
                 break;
             }
+            case OpCode::CLASS_CLOSURE: {
+                Function* function = reinterpret_cast<Function*>(*get_constant(fetch()).as<Object*>());
+                auto* closure = new Closure(function);
+                for (int i = 0; i < closure->get_function()->get_upvalue_count(); ++i) {
+                    int is_local = fetch();
+                    int index = fetch();
+                    if (is_local) {
+                        closure->upvalues.push_back(capture_upvalue(index));
+                    } else {
+                        closure->upvalues.push_back(frames.back().closure->upvalues[index]);
+                    }
+                }
+                push(closure);
+                allocate(closure);
+                break;
+            }
         }
-        for (int i = 0; i < stack_index; ++i) {
-            std::cout << '[' << stack[i].to_string() << "] ";
-        }
-        std::cout << '\n';
+        // for (int i = 0; i < stack_index; ++i) {
+        //     std::cout << '[' << stack[i].to_string() << "] ";
+        // }
+        // std::cout << '\n';
     }
     #undef BINARY_OPERATION
 }

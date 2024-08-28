@@ -8,7 +8,7 @@
 #include "base/overloaded.h"
 #include "shared/SharedContext.h"
 
-#define COMPILER_PRINT_BYTECODE
+//#define COMPILER_PRINT_BYTECODE
 
 bool Compiler::compile(Ast* ast) {
     this->ast = ast;
@@ -383,7 +383,11 @@ void Compiler::function(const FunctionDeclaration& stmt, FunctionType type) {
     );
 
     int constant = current_function()->add_constant(function);
-    emit(OpCode::CLOSURE, constant);
+    if (type == FunctionType::METHOD) {
+        emit(OpCode::CLASS_CLOSURE, constant);
+    } else {
+        emit(OpCode::CLOSURE, constant);
+    }
     for (const UpValue& upvalue : stmt.enviroment.upvalues) {
         emit(upvalue.local);
         if (upvalue.local) {
@@ -439,7 +443,7 @@ void Compiler::constructor(const Constructor& stmt, const std::vector<Field>& fi
     );
 
     int constant = current_function()->add_constant(function);
-    emit(OpCode::CLOSURE, constant);
+    emit(OpCode::CLASS_CLOSURE, constant);
     if (stmt.function) {
         for (const UpValue& upvalue : stmt.function->enviroment.upvalues) {
             emit(upvalue.local);

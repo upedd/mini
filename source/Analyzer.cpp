@@ -1021,9 +1021,37 @@ void bite::Analyzer::check_member_declaration(
 
     if (overrideable_members.contains(name)) {
         auto& member = overrideable_members[name];
+        if (info.attributes[ClassAttributes::OVERRIDE] && info.attributes[ClassAttributes::GETTER] && !member.attributes[ClassAttributes::GETTER]) {
+            emit_error_diagnostic(
+              "cannot override function with a getter",
+              info.decl_span,
+              "here",
+              {
+                  InlineHint {
+                      .location = overrideable_members[name].decl_span,
+                      .message = "function originally declared here",
+                      .level = DiagnosticLevel::INFO
+                  }
+              }
+          );
+        }
+        if (info.attributes[ClassAttributes::OVERRIDE] && info.attributes[ClassAttributes::SETTER] && !member.attributes[ClassAttributes::SETTER]) {
+            emit_error_diagnostic(
+              "cannot override function with a setter",
+              info.decl_span,
+              "here",
+              {
+                  InlineHint {
+                      .location = overrideable_members[name].decl_span,
+                      .message = "function originally declared here",
+                      .level = DiagnosticLevel::INFO
+                  }
+              }
+          );
+        }
         bool emit_override_error = false;
         // TODO: refactor!
-        if (info.attributes[ClassAttributes::GETTER] || info.attributes[ClassAttributes::ABSTRACT]) {
+        if (info.attributes[ClassAttributes::GETTER] || info.attributes[ClassAttributes::SETTER]) {
             if (!info.attributes[ClassAttributes::OVERRIDE] && ((info.attributes[ClassAttributes::GETTER] && member.
                 attributes[ClassAttributes::GETTER]) || (info.attributes[ClassAttributes::SETTER] && member.attributes[
                 ClassAttributes::SETTER]))) {
@@ -1048,12 +1076,16 @@ void bite::Analyzer::check_member_declaration(
             );
         }
         // TODO: refactor!
-        if (member.attributes[ClassAttributes::GETTER] && member.attributes[ClassAttributes::SETTER] && info.attributes[
-            ClassAttributes::GETTER] && !info.attributes[ClassAttributes::SETTER]) {
-            member.attributes -= ClassAttributes::GETTER;
-        } else if (member.attributes[ClassAttributes::GETTER] && member.attributes[ClassAttributes::SETTER] && !info.
-            attributes[ClassAttributes::GETTER] && info.attributes[ClassAttributes::SETTER]) {
-            member.attributes -= ClassAttributes::SETTER;
+        if (info.attributes[ClassAttributes::GETTER] || info.attributes[ClassAttributes::SETTER]) {
+            if (member.attributes[ClassAttributes::GETTER] && info.attributes[ClassAttributes::GETTER]) {
+                member.attributes -= ClassAttributes::GETTER;
+            }
+            if (member.attributes[ClassAttributes::SETTER] && info.attributes[ClassAttributes::SETTER]) {
+                member.attributes -= ClassAttributes::SETTER;
+            }
+            if (!member.attributes[ClassAttributes::GETTER] && !member.attributes[ClassAttributes::SETTER]) {
+                overrideable_members.erase(name);
+            }
         } else {
             // TODO: performance?
             overrideable_members.erase(name);

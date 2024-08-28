@@ -59,6 +59,7 @@ enum class OpCode : bite_byte {
     SET_GLOBAL,
     GET_GLOBAL,
     IMPORT,
+    CLASS_CLOSURE // TODO: temp
 };
 
 #endif //OPCODE_H
