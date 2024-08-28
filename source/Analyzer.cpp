@@ -644,7 +644,7 @@ void bite::Analyzer::trait_declaration(TraitDeclaration& stmt) {
                     using_stmt_node
                 );
             }
-            // TODO: temp!
+            // TODO: getter and setter refactor!
             auto add_requirment = [&](MemberInfo info, StringTable::Handle name) {
                 if (requirements.contains(name)) {
                     auto& req = requirements[name];
@@ -700,21 +700,6 @@ void bite::Analyzer::trait_declaration(TraitDeclaration& stmt) {
                             std::format("in this class", *name)
                         );
                     }
-                    // if (info.attributes[ClassAttributes::SETTER] && !member.attributes[ClassAttributes::SETTER]) {
-                    //     emit_error_diagnostic(
-                    //         std::format("trait required an setter but trait did not provide it", *name),
-                    //         stmt.name.span,
-                    //         std::format("in this class", *name)
-                    //     );
-                    // }
-                    // //?
-                    // if (info.attributes[ClassAttributes::GETTER] && !member.attributes[ClassAttributes::GETTER]) {
-                    //     emit_error_diagnostic(
-                    //         std::format("trait required a getter but trait did not provide it", *name),
-                    //         stmt.name.span,
-                    //         std::format("in this class", *name)
-                    //     );
-                    // }
                 }
             }
         }
@@ -981,17 +966,18 @@ void bite::Analyzer::declare_in_trait_enviroment(
 
 void bite::Analyzer::declare_in_global_enviroment(GlobalEnviroment& env, Declaration* declaration) {
     if (env.locals.scopes.empty()) {
-        if (m_globals_hoisted) {
-            return; // already declared
-        }
         if (env.globals.contains(declaration->name.string)) {
+            if (!env.globals[declaration->name.string].is_defined) {
+                env.globals[declaration->name.string].is_defined = true;
+                return;
+            }
             emit_error_diagnostic(
                 "global variable name conflict",
                 declaration->span,
                 "new declaration here",
                 {
                     InlineHint {
-                        .location = env.globals[declaration->name.string]->span,
+                        .location = env.globals[declaration->name.string].declaration->span,
                         .message = "originally declared here",
                         .level = DiagnosticLevel::INFO
                     }
@@ -999,7 +985,7 @@ void bite::Analyzer::declare_in_global_enviroment(GlobalEnviroment& env, Declara
             );
         }
         declaration->info = GlobalDeclarationInfo { .declaration = declaration, .name = declaration->name.string };
-        env.globals[declaration->name.string] = declaration;
+        env.globals[declaration->name.string] = {declaration, false};
     } else {
         declare_local(env.locals, declaration);
     }
@@ -1076,14 +1062,18 @@ std::optional<Binding> bite::Analyzer::resolve_in_trait_enviroment(
 
 std::optional<Binding> bite::Analyzer::resolve_in_global_enviroment(
     const GlobalEnviroment& env,
-    StringTable::Handle name
+    StringTable::Handle name,
+    bool is_current_env
 ) {
     if (auto binding = resolve_locals(env.locals, name)) {
         return binding;
     }
     for (const auto& [global_name, declaration] : env.globals) {
         if (global_name == name) {
-            return GlobalBinding { .info = &std::get<GlobalDeclarationInfo>(declaration->info) };
+            if (is_current_env && !declaration.is_defined) {
+                return {};
+            }
+            return GlobalBinding { .info = &std::get<GlobalDeclarationInfo>(declaration.declaration->info) };
         }
     }
     return {};
@@ -1116,8 +1106,10 @@ Binding bite::Analyzer::propagate_upvalues(
 
 Binding bite::Analyzer::resolve(StringTable::Handle name, const SourceSpan& span) {
     std::vector<FunctionEnviroment*> enviroments_visited;
+    bool visited_any_env = false;
     for (auto* node : context_nodes | std::views::reverse) {
         if (node->is_function_declaration()) {
+            visited_any_env = true;
             if (auto binding = resolve_in_function_enviroment(node->as_function_declaration()->enviroment, name)) {
                 if (std::holds_alternative<LocalBinding>(*binding) && !enviroments_visited.empty()) {
                     return propagate_upvalues(std::get<LocalBinding>(*binding), enviroments_visited);
@@ -1128,6 +1120,7 @@ Binding bite::Analyzer::resolve(StringTable::Handle name, const SourceSpan& span
             enviroments_visited.emplace_back(&node->as_function_declaration()->enviroment);
         }
         if (node->is_class_declaration()) {
+            visited_any_env = true;
             if (auto binding = resolve_in_class_enviroment(
                 node->as_class_declaration()->object.enviroment,
                 name,
@@ -1136,16 +1129,18 @@ Binding bite::Analyzer::resolve(StringTable::Handle name, const SourceSpan& span
                 return std::move(binding.value());
             }
         } else if (node->is_trait_declaration()) {
+            visited_any_env = true;
             if (auto binding = resolve_in_trait_enviroment(node->as_trait_declaration()->enviroment, name)) {
                 return std::move(binding.value());
             }
         } else if (node->is_object_expr()) {
+            visited_any_env = true;
             if (auto binding = resolve_in_class_enviroment(node->as_object_expr()->object.enviroment, name, span)) {
                 return std::move(binding.value());
             }
         }
     }
-    if (auto binding = resolve_in_global_enviroment(ast->enviroment, name)) {
+    if (auto binding = resolve_in_global_enviroment(ast->enviroment, name, !visited_any_env)) {
         if (std::holds_alternative<LocalBinding>(*binding) && !enviroments_visited.empty()) {
             return propagate_upvalues(std::get<LocalBinding>(*binding), enviroments_visited);
         }

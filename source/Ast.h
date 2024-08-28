@@ -151,9 +151,14 @@ struct Locals {
     int64_t locals_count = 0;
     std::vector<std::vector<Local>> scopes;
 };
+struct Global {
+    Declaration* declaration = nullptr;
+    bool is_defined = false;
+};
+
 
 struct GlobalEnviroment {
-    bite::unordered_dense::map<StringTable::Handle, Declaration*> globals;
+    bite::unordered_dense::map<StringTable::Handle, Global> globals;
     Locals locals;
 };
 

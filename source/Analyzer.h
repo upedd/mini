@@ -105,7 +105,8 @@ namespace bite {
         static std::optional<Binding> resolve_in_trait_enviroment(const TraitEnviroment& env, StringTable::Handle name);
         static std::optional<Binding> resolve_in_global_enviroment(
             const GlobalEnviroment& env,
-            StringTable::Handle name
+            StringTable::Handle name,
+            bool is_current_env
         );
 
         Binding propagate_upvalues(LocalBinding binding, const std::vector<FunctionEnviroment*>& enviroments_visited);

@@ -40,7 +40,11 @@ FileModule* SharedContext::compile(const std::string& name) {
         gc.add_object(function);
     }
     // Bite automatically exports all globals declarations, this can change in future.
-    modules[intern(name)] = std::make_unique<FileModule>(compiler.get_main(), std::move(ast.enviroment.globals));
+    bite::unordered_dense::map<StringTable::Handle, Declaration*> declarations;
+    for (auto& [name, global] : ast.enviroment.globals) {
+        declarations[name] = global.declaration;
+    }
+    modules[intern(name)] = std::make_unique<FileModule>(compiler.get_main(), std::move(declarations));
     return static_cast<FileModule*>(modules[intern(name)].get());
 }
 
