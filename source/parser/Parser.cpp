@@ -795,7 +795,8 @@ SuperConstructorCall Parser::super_constructor_call() {
 }
 
 std::unique_ptr<ObjectExpr> Parser::object_expression() {
-    return std::make_unique<ObjectExpr>(make_span(), class_object());
+    Token name = current;
+    return std::make_unique<ObjectExpr>(make_span(), class_object(), name.span);
 }
 
 std::unique_ptr<Expr> Parser::labeled_expression() {

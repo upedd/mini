@@ -86,6 +86,7 @@ namespace bite {
         void super_expr(SuperExpr& expr);
         void object_expr(ObjectExpr& expr);
         void trait_declaration(TraitDeclaration& stmt);
+        void check_trait_member(TraitDeclaration& stmt, SourceSpan& name_span, bitflags<ClassAttributes>& attributes, bool is_method);
         void declare_local(Locals& locals, Declaration* declaration);
         void literal_expr(LiteralExpr& /*unused*/) {}
         void string_expr(StringExpr& /*unused*/) {}
@@ -169,7 +170,7 @@ namespace bite {
             for (auto& [field_name, field_attr] : item_trait->enviroment.members) {
                 //check if excluded
                 bool is_excluded = std::ranges::contains(trait_usage.exclusions, field_name, &Token::string);
-
+                field_attr.inclusion_span = trait_usage.span;
                 if (is_excluded || field_attr.attributes[ClassAttributes::ABSTRACT]) {
                     requirements[field_name] = field_attr;
                     // warn about useless exclude?

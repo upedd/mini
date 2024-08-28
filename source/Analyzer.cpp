@@ -75,11 +75,30 @@ void bite::Analyzer::function(FunctionDeclaration& stmt) {
         [this, &stmt] {
             for (const auto& param : stmt.params) {
                 // TODO: temp
-                if (std::ranges::contains(stmt.enviroment.parameters, param.string)) {
+                if (std::ranges::contains(
+                    stmt.enviroment.parameters,
+                    param.string,
+                    &std::pair<StringTable::Handle, SourceSpan>::first
+                )) {
                     // TODO: better error message, point to original
-                    emit_error_diagnostic("duplicate parameter name", param.span, "here");
+                    emit_error_diagnostic(
+                        "duplicate parameter name",
+                        param.span,
+                        "redeclared here",
+                        {
+                            InlineHint {
+                                .location = std::ranges::find(
+                                    stmt.enviroment.parameters,
+                                    param.string,
+                                    &std::pair<StringTable::Handle, SourceSpan>::first
+                                )->second,
+                                .message = "originally declared here",
+                                .level = DiagnosticLevel::INFO
+                            }
+                        }
+                    );
                 }
-                stmt.enviroment.parameters.push_back(param.string);
+                stmt.enviroment.parameters.emplace_back(param.string, param.span);
             }
             if (stmt.body) {
                 visit(*stmt.body);
@@ -155,8 +174,7 @@ void bite::Analyzer::class_object(ClassObject& object, bool is_abstract, SourceS
     for (auto& trait_used : object.traits_used) {
         // refactor?
         trait_usage(
-            [&object, this, &trait_used](const auto& name, auto& info) {
-                info.inclusion_span = trait_used.span;
+            [&object, this](const auto& name, const auto& info) {
                 declare_in_class_enviroment(object.enviroment, name, info);
             },
             requirements,
@@ -257,11 +275,30 @@ void bite::Analyzer::class_object(ClassObject& object, bool is_abstract, SourceS
             if (object.constructor.function) {
                 for (const auto& param : object.constructor.function->params) {
                     // TODO: temp
-                    if (std::ranges::contains(object.constructor.function->enviroment.parameters, param.string)) {
+                    if (std::ranges::contains(
+                        object.constructor.function->enviroment.parameters,
+                        param.string,
+                        &std::pair<StringTable::Handle, SourceSpan>::first
+                    )) {
                         // TODO: better error message, point to original
-                        emit_error_diagnostic("duplicate parameter name", param.span, "here");
+                        emit_error_diagnostic(
+                            "duplicate parameter name",
+                            param.span,
+                            "redeclared here",
+                            {
+                                InlineHint {
+                                    .location = std::ranges::find(
+                                        object.constructor.function->enviroment.parameters,
+                                        param.string,
+                                        &std::pair<StringTable::Handle, SourceSpan>::first
+                                    )->second,
+                                    .message = "originally declared here",
+                                    .level = DiagnosticLevel::INFO
+                                }
+                            }
+                        );
                     }
-                    object.constructor.function->enviroment.parameters.push_back(param.string);
+                    object.constructor.function->enviroment.parameters.emplace_back(param.string, param.span);
                 }
             }
             if (object.constructor.super_arguments_call) {
@@ -353,8 +390,8 @@ void bite::Analyzer::class_object(ClassObject& object, bool is_abstract, SourceS
                         .level = DiagnosticLevel::INFO
                     },
                     InlineHint {
-                        .location = info.decl_span,
-                        .message = "requirement declared here",
+                        .location = *info.inclusion_span,
+                        .message = "included here",
                         .level = DiagnosticLevel::INFO
                     }
                 }
@@ -534,14 +571,18 @@ void bite::Analyzer::object_expr(ObjectExpr& expr) {
     with_context(
         expr,
         [this, &expr] {
-            // TODO: better object span
-            // TODO: metaobject span
             if (expr.object.metaobject) {
                 emit_error_diagnostic(
                     "object cannot contain metaobject",
-                    expr.object.metaobject->span,
+                    expr.object.metaobject->name_span,
                     "remove this",
-                    { InlineHint { .location = expr.span, .message = "is an object", .level = DiagnosticLevel::INFO } }
+                    {
+                        InlineHint {
+                            .location = expr.name_span,
+                            .message = "is an object",
+                            .level = DiagnosticLevel::INFO
+                        }
+                    }
                 );
             }
             if (expr.object.constructor.function && !expr.object.constructor.function->params.empty()) {
@@ -564,8 +605,7 @@ void bite::Analyzer::trait_declaration(TraitDeclaration& stmt) {
             unordered_dense::map<StringTable::Handle, MemberInfo> requirements;
             for (auto& using_stmt_node : stmt.using_stmts) {
                 trait_usage(
-                    [&stmt, this, &using_stmt_node](const auto& name, auto& info) {
-                        info.inclusion_span = using_stmt_node.span;
+                    [&stmt, this](const auto& name, auto& info) {
                         declare_in_trait_enviroment(stmt.enviroment, name, info);
                     },
                     requirements,
@@ -574,6 +614,7 @@ void bite::Analyzer::trait_declaration(TraitDeclaration& stmt) {
             }
 
             for (auto& field : stmt.fields) {
+                check_trait_member(stmt, field.span, field.attributes, true);
                 declare_in_trait_enviroment(
                     stmt.enviroment,
                     field.variable->name.string,
@@ -582,6 +623,7 @@ void bite::Analyzer::trait_declaration(TraitDeclaration& stmt) {
             }
             // hoist methods
             for (auto& method : stmt.methods) {
+                check_trait_member(stmt, method.span, method.attributes, true);
                 declare_in_trait_enviroment(
                     stmt.enviroment,
                     method.function->name.string,
@@ -598,6 +640,33 @@ void bite::Analyzer::trait_declaration(TraitDeclaration& stmt) {
             }
         }
     );
+}
+
+void bite::Analyzer::check_trait_member(
+    TraitDeclaration& stmt,
+    SourceSpan& name_span,
+    bitflags<ClassAttributes>& attributes,
+    bool is_method
+) {
+    if (attributes[ClassAttributes::ABSTRACT]) {
+        emit_error_diagnostic(
+            "trait memebers cannot be abstract",
+            name_span,
+            "remove \"abstract\" from here.",
+            { InlineHint { .location = stmt.name.span, .message = "is a trait", .level = DiagnosticLevel::INFO } }
+        );
+    }
+    if (attributes[ClassAttributes::OVERRIDE]) {
+        emit_error_diagnostic(
+            "trait memebers cannot be overrides",
+            name_span,
+            "remove \"override\" from here.",
+            { InlineHint { .location = stmt.name.span, .message = "is a trait", .level = DiagnosticLevel::INFO } }
+        );
+    }
+    if (attributes[ClassAttributes::GETTER] && attributes[ClassAttributes::SETTER] && is_method) {
+        emit_error_diagnostic("method cannot be both an getter and a setter", name_span, "here");
+    }
 }
 
 void bite::Analyzer::declare_local(Locals& locals, Declaration* declaration) {
@@ -627,11 +696,31 @@ void bite::Analyzer::declare_local(Locals& locals, Declaration* declaration) {
 
 void bite::Analyzer::declare_in_function_enviroment(FunctionEnviroment& env, Declaration* declaration) {
     if (env.locals.scopes.empty()) {
-        if (std::ranges::contains(env.parameters, declaration->name.string)) {
+        if (std::ranges::contains(
+            env.parameters,
+            declaration->name.string,
+            &std::pair<StringTable::Handle, SourceSpan>::first
+        )) {
             // TODO: better error message, point to original
-            emit_error_diagnostic("duplicate parameter name", declaration->span, "here");
+
+            emit_error_diagnostic(
+                "duplicate parameter name",
+                declaration->span,
+                "redeclared here",
+                {
+                    InlineHint {
+                        .location = std::ranges::find(
+                            env.parameters,
+                            declaration->name.string,
+                            &std::pair<StringTable::Handle, SourceSpan>::first
+                        )->second,
+                        .message = "originally declared here",
+                        .level = DiagnosticLevel::INFO
+                    }
+                }
+            );
         }
-        env.parameters.push_back(declaration->name.string);
+        env.parameters.emplace_back(declaration->name.string, declaration->span);
     } else {
         declare_local(env.locals, declaration);
     }
@@ -868,7 +957,7 @@ std::optional<Binding> bite::Analyzer::resolve_in_function_enviroment(
         return binding;
     }
     for (const auto& [idx, param] : env.parameters | std::views::enumerate) {
-        if (param == name) {
+        if (param.first == name) {
             return ParameterBinding { idx };
         }
     }

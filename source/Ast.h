@@ -169,7 +169,7 @@ struct UpValue {
 struct FunctionEnviroment {
     Locals locals;
     std::vector<UpValue> upvalues;
-    std::vector<StringTable::Handle> parameters;
+    std::vector<std::pair<StringTable::Handle, bite::SourceSpan>> parameters;
 };
 
 
@@ -602,13 +602,13 @@ public:
 
 class ObjectExpr final : public Expr {
 public:
-    ObjectExpr(const bite::SourceSpan& span, ClassObject object) : Expr(span),
-                                                                   object(std::move(object)) {}
+    bite::SourceSpan name_span; // TODO: temp?
+    ObjectExpr(const bite::SourceSpan& span, ClassObject object, const bite::SourceSpan& name_span) : Expr(span),
+                                                                   object(std::move(object)), name_span(name_span) {}
 
     [[nodiscard]] NodeKind kind() const override {
         return NodeKind::object_expr;
     }
-
     ClassObject object;
 };
 

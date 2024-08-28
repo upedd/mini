@@ -3,9 +3,6 @@
 #include <iostream>
 #include "Compiler.h"
 #include "shared/SharedContext.h"
-// TODO: getters and setters refactor and traits tests
-// TODO: duplicates by traits
-// TODO: this closures
 // TODO: cyclic imports
 // TODO: refactor
 
