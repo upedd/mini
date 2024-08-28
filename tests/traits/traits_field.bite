@@ -13,12 +13,19 @@ trait B using A {
         print("B.a");
         return "B";
     }
+
+    set a(value) {
+
+    }
 }
 
 class C using A {
     get a {
         print("C.a");
         return "C";
+    }
+    set a(value) {
+
     }
 }
 

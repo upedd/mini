@@ -173,10 +173,8 @@ void bite::Analyzer::class_object(ClassObject& object, bool is_abstract, SourceS
     for (auto& trait_used : object.traits_used) {
         // refactor?
         trait_usage(
-            [&object, this, &requirements](const auto& name, const auto& info) {
-                if (!requirements.contains(name)) {
-                    declare_in_class_enviroment(object.enviroment, name, info);
-                }
+            [&object, this](const auto& name, const auto& info) {
+                declare_in_class_enviroment(object.enviroment, name, info);
             },
             requirements,
             trait_used
@@ -396,6 +394,39 @@ void bite::Analyzer::class_object(ClassObject& object, bool is_abstract, SourceS
                     }
                 }
             );
+        } else {
+            // TODO: better error message
+            auto& member = object.enviroment.members[requirement];
+            if (member.attributes[ClassAttributes::GETTER] && !info.attributes[ClassAttributes::GETTER] && !info.
+                attributes[ClassAttributes::SETTER]) {
+                emit_error_diagnostic(
+                    std::format("trait required method but class provided an getter", *requirement),
+                    name_span,
+                    std::format("in this class", *requirement)
+                );
+            }
+            if (member.attributes[ClassAttributes::SETTER] && !info.attributes[ClassAttributes::SETTER] && !info.
+                attributes[ClassAttributes::GETTER]) {
+                emit_error_diagnostic(
+                    std::format("trait required method but class provided an setter", *requirement),
+                    name_span,
+                    std::format("in this class", *requirement)
+                );
+            }
+            if (info.attributes[ClassAttributes::SETTER] && !member.attributes[ClassAttributes::SETTER]) {
+                emit_error_diagnostic(
+                    std::format("trait required an setter but class did not provide it", *requirement),
+                    name_span,
+                    std::format("in this class", *requirement)
+                );
+            }
+            if (info.attributes[ClassAttributes::GETTER] && !member.attributes[ClassAttributes::GETTER]) {
+                emit_error_diagnostic(
+                    std::format("trait required a getter but class did not provide it", *requirement),
+                    name_span,
+                    std::format("in this class", *requirement)
+                );
+            }
         }
     }
 }
@@ -598,6 +629,7 @@ void bite::Analyzer::object_expr(ObjectExpr& expr) {
 }
 
 void bite::Analyzer::trait_declaration(TraitDeclaration& stmt) {
+    // TODO: this needs rewrite!
     declare(&stmt);
     with_context(
         stmt,
@@ -612,28 +644,35 @@ void bite::Analyzer::trait_declaration(TraitDeclaration& stmt) {
                     using_stmt_node
                 );
             }
+            // TODO: temp!
+            auto add_requirment = [&](MemberInfo info, StringTable::Handle name) {
+                if (requirements.contains(name)) {
+                    auto& req = requirements[name];
+                    if (info.attributes[ClassAttributes::GETTER] && !req.attributes[ClassAttributes::GETTER]) {
+                        req.attributes += ClassAttributes::GETTER;
+                    }
+                    if (info.attributes[ClassAttributes::SETTER] && !req.attributes[ClassAttributes::SETTER]) {
+                        req.attributes += ClassAttributes::SETTER;
+                    }
+                } else {
+                    stmt.enviroment.requirements[name] = info;
+                }
+            };
+
             // TODO: redefined requirements conflicts
             for (auto& field : stmt.fields) {
                 check_trait_member(stmt, field.span, field.attributes, false);
                 MemberInfo info(field.attributes, field.span, stmt.name.span);
-                declare_in_trait_enviroment(
-                    stmt.enviroment,
-                    field.variable->name.string,
-                    info
-                );
-                stmt.enviroment.requirements[field.variable->name.string] = info;
+                declare_in_trait_enviroment(stmt.enviroment, field.variable->name.string, info);
+                add_requirment(info, field.variable->name.string);
             }
             // hoist methods
             for (auto& method : stmt.methods) {
                 check_trait_member(stmt, method.span, method.attributes, true);
                 MemberInfo info(method.attributes, method.span, stmt.name.span);
-                declare_in_trait_enviroment(
-                    stmt.enviroment,
-                    method.function->name.string,
-                    info
-                );
+                declare_in_trait_enviroment(stmt.enviroment, method.function->name.string, info);
                 if (!method.function->body) {
-                    stmt.enviroment.requirements[method.function->name.string] = info;
+                    add_requirment(info, method.function->name.string);
                 }
             }
             for (auto& method : stmt.methods) {
@@ -642,6 +681,40 @@ void bite::Analyzer::trait_declaration(TraitDeclaration& stmt) {
             for (auto& [name, info] : requirements) {
                 if (!stmt.enviroment.members.contains(name)) {
                     stmt.enviroment.requirements[name] = info;
+                } else {
+                    // TODO: better error message
+                    auto& member = stmt.enviroment.members[name];
+                    if (member.attributes[ClassAttributes::GETTER] && !info.attributes[ClassAttributes::GETTER] && !info
+                        .attributes[ClassAttributes::SETTER]) {
+                        emit_error_diagnostic(
+                            std::format("trait required method but trait provided an getter", *name),
+                            stmt.name.span,
+                            std::format("in this class", *name)
+                        );
+                    }
+                    if (member.attributes[ClassAttributes::SETTER] && !info.attributes[ClassAttributes::SETTER] && !info
+                        .attributes[ClassAttributes::GETTER]) {
+                        emit_error_diagnostic(
+                            std::format("trait required method but trait provided an setter", *name),
+                            stmt.name.span,
+                            std::format("in this class", *name)
+                        );
+                    }
+                    // if (info.attributes[ClassAttributes::SETTER] && !member.attributes[ClassAttributes::SETTER]) {
+                    //     emit_error_diagnostic(
+                    //         std::format("trait required an setter but trait did not provide it", *name),
+                    //         stmt.name.span,
+                    //         std::format("in this class", *name)
+                    //     );
+                    // }
+                    // //?
+                    // if (info.attributes[ClassAttributes::GETTER] && !member.attributes[ClassAttributes::GETTER]) {
+                    //     emit_error_diagnostic(
+                    //         std::format("trait required a getter but trait did not provide it", *name),
+                    //         stmt.name.span,
+                    //         std::format("in this class", *name)
+                    //     );
+                    // }
                 }
             }
         }
@@ -1226,7 +1299,7 @@ void bite::Analyzer::check_member_declaration(
                     }
                 }
             );
-            }
+        }
         if (info.attributes[ClassAttributes::OVERRIDE] && info.attributes[ClassAttributes::SETTER] && !member.attributes
             [ClassAttributes::SETTER]) {
             emit_error_diagnostic(
@@ -1246,7 +1319,7 @@ void bite::Analyzer::check_member_declaration(
                     }
                 }
             );
-            }
+        }
     }
     // 1. Decide whetever is override needed or not
     bool is_override_nedded = false;
@@ -1274,11 +1347,11 @@ void bite::Analyzer::check_member_declaration(
                     .message = "member first declared here",
                     .level = DiagnosticLevel::INFO
                 },
-                    InlineHint {
-                        .location = *overrideable_members[name].inclusion_span,
-                        .message = "included here",
-                        .level = DiagnosticLevel::INFO,
-                    }
+                InlineHint {
+                    .location = *overrideable_members[name].inclusion_span,
+                    .message = "included here",
+                    .level = DiagnosticLevel::INFO,
+                }
             }
         );
     }
