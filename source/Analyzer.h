@@ -82,6 +82,8 @@ namespace bite {
         void return_expr(ReturnExpr& expr);
         void this_expr(ThisExpr& expr);
         void import_stmt(ImportStmt& stmt);
+        void module_stmt(ModuleStmt& stmt, bool visit = true);
+        void module_resolution_expr(ModuleResolutionExpr& expr);
 
         void super_expr(SuperExpr& expr);
         void object_expr(ObjectExpr& expr);

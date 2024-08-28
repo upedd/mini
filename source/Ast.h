@@ -691,18 +691,18 @@ public:
     std::unique_ptr<StringExpr> module;
 };
 
-class ModuleStmt final : public Stmt {
+class ModuleStmt final : public Declaration {
 public:
-    ModuleStmt(const bite::SourceSpan& span, const Token& name, std::vector<Stmt> stmts) : Stmt(span),
-        name(name),
+    ModuleStmt(const bite::SourceSpan& span, const Token& name, std::vector<std::unique_ptr<Stmt>> stmts) :
+        Declaration(span, name),
         stmts(std::move(stmts)) {}
 
     [[nodiscard]] NodeKind kind() const override {
         return NodeKind::module_stmt;
     }
 
-    Token name;
-    std::vector<Stmt> stmts;
+    std::vector<std::unique_ptr<Stmt>> stmts;
+    bite::unordered_dense::map<StringTable::Handle, Declaration*> declaration;
 };
 
 class ModuleResolutionExpr final : public Expr {
@@ -713,7 +713,7 @@ public:
     [[nodiscard]] NodeKind kind() const override {
         return NodeKind::module_resolution_expr;
     }
-
+    Binding binding = NoBinding();
     std::vector<Token> path;
 };
 

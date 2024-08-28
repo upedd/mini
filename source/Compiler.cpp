@@ -8,7 +8,7 @@
 #include "base/overloaded.h"
 #include "shared/SharedContext.h"
 
-//#define COMPILER_PRINT_BYTECODE
+#define COMPILER_PRINT_BYTECODE
 
 bool Compiler::compile(Ast* ast) {
     this->ast = ast;
@@ -899,4 +899,15 @@ void Compiler::import_stmt(const ImportStmt& stmt) {
         emit(item_const);
         define_variable(item->info);
     }
+}
+
+void Compiler::module_stmt(const ModuleStmt& stmt) {
+    for (const auto& st : stmt.stmts) {
+        visit(*st);
+    }
+}
+
+void Compiler::module_resolution_expr(const ModuleResolutionExpr& expr) {
+    emit_get_variable(expr.binding);
+    current_context().on_stack++;
 }

@@ -17,11 +17,17 @@ void bite::Analyzer::emit_error_diagnostic(
 void bite::Analyzer::analyze(Ast& ast) {
     this->ast = &ast;
     for (auto& stmt : ast.stmts) {
-        if (auto* declaration = dynamic_cast<Declaration*>(stmt.get())) {
-            declare_in_global_enviroment(ast.enviroment, declaration);
-        }
         if (auto* import = dynamic_cast<ImportStmt*>(stmt.get())) {
             import_stmt(*import);
+            continue;
+        }
+        // TODO: temp!
+        if (auto* module = dynamic_cast<ModuleStmt*>(stmt.get())) {
+            module_stmt(*module, false);
+            continue;
+        }
+        if (auto* declaration = dynamic_cast<Declaration*>(stmt.get())) {
+            declare_in_global_enviroment(ast.enviroment, declaration);
         }
     }
     m_globals_hoisted = true;
@@ -592,6 +598,50 @@ void bite::Analyzer::import_stmt(ImportStmt& stmt) {
     }
 }
 
+void bite::Analyzer::module_stmt(ModuleStmt& stmt, bool do_visit) {
+    // THROW if not at top level
+    declare(&stmt);
+    if (do_visit) {
+        with_context(
+            stmt,
+            [this, &stmt] {
+                for (auto& st : stmt.stmts) {
+                    visit(*st);
+                }
+            }
+        );
+    }
+}
+
+void bite::Analyzer::module_resolution_expr(ModuleResolutionExpr& expr) {
+    BITE_ASSERT(expr.path.size() >= 2);
+
+    // TODO: recursive resolve!
+    // TODO: temp!
+    // TODO: this wont work!
+    std::vector<std::string> module_string;
+    for (auto& path_part : expr.path) {
+        module_string.emplace_back(*path_part.string);
+    }
+    std::string module = module_string[0];
+    for (int i = 1; i < module_string.size(); ++i) {
+        module += "::" + module_string[i];
+    }
+    expr.binding = resolve(context->intern(module), expr.span);
+
+    // auto x = resolve(expr.path[0].string, expr.path[0].span);
+    // if (auto declaration = find_declaration(x)) {
+    //     if (declaration.value()->is_module_stmt()) {
+    //         //expr.binding = resolve(std::forma);
+    //     } else {
+    //         BITE_PANIC("path does not point to a module");
+    //     }
+    // } else {
+    //     BITE_PANIC("path does not resolve");
+    // }
+}
+
+
 void bite::Analyzer::super_expr(SuperExpr& expr) {
     if (!is_in_class_with_superclass()) {
         emit_error_diagnostic("'super' outside of class with superclass", expr.span, "here");
@@ -985,19 +1035,38 @@ void bite::Analyzer::declare_in_global_enviroment(GlobalEnviroment& env, Declara
             );
         }
         declaration->info = GlobalDeclarationInfo { .declaration = declaration, .name = declaration->name.string };
-        env.globals[declaration->name.string] = {declaration, false};
+        env.globals[declaration->name.string] = { declaration, false };
     } else {
         declare_local(env.locals, declaration);
     }
 }
 
 void bite::Analyzer::declare(Declaration* declaration) {
+    // TODO: this won't work
+    std::vector<StringTable::Handle> modules;
+    auto fixme = [&] {
+        if (modules.empty()) {
+            return;
+        }
+        std::string module_string;
+        for (auto& part : modules) {
+            module_string += *part + "::";
+        }
+        module_string += *declaration->name.string;
+        declaration->name.string = context->intern(module_string);
+    };
     for (auto* node : context_nodes | std::views::reverse) {
         if (node->is_function_declaration()) {
+            fixme();
             declare_in_function_enviroment(node->as_function_declaration()->enviroment, declaration);
             return;
         }
+
+        if (node->is_module_stmt()) {
+            modules.push_back(node->as_module_stmt()->name.string);
+        }
     }
+    fixme();
     declare_in_global_enviroment(ast->enviroment, declaration);
 }
 

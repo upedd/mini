@@ -159,6 +159,8 @@ std::unique_ptr<Stmt> Parser::import_stmt() {
 
 std::unique_ptr<ModuleStmt> Parser::module_stmt() {
     consume(Token::Type::IDENTIFIER, "missing module name");
+    Token module_name = current;
+    consume(Token::Type::LEFT_BRACE, "missing module body");
     std::vector<std::unique_ptr<Stmt>> stmts;
     while (!match(Token::Type::RIGHT_BRACE)) {
         if (auto stmt = statement()) {
@@ -167,7 +169,7 @@ std::unique_ptr<ModuleStmt> Parser::module_stmt() {
             error(current, "only declarations are allowed inside of modules", "is not a declaration");
         }
     }
-
+    return std::make_unique<ModuleStmt>(make_span(), module_name, std::move(stmts));
 }
 
 Ast Parser::parse() {
@@ -667,6 +669,16 @@ std::unique_ptr<Expr> Parser::expression(const Precedence precedence) {
     );
 }
 
+std::unique_ptr<Expr> Parser::module_resolution() {
+    std::vector path { current };
+    advance();
+    do {
+        consume(Token::Type::IDENTIFIER, "missing module resolution path element");
+        path.emplace_back(current);
+    } while(match(Token::Type::COLON_COLON));
+    return std::make_unique<ModuleResolutionExpr>(make_span(), std::move(path));
+}
+
 std::optional<std::unique_ptr<Expr>> Parser::prefix() {
     switch (current.type) {
         case Token::Type::INTEGER: return integer();
@@ -676,7 +688,7 @@ std::optional<std::unique_ptr<Expr>> Parser::prefix() {
         case Token::Type::FALSE:
         case Token::Type::THIS:
         case Token::Type::NIL: return keyword();
-        case Token::Type::IDENTIFIER: return identifier();
+        case Token::Type::IDENTIFIER: return check(Token::Type::COLON_COLON) ? module_resolution() : identifier();
         case Token::Type::LEFT_PAREN: return grouping();
         case Token::Type::LEFT_BRACE: return block();
         case Token::Type::BANG:
@@ -724,7 +736,7 @@ std::unique_ptr<Expr> Parser::keyword() {
     }
 }
 
-std::unique_ptr<VariableExpr> Parser::identifier() {
+std::unique_ptr<Expr> Parser::identifier() {
     return std::make_unique<VariableExpr>(make_span(), current);
 }
 

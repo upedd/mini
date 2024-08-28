@@ -197,6 +197,8 @@ public:
     void super_expr(const SuperExpr& expr);
 
     void import_stmt(const ImportStmt& stmt);
+    void module_stmt(const ModuleStmt& stmt);
+    void module_resolution_expr(const ModuleResolutionExpr& expr);
 
     void invalid_stmt(const InvalidStmt& /*unused*/) {}
     void invalid_expr(const InvalidExpr& /*unused*/) {}

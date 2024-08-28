@@ -131,13 +131,14 @@ private:
 
     std::unique_ptr<Expr> expression(Precedence precedence = Precedence::NONE);
 
+    std::unique_ptr<Expr> module_resolution();
     std::optional<std::unique_ptr<Expr>> prefix();
 
     std::unique_ptr<Expr> integer();
     std::unique_ptr<Expr> number();
     std::unique_ptr<Expr> keyword();
     std::unique_ptr<StringExpr> string();
-    std::unique_ptr<VariableExpr> identifier();
+    std::unique_ptr<Expr> identifier();
     std::unique_ptr<Expr> grouping();
     std::unique_ptr<UnaryExpr> unary(Token::Type op);
     std::unique_ptr<SuperExpr> super_();
