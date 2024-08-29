@@ -605,16 +605,41 @@ void bite::Analyzer::import_stmt(ImportStmt& stmt) {
                     StringTable::Handle name;
                     // TODO: module resolution
                     if (item->item->is_variable_expr()) {
-                        name = item->item->as_variable_expr()->identifier.string;
-                    } else {
-                        BITE_PANIC("not implemented!");
+                        if (module->declarations.contains(name)) {
+                            item->binding = *resolve_in_module(*module, name);
+                        } else {
+                            BITE_PANIC("item not in module!");
+                        }
+                    } else if (item->item->is_module_resolution_expr()) {
+                        auto& expr = *item->item->as_module_resolution_expr();
+                        auto resolve_recursive = [this, &expr](ModuleStmt& module, auto& resolve, int depth = 0) -> Declaration* {
+                            if (depth >= expr.path.size()) {
+                                emit_error_diagnostic("path resolution failed!", expr.span, "here");
+                                return nullptr;
+                            }
+                            if (!module.declarations.contains(expr.path[depth].string)) {
+                                emit_error_diagnostic("path resolution failed", expr.path[depth].span, "here");
+                                return nullptr;
+                            }
+                            if (module.declarations[expr.path[depth].string]->is_module_stmt()) {
+                                return resolve(*module.declarations[expr.path[depth].string]->as_module_stmt(), resolve, depth + 1);
+                            }
+                            if (depth != expr.path.size() - 1) {
+                                emit_error_diagnostic("path resolution too fast?", expr.path[depth].span, "here");
+                                return nullptr;
+                            }
+                            return module.declarations[expr.path[depth].string];
+                        };
+
+                        Declaration* declaration = resolve_recursive(*module, resolve_recursive);
+                        // TODO: non-global bindings?
+                        if (declaration && std::holds_alternative<GlobalDeclarationInfo>(declaration->info)) {
+                            item->binding = GlobalBinding { &std::get<GlobalDeclarationInfo>(declaration->info) };
+                        } else {
+                            emit_error_diagnostic("path resolution failed!", expr.span, "here");
+                        }
                     }
-                    if (module->declarations.contains(name)) {
-                        item->binding = *resolve_in_module(*module, name);
-                        declare(item.get());
-                    } else {
-                        BITE_PANIC("item not in module!");
-                    }
+                    declare(item.get());
                 }
             } else {
                 BITE_PANIC("module not a module :O");
