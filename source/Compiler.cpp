@@ -886,17 +886,24 @@ void Compiler::super_expr(const SuperExpr& expr) {
 }
 
 void Compiler::import_stmt(const ImportStmt& stmt) {
-    int module_const = current_function()->add_constant(stmt.module->string);
+    // TODO!
+    // int module_const = current_function()->add_constant(stmt.module->string);
+    // for (const auto& item : stmt.items) {
+    //     auto* name = item->name.string;
+    //     if (item->original_name) {
+    //         name = item->original_name->string;
+    //     }
+    //     int item_const = current_function()->add_constant(*name);
+    //     current_context().on_stack++;
+    //     emit(OpCode::IMPORT);
+    //     emit(module_const);
+    //     emit(item_const);
+    //     define_variable(item->info);
+    // }
+
     for (const auto& item : stmt.items) {
-        auto* name = item->name.string;
-        if (item->original_name) {
-            name = item->original_name->string;
-        }
-        int item_const = current_function()->add_constant(*name);
+        emit_get_variable(item->binding);
         current_context().on_stack++;
-        emit(OpCode::IMPORT);
-        emit(module_const);
-        emit(item_const);
         define_variable(item->info);
     }
 }

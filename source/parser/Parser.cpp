@@ -141,18 +141,27 @@ bool is_expression_start(const Token::Type type) {
 std::unique_ptr<Stmt> Parser::import_stmt() {
     std::vector<std::unique_ptr<ImportStmt::Item>> items;
     do {
-        consume(Token::Type::IDENTIFIER, "missing import identifier");
-        Token name = current;
+        auto expr = expression();
+        Token name;
+        if (expr->is_variable_expr()) {
+            name = expr->as_variable_expr()->identifier;
+        } else if (expr->is_module_resolution_expr()) {
+            name = expr->as_module_resolution_expr()->path.back();
+        } else {
+            // better error?
+            error(current, "import item must be either a identifer of path resolution expression");
+        }
         if (match(Token::Type::AS)) {
             consume(Token::Type::IDENTIFIER, "missing import aliasas");
-            items.emplace_back(std::make_unique<ImportStmt::Item>(current.span, current, name));
-        } else {
-            items.emplace_back(std::make_unique<ImportStmt::Item>(current.span, name));
+            name = current;
         }
+        items.emplace_back(std::make_unique<ImportStmt::Item>(current.span, name, std::move(expr)));
     } while (match(Token::Type::COMMA));
     consume(Token::Type::FROM, "import does not specify destination");
-    advance();
-    auto stmt = std::make_unique<ImportStmt>(make_span(), std::move(items), string());
+    // advance();
+    //consume(Token::Type::IDENTIFIER, "expected module name");
+    // TODO!!!
+    auto stmt = std::make_unique<ImportStmt>(make_span(), std::move(items), expression());
     consume(Token::Type::SEMICOLON, "missing semicolon after import");
     return stmt;
 }

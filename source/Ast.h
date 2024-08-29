@@ -668,17 +668,17 @@ public:
         }
 
         Declaration* item_declaration = nullptr;
-        std::optional<Token> original_name;
+        std::unique_ptr<Expr> item; // better name?
+        Binding binding = NoBinding();
 
-        Item(const bite::SourceSpan& span, const Token& name, const std::optional<Token>& original_name = {}) :
-            Declaration(span, name),
-            original_name(original_name) {}
+        Item(const bite::SourceSpan& span, const Token& name, std::unique_ptr<Expr> item) :
+            Declaration(span, name), item(std::move(item)) {}
     };
 
     ImportStmt(
         const bite::SourceSpan& span,
         std::vector<std::unique_ptr<Item>> items,
-        std::unique_ptr<StringExpr> module
+        std::unique_ptr<Expr> module
     ) : Stmt(span),
         items(std::move(items)),
         module(std::move(module)) {}
@@ -688,7 +688,7 @@ public:
     }
 
     std::vector<std::unique_ptr<Item>> items;
-    std::unique_ptr<StringExpr> module;
+    std::unique_ptr<Expr> module;
 };
 
 class ModuleStmt final : public Declaration {
