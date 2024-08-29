@@ -887,24 +887,28 @@ void Compiler::super_expr(const SuperExpr& expr) {
 
 void Compiler::import_stmt(const ImportStmt& stmt) {
     // TODO!
-    // int module_const = current_function()->add_constant(stmt.module->string);
-    // for (const auto& item : stmt.items) {
-    //     auto* name = item->name.string;
-    //     if (item->original_name) {
-    //         name = item->original_name->string;
-    //     }
-    //     int item_const = current_function()->add_constant(*name);
-    //     current_context().on_stack++;
-    //     emit(OpCode::IMPORT);
-    //     emit(module_const);
-    //     emit(item_const);
-    //     define_variable(item->info);
-    // }
-
-    for (const auto& item : stmt.items) {
-        emit_get_variable(item->binding);
-        current_context().on_stack++;
-        define_variable(item->info);
+    if (stmt.module->is_string_expr()) {
+        int module_const = current_function()->add_constant(stmt.module->as_string_expr()->string);
+        for (const auto& item : stmt.items) {
+            StringTable::Handle name;
+            if (item->item->is_variable_expr()) {
+                name = item->item->as_variable_expr()->identifier.string;
+            } else {
+                BITE_PANIC("not supported \\o\\");
+            }
+            int item_const = current_function()->add_constant(*name);
+            current_context().on_stack++;
+            emit(OpCode::IMPORT);
+            emit(module_const);
+            emit(item_const);
+            define_variable(item->info);
+        }
+    } else {
+        for (const auto& item : stmt.items) {
+            emit_get_variable(item->binding);
+            current_context().on_stack++;
+            define_variable(item->info);
+        }
     }
 }
 

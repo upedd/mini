@@ -1,0 +1,23 @@
+import print from "os";
+
+module Bar {
+    fun foo() {
+        return 5;
+    }
+}
+
+fun foo() {
+    return 10;
+}
+
+module Baz {
+    import foo from Bar;
+
+    bar() {
+        return foo();
+    }
+}
+
+print(Bar::foo());
+print(foo());
+print(Baz::bar());

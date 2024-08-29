@@ -558,43 +558,6 @@ void bite::Analyzer::this_expr(ThisExpr& expr) {
 }
 
 void bite::Analyzer::import_stmt(ImportStmt& stmt) {
-    // TODO: string node should contain interned string
-    // auto* module = context->get_module(context->intern(stmt.module->string));
-    //
-    // // TODO: refactor!
-    // if (!module) {
-    //     emit_error_diagnostic(std::format("module \"{}\" not found", stmt.module->string), stmt.span, "required here");
-    //     return;
-    // }
-    // for (auto& item : stmt.items) {
-    //     StringTable::Handle name = item->name.string;
-    //     if (item->original_name) {
-    //         name = item->original_name->string;
-    //     }
-    //
-    //     if (auto* file_module = dynamic_cast<FileModule*>(context->get_module(name))) {
-    //         if (!file_module->declarations.contains(name)) {
-    //             emit_error_diagnostic(
-    //                 std::format("module \"{}\" does not declare \"{}\"", stmt.module->string, *name),
-    //                 item->span,
-    //                 "required here"
-    //             );
-    //             continue;
-    //         }
-    //         item->item_declaration = file_module->declarations[name];
-    //     }
-    //     if (auto* foreign_module = dynamic_cast<ForeignModule*>(context->get_module(name))) {
-    //         if (!foreign_module->functions.contains(name)) {
-    //             emit_error_diagnostic(
-    //                 std::format("module \"{}\" does not declare \"{}\"", stmt.module->string, *name),
-    //                 item->span,
-    //                 "required here"
-    //             );
-    //             continue;
-    //         }
-    //     }
-    //     declare(item.get());
-    // }
     if (stmt.module->is_variable_expr()) {
         auto identifier = stmt.module->as_variable_expr()->identifier;
         auto binding = resolve(identifier.string, identifier.span);
@@ -647,7 +610,45 @@ void bite::Analyzer::import_stmt(ImportStmt& stmt) {
         } else {
             BITE_PANIC("module not local or global");
         }
-    } else {
+    } else if (stmt.module->is_string_expr()) {
+        //TODO: string node should contain interned string
+        auto* module = context->get_module(context->intern(stmt.module->as_string_expr()->string));
+
+        // TODO: refactor!
+        if (!module) {
+            emit_error_diagnostic(std::format("module \"{}\" not found", stmt.module->as_string_expr()->string), stmt.span, "required here");
+            return;
+        }
+        for (auto& item : stmt.items) {
+            StringTable::Handle name = nullptr;
+            if (item->item->is_variable_expr()) {
+                name = item->item->as_variable_expr()->identifier.string;
+            }
+
+            if (auto* file_module = dynamic_cast<FileModule*>(context->get_module(name))) {
+                if (!file_module->declarations.contains(name)) {
+                    emit_error_diagnostic(
+                        std::format("module \"{}\" does not declare \"{}\"", stmt.module->as_string_expr()->string, *name),
+                        item->span,
+                        "required here"
+                    );
+                    continue;
+                }
+                item->item_declaration = file_module->declarations[name];
+            }
+            if (auto* foreign_module = dynamic_cast<ForeignModule*>(context->get_module(name))) {
+                if (!foreign_module->functions.contains(name)) {
+                    emit_error_diagnostic(
+                        std::format("module \"{}\" does not declare \"{}\"", stmt.module->as_string_expr()->string, *name),
+                        item->span,
+                        "required here"
+                    );
+                    continue;
+                }
+            }
+            declare(item.get());
+        }
+    } else{
         BITE_PANIC("module not variable expr");
     }
 }
