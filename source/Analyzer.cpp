@@ -598,20 +598,26 @@ void bite::Analyzer::import_stmt(ImportStmt& stmt) {
 }
 
 void bite::Analyzer::module_stmt(ModuleStmt& stmt, bool do_visit) {
+    // TODO: non-globals
     declare(&stmt);
     with_context(
         stmt,
         [this, &stmt, do_visit] {
-            for (auto& st : stmt.stmts) {
-                if (stmt.is_)
-                    visit(*st);
-                }
             if (do_visit) {
                 for (auto& st : stmt.stmts) {
                     visit(*st);
                 }
+            } else {
+                for (auto& st : stmt.stmts) {
+                    if (auto* module = dynamic_cast<ModuleStmt*>(st.get())) {
+                        module_stmt(*module, false);
+                        continue;
+                    }
+                    if (auto* declaration = dynamic_cast<Declaration*>(st.get())) {
+                        declare(declaration);
+                    }
+                }
             }
-
         }
     );
 }
@@ -644,7 +650,7 @@ void bite::Analyzer::module_resolution_expr(ModuleResolutionExpr& expr) {
             Declaration* declaration = resolve_recursive(*module, resolve_recursive);
             // TODO: non-global bindings?
             if (declaration && std::holds_alternative<GlobalDeclarationInfo>(declaration->info)) {
-                expr.binding = GlobalBinding {&std::get<GlobalDeclarationInfo>(declaration->info)};
+                expr.binding = GlobalBinding { &std::get<GlobalDeclarationInfo>(declaration->info) };
             } else {
                 emit_error_diagnostic("path resolution failed!", expr.span, "here");
             }
@@ -654,7 +660,6 @@ void bite::Analyzer::module_resolution_expr(ModuleResolutionExpr& expr) {
     } else {
         emit_error_diagnostic("module must be a global or local variable", expr.path[0].span, "here");
     }
-
 }
 
 
@@ -1057,12 +1062,20 @@ void bite::Analyzer::declare_in_global_enviroment(GlobalEnviroment& env, Declara
     }
 }
 
-void bite::Analyzer::declare_in_module(ModuleStmt& module, Declaration* declaration) {
+void bite::Analyzer::declare_in_module(std::vector<StringTable::Handle> module_path, ModuleStmt& module, Declaration* declaration) {
     // TODO: check errors
+    // TODO: refactor?
+    std::string module_path_string;
+    for (auto& item : module_path) {
+        module_path_string += *item + "::";
+    }
+    module_path_string += *declaration->name.string;
+    declaration->info = GlobalDeclarationInfo { .declaration = declaration, .name = context->intern(module_path_string)};
     module.declarations[declaration->name.string] = declaration;
 }
 
 void bite::Analyzer::declare(Declaration* declaration) {
+    ModuleStmt* module = nullptr;
     for (auto* node : context_nodes | std::views::reverse) {
         if (node->is_function_declaration()) {
             declare_in_function_enviroment(node->as_function_declaration()->enviroment, declaration);
@@ -1070,9 +1083,24 @@ void bite::Analyzer::declare(Declaration* declaration) {
         }
 
         if (node->is_module_stmt()) {
-            declare_in_module(*node->as_module_stmt(), declaration);
+            module = node->as_module_stmt();
+            break;
         }
     }
+
+    // TODO: refactor
+    std::vector<StringTable::Handle> modules_path;
+    for (auto* node : context_nodes) {
+        if (node->is_module_stmt()) {
+            modules_path.push_back(node->as_module_stmt()->name.string);
+            if (node->as_module_stmt() == module) {
+                declare_in_module(modules_path, *module, declaration);
+                return;
+            }
+        }
+    }
+
+
     declare_in_global_enviroment(ast->enviroment, declaration);
 }
 
@@ -1179,6 +1207,18 @@ Binding bite::Analyzer::propagate_upvalues(
     return UpvalueBinding { .idx = value, .info = binding.info };
 }
 
+std::optional<Binding> bite::Analyzer::resolve_in_module(ModuleStmt& stmt, StringTable::Handle name) {
+    if (stmt.declarations.contains(name)) {
+        Declaration* declaration = stmt.declarations[name];
+        // TODO: non-global bindings?
+        if (declaration && std::holds_alternative<GlobalDeclarationInfo>(declaration->info)) {
+            return GlobalBinding { &std::get<GlobalDeclarationInfo>(declaration->info) };
+        }
+        BITE_PANIC("not global module declaration!");
+    }
+    return {};
+}
+
 Binding bite::Analyzer::resolve(StringTable::Handle name, const SourceSpan& span) {
     std::vector<FunctionEnviroment*> enviroments_visited;
     bool visited_any_env = false;
@@ -1212,6 +1252,11 @@ Binding bite::Analyzer::resolve(StringTable::Handle name, const SourceSpan& span
             visited_any_env = true;
             if (auto binding = resolve_in_class_enviroment(node->as_object_expr()->object.enviroment, name, span)) {
                 return std::move(binding.value());
+            }
+        } else if (node->is_module_stmt()) {
+            visited_any_env = true; // do we?
+            if (auto binding = resolve_in_module(*node->as_module_stmt(), name)) {
+                return std::move(*binding);
             }
         }
     }

@@ -57,7 +57,7 @@ namespace bite {
             GlobalEnviroment& env,
             Declaration* declaration
         );
-        void declare_in_module(ModuleStmt& module, Declaration* declaration);
+        void declare_in_module(std::vector<StringTable::Handle> module_path, ModuleStmt& module, Declaration* declaration);
         void declare(Declaration* declaration);
 
         void analyze(Ast& ast);
@@ -114,6 +114,7 @@ namespace bite {
 
         Binding propagate_upvalues(LocalBinding binding, const std::vector<FunctionEnviroment*>& enviroments_visited);
 
+        std::optional<Binding> resolve_in_module(ModuleStmt& stmt, StringTable::Handle name);
         Binding resolve(StringTable::Handle name, const SourceSpan& span);
 
 
