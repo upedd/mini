@@ -57,6 +57,7 @@ namespace bite {
             GlobalEnviroment& env,
             Declaration* declaration
         );
+        void declare_in_module(ModuleStmt& module, Declaration* declaration);
         void declare(Declaration* declaration);
 
         void analyze(Ast& ast);

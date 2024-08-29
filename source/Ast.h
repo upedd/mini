@@ -702,7 +702,7 @@ public:
     }
 
     std::vector<std::unique_ptr<Stmt>> stmts;
-    bite::unordered_dense::map<StringTable::Handle, Declaration*> declaration;
+    bite::unordered_dense::map<StringTable::Handle, Declaration*> declarations;
 };
 
 class ModuleResolutionExpr final : public Expr {
