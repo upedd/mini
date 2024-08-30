@@ -87,7 +87,7 @@ private:
 
     std::unique_ptr<FunctionDeclaration> function_declaration();
     std::unique_ptr<FunctionDeclaration> function_declaration_body(const Token& name, bool skip_params = false);
-    std::vector<Token> functions_parameters();
+    std::vector<std::pair<Token, std::unique_ptr<Expr>>> functions_parameters();
     std::vector<std::unique_ptr<Expr>> call_arguments();
     TraitUsage trait_usage();
 
@@ -96,7 +96,6 @@ private:
     std::unique_ptr<ClassDeclaration> class_declaration(bool is_abstract = false);
     bitflags<ClassAttributes> member_attributes();
 
-    Constructor constructor_statement();
 
     SuperConstructorCall super_constructor_call();
     std::unique_ptr<FunctionDeclaration> abstract_method(const Token& name, bool skip_params);

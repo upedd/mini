@@ -309,19 +309,24 @@ std::unique_ptr<FunctionDeclaration> Parser::function_declaration() {
 
 // The part after name
 std::unique_ptr<FunctionDeclaration> Parser::function_declaration_body(const Token& name, const bool skip_params) {
-    std::vector<Token> parameters = skip_params ? std::vector<Token>() : functions_parameters();
+    std::vector<std::pair<Token, std::unique_ptr<Expr>>>  parameters = skip_params ? std::vector<std::pair<Token, std::unique_ptr<Expr>>>() : functions_parameters();
     consume(Token::Type::LEFT_BRACE, "Expected '{' before function body");
     auto body = block();
     return std::make_unique<FunctionDeclaration>(make_span(), name, std::move(parameters), std::move(body));
 }
 
-std::vector<Token> Parser::functions_parameters() {
+std::vector<std::pair<Token, std::unique_ptr<Expr>>> Parser::functions_parameters() {
     consume(Token::Type::LEFT_PAREN, "missing fuction parameters");
-    std::vector<Token> parameters;
+    std::vector<std::pair<Token, std::unique_ptr<Expr>>> parameters;
     if (!check(Token::Type::RIGHT_PAREN)) {
         do {
             consume(Token::Type::IDENTIFIER, "invalid parameter."); // TODO: better error message?
-            parameters.push_back(current);
+            std::unique_ptr<Expr> default_value;
+            if (match(Token::Type::EQUAL)) {
+                default_value = expression();
+            }
+
+            parameters.emplace_back(current, std::move(default_value));
         } while (match(Token::Type::COMMA));
     }
     consume(Token::Type::RIGHT_PAREN, "unmatched ')'");
@@ -378,7 +383,7 @@ Constructor Parser::constructor() {
         [this] {
             Token init_token = advance();
 
-            std::vector<Token> parameters = functions_parameters();
+            std::vector<std::pair<Token, std::unique_ptr<Expr>>> parameters = functions_parameters();
             std::optional<SuperConstructorCall> super_constructor_call;
             // init(parameters*) : super(arguments*) [block]
             if (match(Token::Type::COLON)) {
@@ -514,31 +519,8 @@ bitflags<ClassAttributes> Parser::member_attributes() {
     return attributes;
 }
 
-Constructor Parser::constructor_statement() {
-    Token init_token = current;
-    std::vector<Token> parameters = functions_parameters();
-    std::optional<SuperConstructorCall> super_constructor;
-    // init(parameters*) : super(arguments*) [block]
-    if (match(Token::Type::COLON)) {
-        with_source_span(
-            [this, &super_constructor] -> int {
-                consume(Token::Type::SUPER, "missing superclass constructor call");
-                super_constructor = super_constructor_call();
-                return 0;
-            }
-        );
-    }
-    auto span = make_span();
-    consume(Token::Type::LEFT_BRACE, "missing constructor body");
-    return {
-            std::move(super_constructor),
-            std::make_unique<FunctionDeclaration>(make_span(), init_token, std::move(parameters), block()),
-            span
-        };
-}
-
 std::unique_ptr<FunctionDeclaration> Parser::abstract_method(const Token& name, const bool skip_params) {
-    std::vector<Token> parameters = skip_params ? std::vector<Token>() : functions_parameters();
+    std::vector<std::pair<Token, std::unique_ptr<Expr>>> parameters = skip_params ? std::vector<std::pair<Token, std::unique_ptr<Expr>>>() : functions_parameters();
     consume(Token::Type::SEMICOLON, "missing semicolon after declaration");
     return std::make_unique<FunctionDeclaration>(make_span(), name, std::move(parameters)); // CHECK
 }
@@ -603,7 +585,7 @@ std::unique_ptr<FunctionDeclaration> Parser::in_trait_function(
     bitflags<ClassAttributes>& attributes,
     bool skip_params
 ) {
-    std::vector<Token> parameters = skip_params ? std::vector<Token>() : functions_parameters();
+    std::vector<std::pair<Token, std::unique_ptr<Expr>>>  parameters = skip_params ? std::vector<std::pair<Token, std::unique_ptr<Expr>>>() : functions_parameters();
     std::unique_ptr<Expr> body;
     if (match(Token::Type::LEFT_BRACE)) {
         body = block();
@@ -695,11 +677,15 @@ std::unique_ptr<Expr> Parser::module_resolution() {
 std::unique_ptr<AnonymousFunctionExpr> Parser::anonymous_function() {
     // TODO: refactor!
     Token name = current;
-    std::vector<Token> params;
+    std::vector<std::pair<Token, std::unique_ptr<Expr>>>  params;
     if (!check(Token::Type::BAR)) {
         do {
             consume(Token::Type::IDENTIFIER, "invalid parameter");
-            params.push_back(current);
+            std::unique_ptr<Expr> default_value;
+            if (match(Token::Type::EQUAL)) {
+                default_value = expression();
+            }
+            params.emplace_back(current, std::move(default_value));
         } while (match(Token::Type::COMMA));
     }
     consume(Token::Type::BAR, "missing '|' after function parameters");

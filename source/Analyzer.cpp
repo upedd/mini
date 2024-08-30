@@ -86,18 +86,18 @@ void bite::Analyzer::function(FunctionDeclaration& stmt) {
                 // TODO: temp
                 if (std::ranges::contains(
                     stmt.enviroment.parameters,
-                    param.string,
+                    param.first.string,
                     &std::pair<StringTable::Handle, SourceSpan>::first
                 )) {
                     emit_error_diagnostic(
                         "duplicate parameter name",
-                        param.span,
+                        param.first.span,
                         "redeclared here",
                         {
                             InlineHint {
                                 .location = std::ranges::find(
                                     stmt.enviroment.parameters,
-                                    param.string,
+                                    param.first.string,
                                     &std::pair<StringTable::Handle, SourceSpan>::first
                                 )->second,
                                 .message = "originally declared here",
@@ -106,7 +106,7 @@ void bite::Analyzer::function(FunctionDeclaration& stmt) {
                         }
                     );
                 }
-                stmt.enviroment.parameters.emplace_back(param.string, param.span);
+                stmt.enviroment.parameters.emplace_back(param.first.string, param.first.span);
             }
             if (stmt.body) {
                 visit(*stmt.body);
@@ -285,18 +285,18 @@ void bite::Analyzer::class_object(ClassObject& object, bool is_abstract, SourceS
                     // TODO: temp
                     if (std::ranges::contains(
                         object.constructor.function->enviroment.parameters,
-                        param.string,
+                        param.first.string,
                         &std::pair<StringTable::Handle, SourceSpan>::first
                     )) {
                         emit_error_diagnostic(
                             "duplicate parameter name",
-                            param.span,
+                            param.first.span,
                             "redeclared here",
                             {
                                 InlineHint {
                                     .location = std::ranges::find(
                                         object.constructor.function->enviroment.parameters,
-                                        param.string,
+                                        param.first.string,
                                         &std::pair<StringTable::Handle, SourceSpan>::first
                                     )->second,
                                     .message = "originally declared here",
@@ -305,7 +305,7 @@ void bite::Analyzer::class_object(ClassObject& object, bool is_abstract, SourceS
                             }
                         );
                     }
-                    object.constructor.function->enviroment.parameters.emplace_back(param.string, param.span);
+                    object.constructor.function->enviroment.parameters.emplace_back(param.first.string, param.first.span);
                 }
             }
             if (object.constructor.super_arguments_call) {

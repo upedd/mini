@@ -553,14 +553,14 @@ public:
         return NodeKind::function_declaration;
     }
 
-    std::vector<Token> params;
+    std::vector<std::pair<Token, std::unique_ptr<Expr>>>  params;
     std::unique_ptr<Expr> body;
     FunctionEnviroment enviroment {};
 
     FunctionDeclaration(
         const bite::SourceSpan& span,
         const Token& name,
-        std::vector<Token> params,
+        std::vector<std::pair<Token, std::unique_ptr<Expr>>>  params,
         std::unique_ptr<Expr> body = {}
     ) : Declaration(span, name),
         params(std::move(params)),
