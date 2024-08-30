@@ -33,7 +33,7 @@ std::expected<Token, bite::Diagnostic> Lexer::next_token() {
                 return make_token(Token::Type::QUESTION_DOT);
             }
             if (stream.match('?')) {
-                return make_token(Token::Type::QUESTION_QUESTION);
+                return make_token(stream.match('=') ? Token::Type::QUESTION_QUESTION_EQUAL : Token::Type::QUESTION_QUESTION);
             }
             return make_error("invalid character after '?'", "expected '.' or '?' here");
         }

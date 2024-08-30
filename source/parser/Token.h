@@ -92,6 +92,7 @@ struct Token {
         COLON_COLON,
         QUESTION_DOT,
         QUESTION_QUESTION,
+        QUESTION_QUESTION_EQUAL,
         END // NOTE: Type END must always be last element in this enum.
     };
 

@@ -644,6 +644,8 @@ Parser::Precedence Parser::get_precendece(const Token::Type token) {
         case Token::Type::GREATER_GREATER_EQUAL:
         case Token::Type::AND_EQUAL:
         case Token::Type::CARET_EQUAL:
+        case Token::Type::QUESTION_QUESTION_EQUAL:
+        case Token::Type::QUESTION_QUESTION:
         case Token::Type::BAR_EQUAL: return Precedence::ASSIGMENT;
         case Token::Type::AND_AND: return Precedence::LOGICAL_AND;
         case Token::Type::BAR_BAR: return Precedence::LOGICAL_OR;
@@ -935,6 +937,7 @@ std::unique_ptr<Expr> Parser::infix(std::unique_ptr<Expr> left) {
         case Token::Type::CARET:
         case Token::Type::AND_AND:
         case Token::Type::BAR_BAR:
+        case Token::Type::QUESTION_QUESTION:
         case Token::Type::PERCENT: return binary(std::move(left));
         case Token::Type::EQUAL:
         case Token::Type::PLUS_EQUAL:
@@ -947,6 +950,7 @@ std::unique_ptr<Expr> Parser::infix(std::unique_ptr<Expr> left) {
         case Token::Type::GREATER_GREATER_EQUAL:
         case Token::Type::AND_EQUAL:
         case Token::Type::CARET_EQUAL:
+        case Token::Type::QUESTION_QUESTION_EQUAL:
         case Token::Type::BAR_EQUAL: return assigment(std::move(left));
         case Token::Type::LEFT_PAREN: return call(std::move(left));
         case Token::Type::DOT: return dot(std::move(left));

@@ -454,7 +454,7 @@ void bite::Analyzer::binary_expr(BinaryExpr& expr) {
     if (expr.op == Token::Type::EQUAL || expr.op == Token::Type::PLUS_EQUAL || expr.op == Token::Type::MINUS_EQUAL ||
         expr.op == Token::Type::STAR_EQUAL || expr.op == Token::Type::SLASH_EQUAL || expr.op ==
         Token::Type::SLASH_SLASH_EQUAL || expr.op == Token::Type::AND_EQUAL || expr.op == Token::Type::CARET_EQUAL ||
-        expr.op == Token::Type::BAR_EQUAL) {
+        expr.op == Token::Type::BAR_EQUAL || expr.op == Token::Type::QUESTION_QUESTION_EQUAL) {
         if (expr.left->is_variable_expr()) {
             expr.binding = expr.left->as_variable_expr()->binding;
         } else if (expr.left->is_get_property_expr()) {

@@ -235,6 +235,14 @@ inline void Disassembler::disassemble(const std::string& name) {
                 double_constant_inst("IMPORT");
                 break;
             }
+            case OpCode::JUMP_IF_NIL: {
+                jump_inst("JUMP_IF_NIL");
+                break;
+            }
+            case OpCode::JUMP_IF_NOT_NIL: {
+                jump_inst("JUMP_IF_NOT_NIL");
+                break;
+            }
         }
     }
 }

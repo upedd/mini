@@ -460,6 +460,13 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 }
                 break;
             }
+            case OpCode::JUMP_IF_NOT_NIL: {
+                int idx = fetch();
+                if (!peek().is<Nil>()) {
+                    jump_to(get_jump_destination(idx));
+                }
+                break;
+            }
             case OpCode::JUMP_IF_TRUE: {
                 int idx = fetch();
                 if (!peek().is_falsey()) {

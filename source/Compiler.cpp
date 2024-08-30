@@ -673,6 +673,19 @@ void Compiler::binary_expr(const BinaryExpr& expr) {
         return;
     }
 
+    if (expr.op == Token::Type::QUESTION_QUESTION_EQUAL) {
+        auto jump_to_end = current_function()->add_empty_jump_destination();
+        emit(OpCode::JUMP_IF_NOT_NIL, jump_to_end);
+        visit(*expr.right);
+        if (expr.left->is_get_property_expr()) {
+            visit(*expr.left->as_get_property_expr()->left);
+        }
+        emit_set_variable(expr.binding);
+        current_context().on_stack--;
+        current_function()->patch_jump_destination(jump_to_end, current_program().size());
+        return;
+    }
+
     visit(*expr.right);
 
     // TODO: refactor!!
@@ -853,7 +866,17 @@ void Compiler::variable_expr(const VariableExpr& expr) {
 
 void Compiler::logical_expr(const BinaryExpr& expr) {
     int jump = current_function()->add_empty_jump_destination();
-    emit(expr.op == Token::Type::AND_AND ? OpCode::JUMP_IF_FALSE : OpCode::JUMP_IF_TRUE, jump);
+    OpCode jump_opcode;
+    if (expr.op == Token::Type::AND_AND) {
+        jump_opcode = OpCode::JUMP_IF_FALSE;
+    } else if (expr.op == Token::Type::BAR_BAR) {
+        jump_opcode = OpCode::JUMP_IF_TRUE;
+    } else if (expr.op == Token::Type::QUESTION_QUESTION) {
+        jump_opcode = OpCode::JUMP_IF_NOT_NIL;
+    } else {
+        BITE_PANIC("invalid logical expr operator");
+    }
+    emit(jump_opcode, jump);
     emit(OpCode::POP);
     current_context().on_stack--;
     visit(*expr.right);
