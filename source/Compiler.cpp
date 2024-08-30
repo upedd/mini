@@ -8,7 +8,7 @@
 #include "base/overloaded.h"
 #include "shared/SharedContext.h"
 
-//#define COMPILER_PRINT_BYTECODE
+#define COMPILER_PRINT_BYTECODE
 
 bool Compiler::compile(Ast* ast) {
     this->ast = ast;
@@ -667,7 +667,7 @@ void Compiler::binary_expr(const BinaryExpr& expr) {
     }
     visit(*expr.left);
     // we need handle logical expressions before we execute right side as they can short circut
-    if (expr.op == Token::Type::AND_AND || expr.op == Token::Type::BAR_BAR) {
+    if (expr.op == Token::Type::AND_AND || expr.op == Token::Type::BAR_BAR || expr.op == Token::Type::QUESTION_QUESTION) {
         logical_expr(expr);
         current_context().on_stack--;
         return;
@@ -876,6 +876,17 @@ void Compiler::get_property_expr(const GetPropertyExpr& expr) {
     int constant = current_function()->add_constant(name);
     emit(OpCode::GET_PROPERTY, constant);
 }
+
+void Compiler::safe_get_property_expr(const SafeGetPropertyExpr& expr) {
+    auto jump_idx = current_function()->add_empty_jump_destination();
+    visit(*expr.left);
+    emit(OpCode::JUMP_IF_NIL, jump_idx);
+    std::string name = *expr.property.string;
+    int constant = current_function()->add_constant(name);
+    emit(OpCode::GET_PROPERTY, constant);
+    current_function()->patch_jump_destination(jump_idx, current_program().size());
+}
+
 
 void Compiler::super_expr(const SuperExpr& expr) {
     int constant = current_function()->add_constant(*expr.method.string);

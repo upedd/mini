@@ -28,6 +28,15 @@ std::expected<Token, bite::Diagnostic> Lexer::next_token() {
         case '%': return make_token(stream.match('=') ? Token::Type::PERCENT_EQUAL : Token::Type::PERCENT);
         case '^': return make_token(stream.match('=') ? Token::Type::CARET_EQUAL : Token::Type::CARET);
         case '=': return make_token(stream.match('=') ? Token::Type::EQUAL_EQUAL : Token::Type::EQUAL);
+        case '?': {
+            if (stream.match('.')) {
+                return make_token(Token::Type::QUESTION_DOT);
+            }
+            if (stream.match('?')) {
+                return make_token(Token::Type::QUESTION_QUESTION);
+            }
+            return make_error("invalid character after '?'", "expected '.' or '?' here");
+        }
         case '&': {
             if (stream.match('&')) {
                 return make_token(Token::Type::AND_AND);

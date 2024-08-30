@@ -453,6 +453,13 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 }
                 break;
             }
+            case OpCode::JUMP_IF_NIL: {
+                int idx = fetch();
+                if (peek().is<Nil>()) {
+                    jump_to(get_jump_destination(idx));
+                }
+                break;
+            }
             case OpCode::JUMP_IF_TRUE: {
                 int idx = fetch();
                 if (!peek().is_falsey()) {
@@ -991,10 +998,10 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 break;
             }
         }
-        // for (int i = 0; i < stack_index; ++i) {
-        //     std::cout << '[' << stack[i].to_string() << "] ";
-        // }
-        // std::cout << '\n';
+        for (int i = 0; i < stack_index; ++i) {
+            std::cout << '[' << stack[i].to_string() << "] ";
+        }
+        std::cout << '\n';
     }
     #undef BINARY_OPERATION
 }

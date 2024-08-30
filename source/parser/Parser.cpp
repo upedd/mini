@@ -649,7 +649,8 @@ Parser::Precedence Parser::get_precendece(const Token::Type token) {
         case Token::Type::BAR_BAR: return Precedence::LOGICAL_OR;
         case Token::Type::LEFT_PAREN:
         case Token::Type::LEFT_BRACE:
-        case Token::Type::DOT: return Precedence::CALL;
+        case Token::Type::DOT:
+        case Token::Type::QUESTION_DOT: return Precedence::CALL;
         case Token::Type::IF:
         case Token::Type::LOOP:
         case Token::Type::WHILE:
@@ -949,6 +950,7 @@ std::unique_ptr<Expr> Parser::infix(std::unique_ptr<Expr> left) {
         case Token::Type::BAR_EQUAL: return assigment(std::move(left));
         case Token::Type::LEFT_PAREN: return call(std::move(left));
         case Token::Type::DOT: return dot(std::move(left));
+        case Token::Type::QUESTION_DOT: return safe_get_property_expr(std::move(left));
         default: return left;
     }
 }
@@ -957,6 +959,11 @@ std::unique_ptr<Expr> Parser::infix(std::unique_ptr<Expr> left) {
 std::unique_ptr<GetPropertyExpr> Parser::dot(std::unique_ptr<Expr> left) {
     consume(Token::Type::IDENTIFIER, "missing property name");
     return std::make_unique<GetPropertyExpr>(make_span(), std::move(left), current);
+}
+
+std::unique_ptr<SafeGetPropertyExpr> Parser::safe_get_property_expr(std::unique_ptr<Expr> left) {
+    consume(Token::Type::IDENTIFIER, "missing property name");
+    return std::make_unique<SafeGetPropertyExpr>(make_span(), std::move(left), current);
 }
 
 std::unique_ptr<BinaryExpr> Parser::binary(std::unique_ptr<Expr> left) {

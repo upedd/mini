@@ -478,6 +478,10 @@ void bite::Analyzer::get_property_expr(GetPropertyExpr& expr) {
     visit(*expr.left);
 }
 
+void bite::Analyzer::safe_get_property_expr(SafeGetPropertyExpr& expr) {
+    visit(*expr.left);
+}
+
 void bite::Analyzer::if_expr(IfExpr& expr) {
     visit(*expr.condition);
     visit(*expr.then_expr);

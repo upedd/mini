@@ -74,6 +74,7 @@ namespace bite {
         void binary_expr(BinaryExpr& expr);
         void call_expr(CallExpr& expr);
         void get_property_expr(GetPropertyExpr& expr);
+        void safe_get_property_expr(SafeGetPropertyExpr& expr);
         void if_expr(IfExpr& expr);
         void loop_expr(LoopExpr& expr);
         void break_expr(BreakExpr& expr);

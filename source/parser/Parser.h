@@ -155,6 +155,7 @@ private:
 
     std::unique_ptr<Expr> infix(std::unique_ptr<Expr> left);
     std::unique_ptr<GetPropertyExpr> dot(std::unique_ptr<Expr> left);
+    std::unique_ptr<SafeGetPropertyExpr> safe_get_property_expr(std::unique_ptr<Expr> left);
     std::unique_ptr<BinaryExpr> binary(std::unique_ptr<Expr> left);
     std::unique_ptr<BinaryExpr> assigment(std::unique_ptr<Expr> left);
     std::unique_ptr<CallExpr> call(std::unique_ptr<Expr> left);

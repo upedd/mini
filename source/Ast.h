@@ -41,6 +41,7 @@
     V(StringExpr, string_expr) \
     V(VariableExpr, variable_expr) \
     V(GetPropertyExpr, get_property_expr) \
+    V(SafeGetPropertyExpr, safe_get_property_expr) \
     V(SuperExpr, super_expr) \
     V(BlockExpr, block_expr) \
     V(IfExpr, if_expr) \
@@ -333,6 +334,21 @@ public:
         left(std::move(left)),
         property(property) {}
 };
+
+class SafeGetPropertyExpr final : public Expr {
+public:
+    [[nodiscard]] NodeKind kind() const override {
+        return NodeKind::safe_get_property_expr;
+    }
+
+    std::unique_ptr<Expr> left;
+    Token property;
+
+    SafeGetPropertyExpr(const bite::SourceSpan& span, std::unique_ptr<Expr> left, const Token& property) : Expr(span),
+        left(std::move(left)),
+        property(property) {}
+};
+
 
 class SuperExpr final : public Expr {
 public:

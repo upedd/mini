@@ -90,6 +90,8 @@ struct Token {
         FROM,
         MODULE,
         COLON_COLON,
+        QUESTION_DOT,
+        QUESTION_QUESTION,
         END // NOTE: Type END must always be last element in this enum.
     };
 
