@@ -167,6 +167,10 @@ void VM::mark_roots_for_gc() {
         gc->mark(frame.closure);
     }
 
+    for (auto& global : globals | std::views::values) {
+        gc->mark(global);
+    }
+
     for (auto* open_upvalue : open_upvalues) {
         gc->mark(open_upvalue);
     }
@@ -508,7 +512,13 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 if (auto receiver = get_current_receiver()) {
                     auto bound = bind_method(closure, receiver.value()->klass, receiver.value()->instance);
                     push(bound);
-                    allocate({bound.get<Object*>(), closure, reinterpret_cast<BoundMethod*>(bound.get<Object*>())->receiver.get<Object*>()});
+                    allocate(
+                        {
+                            bound.get<Object*>(),
+                            closure,
+                            reinterpret_cast<BoundMethod*>(bound.get<Object*>())->receiver.get<Object*>()
+                        }
+                    );
                 } else {
                     push(closure);
                     allocate(closure);
@@ -941,8 +951,19 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 auto res = context->get_value_from_module(module_name_interned, import_name_interned);
 
                 // TODO: what happens to colision!
-                for (auto& [value_name, value] : res) {
-                    globals[imported_name + value_name->substr(import_name.size())] = value;
+                if (std::holds_alternative<std::vector<std::pair<StringTable::Handle, Value>>>(res)) {
+                    for (auto& [value_name, value] : std::get<std::vector<std::pair<
+                             StringTable::Handle, Value>>>(res)) {
+                        globals[imported_name + value_name->substr(import_name.size())] = value;
+                    }
+                }
+                if (std::holds_alternative<std::vector<std::pair<StringTable::Handle, ForeignFunction*>>>(res)) {
+                    for (auto& [value_name, value] : std::get<std::vector<std::pair<
+                             StringTable::Handle, ForeignFunction*>>>(res)) {
+                        globals[imported_name + value_name->substr(import_name.size())] = allocate(
+                            new ForeginFunctionObject(value)
+                        );
+                    }
                 }
                 // if (auto* value = std::get_if<Value>(&res)) {
                 //     push(*value);

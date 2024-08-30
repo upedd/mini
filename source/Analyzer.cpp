@@ -565,11 +565,9 @@ void bite::Analyzer::import_stmt(ImportStmt& stmt) {
             if (declaration.value()->is_module_stmt()) {
                 auto* module = declaration.value()->as_module_stmt();
                 for (auto& item : stmt.items) {
-                    StringTable::Handle name;
-                    // TODO: module resolution
                     if (item->item->is_variable_expr()) {
-                        if (module->declarations.contains(name)) {
-                            item->binding = *resolve_in_module(*module, name);
+                        if (module->declarations.contains(item->item->as_variable_expr()->identifier.string)) {
+                            item->binding = *resolve_in_module(*module, item->item->as_variable_expr()->identifier.string);
                         } else {
                             BITE_PANIC("item not in module!");
                         }

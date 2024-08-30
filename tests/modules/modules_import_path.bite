@@ -15,11 +15,11 @@ fun foo() {
 module Baz {
     import inner::foo from Bar;
 
-    bar() {
+    fun bar() {
         return foo();
     }
 }
 
-print(Bar::foo());
+print(Bar::inner::foo());
 print(foo());
 print(Baz::bar());

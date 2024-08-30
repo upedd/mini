@@ -8,7 +8,7 @@
 #include "base/overloaded.h"
 #include "shared/SharedContext.h"
 
-#define COMPILER_PRINT_BYTECODE
+//#define COMPILER_PRINT_BYTECODE
 
 bool Compiler::compile(Ast* ast) {
     this->ast = ast;
@@ -906,7 +906,6 @@ void Compiler::import_stmt(const ImportStmt& stmt) {
             }
             int import_name_const = current_function()->add_constant(*import_name);
             int imported_name_const = current_function()->add_constant(*item->name.string);
-            current_context().on_stack++;
             emit(OpCode::IMPORT);
             emit(module_const);
             emit(import_name_const);

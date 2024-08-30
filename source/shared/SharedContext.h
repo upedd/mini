@@ -73,10 +73,8 @@ public:
     FileModule* compile(const std::string& file);
     void execute(FileModule& module);
     void add_module(const StringTable::Handle name, std::unique_ptr<ForeignModule> module);
-    std::vector<std::pair<StringTable::Handle, Value>> get_value_from_module(
-        const StringTable::Handle& module,
-        const StringTable::Handle& name
-    );
+    std::variant<std::vector<std::pair<StringTable::Handle, Value>>, std::vector<std::pair<StringTable::Handle,
+    ForeignFunction*>>> get_value_from_module(const StringTable::Handle& module, const StringTable::Handle& name);
 
     void run_gc();
 

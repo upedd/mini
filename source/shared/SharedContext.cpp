@@ -68,7 +68,8 @@ void SharedContext::execute(FileModule& module) {
 }
 
 // TODO: temp
-std::vector<std::pair<StringTable::Handle, Value>> SharedContext::get_value_from_module(
+std::variant<std::vector<std::pair<StringTable::Handle, Value>>, std::vector<std::pair<StringTable::Handle,
+ForeignFunction*>>> SharedContext::get_value_from_module(
     const StringTable::Handle& module,
     const StringTable::Handle& name
 ) {
@@ -88,10 +89,19 @@ std::vector<std::pair<StringTable::Handle, Value>> SharedContext::get_value_from
         }
         return values;
     }
-    // if (auto* foreign_module = dynamic_cast<ForeignModule*>(modules[module].get())) {
-    //     BITE_ASSERT(foreign_module->functions.contains(name));
-    //     return &foreign_module->functions[name];
-    // }
+    if (auto* foreign_module = dynamic_cast<ForeignModule*>(modules[module].get())) {
+        BITE_ASSERT(foreign_module->functions.contains(name));
+        std::vector<std::pair<StringTable::Handle, ForeignFunction*>> values;
+        for (auto& [value_name, value] : foreign_module->functions) {
+            // TODO: fixme!
+            if (value_name->starts_with(*name + "::")) {
+                values.emplace_back(value_name, &value);
+            } else if (value_name == name) {
+                values.emplace_back(value_name, &value);
+            }
+        }
+        return values;
+    }
     BITE_PANIC("unknown module type");
 }
 

@@ -13,7 +13,7 @@ fun foo() {
 module Baz {
     import foo as bar from Bar;
 
-    foo() {
+    fun foo() {
         return bar();
     }
 }

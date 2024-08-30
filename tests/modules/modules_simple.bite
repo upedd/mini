@@ -2,17 +2,17 @@ import print from "os";
 
 module Bar {
     fun foo() {
-        Foo::foo();
+        return Foo::foo();
     }
 
     fun bar() {
-       foo();
+       return foo();
     }
 }
 
 module Foo {
     fun foo() {
-        bar();
+        return bar();
     }
     fun bar() {
         return 5;
