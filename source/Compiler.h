@@ -193,6 +193,7 @@ public:
 
     void variable_expr(const VariableExpr& expr);
     void call_expr(const CallExpr& expr);
+    void safe_call_expr(const SafeCallExpr& expr);
     void get_property_expr(const GetPropertyExpr& expr);
     void safe_get_property_expr(const SafeGetPropertyExpr& expr);
     void super_expr(const SuperExpr& expr);

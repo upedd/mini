@@ -1,0 +1,31 @@
+import print from "os";
+
+let x = nil;
+print(x?.foo);
+print(x?.bar);
+let y = object {
+    foo = 10;
+    bar = 10;
+};
+print(y?.foo);
+print(y?.bar);
+let outer = object {
+    middle = object {
+        inner = 10;
+    };
+    middle_nil = nil;
+
+    middle_fun() {
+        return 5;
+    }
+};
+
+print(outer?.middle_nil?.inner);
+print(outer.middle_nil?.inner);
+print(outer?.middle?.inner);
+print(outer?.middle.inner);
+print(outer.middle?.inner);
+
+
+print(outer.middle_nil?());
+print(outer.middle_fun?());

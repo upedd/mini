@@ -1,0 +1,19 @@
+import print from "os";
+
+let x = nil;
+print(x ?? 10);
+x ??= 20;
+print(x ?? 10);
+x ??= 30;
+print(x ?? 10);
+
+class Foo {
+    bar;
+}
+
+let instance = Foo();
+print(instance.bar ?? 10);
+instance.bar ??= 20;
+print(instance.bar ?? 10);
+instance.bar ??= 30;
+print(instance.bar ?? 10);

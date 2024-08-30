@@ -474,6 +474,14 @@ void bite::Analyzer::call_expr(CallExpr& expr) {
     }
 }
 
+void bite::Analyzer::safe_call_expr(SafeCallExpr& expr) {
+    visit(*expr.callee);
+    for (auto& argument : expr.arguments) {
+        visit(*argument);
+    }
+}
+
+
 void bite::Analyzer::get_property_expr(GetPropertyExpr& expr) {
     visit(*expr.left);
 }

@@ -93,6 +93,7 @@ struct Token {
         QUESTION_DOT,
         QUESTION_QUESTION,
         QUESTION_QUESTION_EQUAL,
+        QUESTION_LEFT_PAREN,
         END // NOTE: Type END must always be last element in this enum.
     };
 

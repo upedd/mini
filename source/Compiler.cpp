@@ -8,7 +8,7 @@
 #include "base/overloaded.h"
 #include "shared/SharedContext.h"
 
-#define COMPILER_PRINT_BYTECODE
+//#define COMPILER_PRINT_BYTECODE
 
 bool Compiler::compile(Ast* ast) {
     this->ast = ast;
@@ -102,6 +102,8 @@ void Compiler::define_variable(const DeclarationInfo& info) {
         auto name_constant = current_function()->add_constant(*std::get<GlobalDeclarationInfo>(info).name);
         // TODO: refactor handling system
         emit(OpCode::SET_GLOBAL, name_constant);
+        emit(OpCode::POP);
+        current_context().on_stack--;
     } else {
         // panic!
         std::unreachable();
@@ -470,7 +472,6 @@ void Compiler::trait_declaration(const TraitDeclaration& stmt) {
     std::string name = *stmt.name.string;
     uint8_t name_constanst = current_function()->add_constant(name);
     emit(OpCode::TRAIT, name_constanst);
-    define_variable(stmt.info);
 
     for (const auto& trait_used : stmt.using_stmts) {
         for (const auto& [original_name, field_name, attr] : trait_used.declarations) {
@@ -502,6 +503,7 @@ void Compiler::trait_declaration(const TraitDeclaration& stmt) {
         attr += ClassAttributes::ABSTRACT;
         emit(attr.to_ullong());
     }
+    define_variable(stmt.info);
 }
 
 void Compiler::class_object(const std::string& name, bool is_abstract, const ClassObject& object) {
@@ -889,8 +891,21 @@ void Compiler::call_expr(const CallExpr& expr) {
         visit(*argument);
     }
     auto arguments_size = std::ranges::distance(expr.arguments);
-    emit(OpCode::CALL, arguments_size); // TODO: check
+    emit(OpCode::CALL, arguments_size);
     current_context().on_stack -= arguments_size;
+}
+
+void Compiler::safe_call_expr(const SafeCallExpr& expr) {
+    visit(*expr.callee);
+    int jump_to_end = current_function()->add_empty_jump_destination();
+    emit(OpCode::JUMP_IF_NIL, jump_to_end);
+    for (auto& argument : expr.arguments) {
+        visit(*argument);
+    }
+    auto arguments_size = std::ranges::distance(expr.arguments);
+    emit(OpCode::CALL, arguments_size);
+    current_context().on_stack -= arguments_size;
+    current_function()->patch_jump_destination(jump_to_end, current_program().size());
 }
 
 void Compiler::get_property_expr(const GetPropertyExpr& expr) {

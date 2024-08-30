@@ -35,6 +35,9 @@ std::expected<Token, bite::Diagnostic> Lexer::next_token() {
             if (stream.match('?')) {
                 return make_token(stream.match('=') ? Token::Type::QUESTION_QUESTION_EQUAL : Token::Type::QUESTION_QUESTION);
             }
+            if (stream.match('(')) {
+                return make_token(Token::Type::QUESTION_LEFT_PAREN);
+            }
             return make_error("invalid character after '?'", "expected '.' or '?' here");
         }
         case '&': {

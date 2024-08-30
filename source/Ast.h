@@ -37,6 +37,7 @@
     V(UnaryExpr, unary_expr) \
     V(BinaryExpr, binary_expr) \
     V(CallExpr, call_expr) \
+    V(SafeCallExpr, safe_call_expr) \
     V(LiteralExpr, literal_expr) \
     V(StringExpr, string_expr) \
     V(VariableExpr, variable_expr) \
@@ -279,6 +280,21 @@ public:
     std::vector<std::unique_ptr<Expr>> arguments;
 
     CallExpr(const bite::SourceSpan& span, std::unique_ptr<Expr> callee, std::vector<std::unique_ptr<Expr>> arguments) :
+        Expr(span),
+        callee(std::move(callee)),
+        arguments(std::move(arguments)) {}
+};
+
+class SafeCallExpr final : public Expr {
+public:
+    [[nodiscard]] NodeKind kind() const override {
+        return NodeKind::safe_call_expr;
+    }
+
+    std::unique_ptr<Expr> callee;
+    std::vector<std::unique_ptr<Expr>> arguments;
+
+    SafeCallExpr(const bite::SourceSpan& span, std::unique_ptr<Expr> callee, std::vector<std::unique_ptr<Expr>> arguments) :
         Expr(span),
         callee(std::move(callee)),
         arguments(std::move(arguments)) {}

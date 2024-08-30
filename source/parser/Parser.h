@@ -159,6 +159,7 @@ private:
     std::unique_ptr<BinaryExpr> binary(std::unique_ptr<Expr> left);
     std::unique_ptr<BinaryExpr> assigment(std::unique_ptr<Expr> left);
     std::unique_ptr<CallExpr> call(std::unique_ptr<Expr> left);
+    std::unique_ptr<SafeCallExpr> safe_call(std::unique_ptr<Expr> left);
 
     Token current;
     Token next;

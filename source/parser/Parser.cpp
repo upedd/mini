@@ -652,6 +652,7 @@ Parser::Precedence Parser::get_precendece(const Token::Type token) {
         case Token::Type::LEFT_PAREN:
         case Token::Type::LEFT_BRACE:
         case Token::Type::DOT:
+        case Token::Type::QUESTION_LEFT_PAREN:
         case Token::Type::QUESTION_DOT: return Precedence::CALL;
         case Token::Type::IF:
         case Token::Type::LOOP:
@@ -952,6 +953,7 @@ std::unique_ptr<Expr> Parser::infix(std::unique_ptr<Expr> left) {
         case Token::Type::CARET_EQUAL:
         case Token::Type::QUESTION_QUESTION_EQUAL:
         case Token::Type::BAR_EQUAL: return assigment(std::move(left));
+        case Token::Type::QUESTION_LEFT_PAREN: return safe_call(std::move(left));
         case Token::Type::LEFT_PAREN: return call(std::move(left));
         case Token::Type::DOT: return dot(std::move(left));
         case Token::Type::QUESTION_DOT: return safe_get_property_expr(std::move(left));
@@ -988,4 +990,8 @@ std::unique_ptr<BinaryExpr> Parser::assigment(std::unique_ptr<Expr> left) {
 std::unique_ptr<CallExpr> Parser::call(std::unique_ptr<Expr> left) {
     std::vector<std::unique_ptr<Expr>> arguments = call_arguments();
     return std::make_unique<CallExpr>(make_span(), std::move(left), std::move(arguments));
+}
+std::unique_ptr<SafeCallExpr> Parser::safe_call(std::unique_ptr<Expr> left) {
+    std::vector<std::unique_ptr<Expr>> arguments = call_arguments();
+    return std::make_unique<SafeCallExpr>(make_span(), std::move(left), std::move(arguments));
 }
