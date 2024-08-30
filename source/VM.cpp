@@ -932,20 +932,25 @@ std::expected<Value, VM::RuntimeError> VM::run() {
             }
             case OpCode::IMPORT: {
                 auto module_name = get_constant(fetch()).get<std::string>();
-                auto item_name = get_constant(fetch()).get<std::string>();
+                auto import_name = get_constant(fetch()).get<std::string>();
+                auto imported_name = get_constant(fetch()).get<std::string>();
                 auto module_name_interned = context->intern(module_name);
-                auto item_name_interned = context->intern(item_name);
+                auto import_name_interned = context->intern(import_name);
                 BITE_ASSERT(context->get_module(module_name_interned) != nullptr);
                 //BITE_ASSERT(context->get_module(module_name_interned)->declarations.contains(item_name_interned));
-                auto res = context->get_value_from_module(module_name_interned, item_name_interned);
+                auto res = context->get_value_from_module(module_name_interned, import_name_interned);
 
-                if (auto* value = std::get_if<Value>(&res)) {
-                    push(*value);
-                } else if (auto* func = std::get_if<ForeignFunction*>(&res)) {
-                    push(allocate(
-                        new ForeginFunctionObject(*func)
-                    ));
+                // TODO: what happens to colision!
+                for (auto& [value_name, value] : res) {
+                    globals[imported_name + value_name->substr(import_name.size())] = value;
                 }
+                // if (auto* value = std::get_if<Value>(&res)) {
+                //     push(*value);
+                // } else if (auto* func = std::get_if<ForeignFunction*>(&res)) {
+                //     push(allocate(
+                //         new ForeginFunctionObject(*func)
+                //     ));
+                // }
                 break;
             }
             case OpCode::CLASS_CLOSURE: {

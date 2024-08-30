@@ -890,18 +890,28 @@ void Compiler::import_stmt(const ImportStmt& stmt) {
     if (stmt.module->is_string_expr()) {
         int module_const = current_function()->add_constant(stmt.module->as_string_expr()->string);
         for (const auto& item : stmt.items) {
-            StringTable::Handle name;
+            StringTable::Handle import_name;
             if (item->item->is_variable_expr()) {
-                name = item->item->as_variable_expr()->identifier.string;
+                import_name = item->item->as_variable_expr()->identifier.string;
             } else {
-                BITE_PANIC("not supported \\o\\");
+                const auto& path = item->item->as_module_resolution_expr()->path;
+                std::string s;
+                for (int i = 0; i < path.size(); ++i) {
+                    if (i != 0) {
+                        s += "::";
+                    }
+                    s += *path[i].string;
+                }
+                import_name = shared_context->intern(s);
             }
-            int item_const = current_function()->add_constant(*name);
+            int import_name_const = current_function()->add_constant(*import_name);
+            int imported_name_const = current_function()->add_constant(*item->name.string);
             current_context().on_stack++;
             emit(OpCode::IMPORT);
             emit(module_const);
-            emit(item_const);
-            define_variable(item->info);
+            emit(import_name_const);
+            emit(imported_name_const);
+            //define_variable(item->info);
         }
     } else {
         for (const auto& item : stmt.items) {

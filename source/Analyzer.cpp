@@ -623,20 +623,48 @@ void bite::Analyzer::import_stmt(ImportStmt& stmt) {
             StringTable::Handle name = nullptr;
             if (item->item->is_variable_expr()) {
                 name = item->item->as_variable_expr()->identifier.string;
+            } else if (item->item->is_module_resolution_expr()) {
+                name = item->item->as_module_resolution_expr()->path[0].string;
+            } else {
+                BITE_PANIC("invalid import item!");
             }
 
-            if (auto* file_module = dynamic_cast<FileModule*>(context->get_module(name))) {
+            if (auto* file_module = dynamic_cast<FileModule*>(module)) {
                 if (!file_module->declarations.contains(name)) {
-                    emit_error_diagnostic(
-                        std::format("module \"{}\" does not declare \"{}\"", stmt.module->as_string_expr()->string, *name),
-                        item->span,
-                        "required here"
-                    );
-                    continue;
+                    // TODO: error!
+                    // emit_error_diagnostic(
+                    //     std::format("module \"{}\" does not declare \"{}\"", stmt.module->as_string_expr()->string, *name),
+                    //     item->span,
+                    //     "required here"
+                    // );
+                    // continue;
                 }
-                item->item_declaration = file_module->declarations[name];
+                Declaration* declaration = file_module->declarations[name];
+
+                if (item->item->is_module_resolution_expr()) {
+                    auto& expr = *item->item->as_module_resolution_expr();
+                    auto* module = declaration->as_module_stmt();
+                    auto resolve_recursive = [this, &expr](ModuleStmt& module, auto& resolve, int depth = 1) -> Declaration* {
+                        if (depth >= expr.path.size()) {
+                            emit_error_diagnostic("path resolution failed!", expr.span, "here");
+                            return nullptr;
+                        }
+                        if (!module.declarations.contains(expr.path[depth].string)) {
+                            emit_error_diagnostic("path resolution failed", expr.path[depth].span, "here");
+                        } else if (module.declarations[expr.path[depth].string]->is_module_stmt()) {
+                            return resolve(*module.declarations[expr.path[depth].string]->as_module_stmt(), resolve, depth + 1);
+                        } else {
+                            if (depth != expr.path.size() - 1) {
+                                emit_error_diagnostic("path resolution too fast?", expr.path[depth].span, "here");
+                            }
+                            return module.declarations[expr.path[depth].string];
+                        }
+                    };
+                    declaration = resolve_recursive(*module, resolve_recursive);
+                }
+                item->item_declaration = declaration;
             }
-            if (auto* foreign_module = dynamic_cast<ForeignModule*>(context->get_module(name))) {
+            if (auto* foreign_module = dynamic_cast<ForeignModule*>(module)) {
                 if (!foreign_module->functions.contains(name)) {
                     emit_error_diagnostic(
                         std::format("module \"{}\" does not declare \"{}\"", stmt.module->as_string_expr()->string, *name),
