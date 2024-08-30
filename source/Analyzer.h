@@ -82,8 +82,10 @@ namespace bite {
         void for_expr(ForExpr& expr);
         void return_expr(ReturnExpr& expr);
         void this_expr(ThisExpr& expr);
+        bool is_at_global_scope();
         void import_stmt(ImportStmt& stmt);
         void module_stmt(ModuleStmt& stmt, bool visit = true);
+        Declaration* resolve_path_in_module(const std::vector<Token>& path, ModuleStmt& module, bool skip_first);
         void module_resolution_expr(ModuleResolutionExpr& expr);
 
         void super_expr(SuperExpr& expr);

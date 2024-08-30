@@ -557,7 +557,20 @@ void bite::Analyzer::this_expr(ThisExpr& expr) {
     }
 }
 
+bool bite::Analyzer::is_at_global_scope() {
+    for (auto* node : context_nodes) {
+        if (node->is_function_declaration()) {
+            return false;
+        }
+    }
+    return ast->enviroment.locals.scopes.empty();
+}
+
 void bite::Analyzer::import_stmt(ImportStmt& stmt) {
+    if (!is_at_global_scope()) {
+        emit_error_diagnostic("import outside of global or module scope", stmt.span, "here");
+    }
+
     if (stmt.module->is_variable_expr()) {
         auto identifier = stmt.module->as_variable_expr()->identifier;
         auto binding = resolve(identifier.string, identifier.span);
@@ -573,26 +586,26 @@ void bite::Analyzer::import_stmt(ImportStmt& stmt) {
                         }
                     } else if (item->item->is_module_resolution_expr()) {
                         auto& expr = *item->item->as_module_resolution_expr();
-                        auto resolve_recursive = [this, &expr](ModuleStmt& module, auto& resolve, int depth = 0) -> Declaration* {
-                            if (depth >= expr.path.size()) {
-                                emit_error_diagnostic("path resolution failed!", expr.span, "here");
-                                return nullptr;
-                            }
-                            if (!module.declarations.contains(expr.path[depth].string)) {
-                                emit_error_diagnostic("path resolution failed", expr.path[depth].span, "here");
-                                return nullptr;
-                            }
-                            if (module.declarations[expr.path[depth].string]->is_module_stmt()) {
-                                return resolve(*module.declarations[expr.path[depth].string]->as_module_stmt(), resolve, depth + 1);
-                            }
-                            if (depth != expr.path.size() - 1) {
-                                emit_error_diagnostic("path resolution too fast?", expr.path[depth].span, "here");
-                                return nullptr;
-                            }
-                            return module.declarations[expr.path[depth].string];
-                        };
+                        // auto resolve_recursive = [this, &expr](ModuleStmt& module, auto& resolve, int depth = 0) -> Declaration* {
+                        //     if (depth >= expr.path.size()) {
+                        //         emit_error_diagnostic("path resolution failed!", expr.span, "here");
+                        //         return nullptr;
+                        //     }
+                        //     if (!module.declarations.contains(expr.path[depth].string)) {
+                        //         emit_error_diagnostic("path resolution failed", expr.path[depth].span, "here");
+                        //         return nullptr;
+                        //     }
+                        //     if (module.declarations[expr.path[depth].string]->is_module_stmt()) {
+                        //         return resolve(*module.declarations[expr.path[depth].string]->as_module_stmt(), resolve, depth + 1);
+                        //     }
+                        //     if (depth != expr.path.size() - 1) {
+                        //         emit_error_diagnostic("path resolution too fast?", expr.path[depth].span, "here");
+                        //         return nullptr;
+                        //     }
+                        //     return module.declarations[expr.path[depth].string];
+                        // };
 
-                        Declaration* declaration = resolve_recursive(*module, resolve_recursive);
+                        Declaration* declaration = resolve_path_in_module(expr.path, *module, false);
                         // TODO: non-global bindings?
                         if (declaration && std::holds_alternative<GlobalDeclarationInfo>(declaration->info)) {
                             item->binding = GlobalBinding { &std::get<GlobalDeclarationInfo>(declaration->info) };
@@ -642,23 +655,23 @@ void bite::Analyzer::import_stmt(ImportStmt& stmt) {
                 if (item->item->is_module_resolution_expr()) {
                     auto& expr = *item->item->as_module_resolution_expr();
                     auto* module = declaration->as_module_stmt();
-                    auto resolve_recursive = [this, &expr](ModuleStmt& module, auto& resolve, int depth = 1) -> Declaration* {
-                        if (depth >= expr.path.size()) {
-                            emit_error_diagnostic("path resolution failed!", expr.span, "here");
-                            return nullptr;
-                        }
-                        if (!module.declarations.contains(expr.path[depth].string)) {
-                            emit_error_diagnostic("path resolution failed", expr.path[depth].span, "here");
-                        } else if (module.declarations[expr.path[depth].string]->is_module_stmt()) {
-                            return resolve(*module.declarations[expr.path[depth].string]->as_module_stmt(), resolve, depth + 1);
-                        } else {
-                            if (depth != expr.path.size() - 1) {
-                                emit_error_diagnostic("path resolution too fast?", expr.path[depth].span, "here");
-                            }
-                            return module.declarations[expr.path[depth].string];
-                        }
-                    };
-                    declaration = resolve_recursive(*module, resolve_recursive);
+                    // auto resolve_recursive = [this, &expr](ModuleStmt& module, auto& resolve, int depth = 1) -> Declaration* {
+                    //     if (depth >= expr.path.size()) {
+                    //         emit_error_diagnostic("path resolution failed!", expr.span, "here");
+                    //         return nullptr;
+                    //     }
+                    //     if (!module.declarations.contains(expr.path[depth].string)) {
+                    //         emit_error_diagnostic("path resolution failed", expr.path[depth].span, "here");
+                    //     } else if (module.declarations[expr.path[depth].string]->is_module_stmt()) {
+                    //         return resolve(*module.declarations[expr.path[depth].string]->as_module_stmt(), resolve, depth + 1);
+                    //     } else {
+                    //         if (depth != expr.path.size() - 1) {
+                    //             emit_error_diagnostic("path resolution too fast?", expr.path[depth].span, "here");
+                    //         }
+                    //         return module.declarations[expr.path[depth].string];
+                    //     }
+                    // };
+                    declaration = resolve_path_in_module(expr.path, *module, true);
                 }
                 item->item_declaration = declaration;
             }
@@ -681,6 +694,9 @@ void bite::Analyzer::import_stmt(ImportStmt& stmt) {
 
 void bite::Analyzer::module_stmt(ModuleStmt& stmt, bool do_visit) {
     // TODO: non-globals
+    if (!is_at_global_scope()) {
+        emit_error_diagnostic("module outside of global or module scope", stmt.name.span, "here");
+    }
     declare(&stmt);
     with_context(
         stmt,
@@ -704,6 +720,39 @@ void bite::Analyzer::module_stmt(ModuleStmt& stmt, bool do_visit) {
     );
 }
 
+Declaration* bite::Analyzer::resolve_path_in_module(const std::vector<Token>& path, ModuleStmt& module, bool skip_first) {
+    Declaration* declaration = nullptr;
+    ModuleStmt* current_module = &module;
+    Token previous_part = module.name;
+    for (auto& part : path) {
+        if (skip_first) {
+            previous_part = part;
+            skip_first = false;
+            continue;
+        }
+        // we resolved too fast..
+        if (declaration != nullptr) {
+            emit_error_diagnostic("expected an module but got a declaration", previous_part.span, "here");
+            return nullptr;
+        }
+
+        if (!module.declarations.contains(part.string)) {
+            emit_error_diagnostic(std::format("module {} does not contain {}", *previous_part.string, *part.string), part.span, "required here");
+            return nullptr;
+        }
+        if (module.declarations[part.string]->is_module_stmt()) {
+            current_module = module.declarations[part.string]->as_module_stmt();
+        } else {
+            declaration =  module.declarations[part.string];
+        }
+        previous_part = part;
+    }
+    if (declaration == nullptr) {
+        emit_error_diagnostic("expected a declaration but a got a module", previous_part.span, "here");
+    }
+    return declaration;
+}
+
 void bite::Analyzer::module_resolution_expr(ModuleResolutionExpr& expr) {
     BITE_ASSERT(expr.path.size() >= 2);
     // TODO: better error messages
@@ -712,24 +761,26 @@ void bite::Analyzer::module_resolution_expr(ModuleResolutionExpr& expr) {
     if (auto declaration = find_declaration(binding)) {
         if (declaration.value()->is_module_stmt()) {
             auto* module = declaration.value()->as_module_stmt();
-            auto resolve_recursive = [this, &expr](ModuleStmt& module, auto& resolve, int depth = 1) -> Declaration* {
-                if (depth >= expr.path.size()) {
-                    emit_error_diagnostic("path resolution failed!", expr.span, "here");
-                    return nullptr;
-                }
-                if (!module.declarations.contains(expr.path[depth].string)) {
-                    emit_error_diagnostic("path resolution failed", expr.path[depth].span, "here");
-                } else if (module.declarations[expr.path[depth].string]->is_module_stmt()) {
-                    return resolve(*module.declarations[expr.path[depth].string]->as_module_stmt(), resolve, depth + 1);
-                } else {
-                    if (depth != expr.path.size() - 1) {
-                        emit_error_diagnostic("path resolution too fast?", expr.path[depth].span, "here");
-                    }
-                    return module.declarations[expr.path[depth].string];
-                }
-            };
+            // auto resolve_recursive = [this, &expr](ModuleStmt& module, auto& resolve, int depth = 1) -> Declaration* {
+            //     if (depth >= expr.path.size()) {
+            //         emit_error_diagnostic("expected a declaration but a got a module", expr.path[depth - 1].span, "here");
+            //         return nullptr;
+            //     }
+            //     if (!module.declarations.contains(expr.path[depth].string)) {
+            //         emit_error_diagnostic(std::format("module {} does not contain {}", *expr.path[depth - 1].string, *expr.path[depth].string), expr.path[depth].span, "required here");
+            //         return nullptr;
+            //     } else if (module.declarations[expr.path[depth].string]->is_module_stmt()) {
+            //         return resolve(*module.declarations[expr.path[depth].string]->as_module_stmt(), resolve, depth + 1);
+            //     } else {
+            //         if (depth != expr.path.size() - 1) {
+            //             emit_error_diagnostic("expected an module but got a declaration", expr.path[depth].span, "here");
+            //             return nullptr;
+            //         }
+            //         return module.declarations[expr.path[depth].string];
+            //     }
+            // };
 
-            Declaration* declaration = resolve_recursive(*module, resolve_recursive);
+            Declaration* declaration = resolve_path_in_module(expr.path, *module, true);
             // TODO: non-global bindings?
             if (declaration && std::holds_alternative<GlobalDeclarationInfo>(declaration->info)) {
                 expr.binding = GlobalBinding { &std::get<GlobalDeclarationInfo>(declaration->info) };
