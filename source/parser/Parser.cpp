@@ -692,6 +692,22 @@ std::unique_ptr<Expr> Parser::module_resolution() {
     return std::make_unique<ModuleResolutionExpr>(make_span(), std::move(path));
 }
 
+std::unique_ptr<AnonymousFunctionExpr> Parser::anonymous_function() {
+    // TODO: refactor!
+    Token name = current;
+    std::vector<Token> params;
+    if (!check(Token::Type::BAR)) {
+        do {
+            consume(Token::Type::IDENTIFIER, "invalid parameter");
+            params.push_back(current);
+        } while (match(Token::Type::COMMA));
+    }
+    consume(Token::Type::BAR, "missing '|' after function parameters");
+    consume(Token::Type::LEFT_BRACE, "missing function body");
+    auto body = block();
+    return std::make_unique<AnonymousFunctionExpr>(make_span(), std::make_unique<FunctionDeclaration>(make_span(),name, std::move(params), std::move(body)));
+}
+
 std::optional<std::unique_ptr<Expr>> Parser::prefix() {
     switch (current.type) {
         case Token::Type::INTEGER: return integer();
@@ -717,6 +733,7 @@ std::optional<std::unique_ptr<Expr>> Parser::prefix() {
         case Token::Type::LABEL: return labeled_expression();
         case Token::Type::RETURN: return return_expression();
         case Token::Type::OBJECT: return object_expression();
+        case Token::Type::BAR: return anonymous_function();
         default: return {};
     }
 }

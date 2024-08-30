@@ -74,6 +74,10 @@ void bite::Analyzer::function_declaration(FunctionDeclaration& stmt) {
     function(stmt);
 }
 
+void bite::Analyzer::anonymous_function_expr(AnonymousFunctionExpr& stmt) {
+    function(*stmt.function);
+}
+
 void bite::Analyzer::function(FunctionDeclaration& stmt) {
     with_context(
         stmt,

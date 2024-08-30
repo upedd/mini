@@ -66,6 +66,7 @@ namespace bite {
         void variable_expr(VariableExpr& expr);
         void expr_stmt(ExprStmt& stmt);
         void function_declaration(FunctionDeclaration& box);
+        void anonymous_function_expr(AnonymousFunctionExpr& stmt);
         void function(FunctionDeclaration& stmt);
         void class_declaration(ClassDeclaration& box);
         void class_object(ClassObject& object, bool is_abstract, SourceSpan& name_span);

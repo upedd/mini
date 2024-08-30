@@ -54,6 +54,7 @@
     V(ReturnExpr, return_expr) \
     V(ThisExpr, this_expr) \
     V(ObjectExpr, object_expr) \
+    V(AnonymousFunctionExpr, anonymous_function_expr) \
     V(FunctionDeclaration, function_declaration) \
     V(VariableDeclaration, variable_declaration) \
     V(ExprStmt, expr_stmt) \
@@ -294,8 +295,11 @@ public:
     std::unique_ptr<Expr> callee;
     std::vector<std::unique_ptr<Expr>> arguments;
 
-    SafeCallExpr(const bite::SourceSpan& span, std::unique_ptr<Expr> callee, std::vector<std::unique_ptr<Expr>> arguments) :
-        Expr(span),
+    SafeCallExpr(
+        const bite::SourceSpan& span,
+        std::unique_ptr<Expr> callee,
+        std::vector<std::unique_ptr<Expr>> arguments
+    ) : Expr(span),
         callee(std::move(callee)),
         arguments(std::move(arguments)) {}
 };
@@ -528,6 +532,20 @@ public:
     explicit ThisExpr(const bite::SourceSpan& span) : Expr(span) {}
 };
 
+// TODO: refactor!
+
+class AnonymousFunctionExpr final : public Expr {
+public:
+    [[nodiscard]] NodeKind kind() const override {
+        return NodeKind::anonymous_function_expr;
+    }
+
+    std::unique_ptr<FunctionDeclaration> function;
+
+    AnonymousFunctionExpr(const bite::SourceSpan& span, std::unique_ptr<FunctionDeclaration> function) : Expr(span),
+        function(std::move(function)) {}
+};
+
 
 class FunctionDeclaration final : public Declaration {
 public:
@@ -703,15 +721,12 @@ public:
         std::unique_ptr<Expr> item; // better name?
         Binding binding = NoBinding();
 
-        Item(const bite::SourceSpan& span, const Token& name, std::unique_ptr<Expr> item) :
-            Declaration(span, name), item(std::move(item)) {}
+        Item(const bite::SourceSpan& span, const Token& name, std::unique_ptr<Expr> item) : Declaration(span, name),
+            item(std::move(item)) {}
     };
 
-    ImportStmt(
-        const bite::SourceSpan& span,
-        std::vector<std::unique_ptr<Item>> items,
-        std::unique_ptr<Expr> module
-    ) : Stmt(span),
+    ImportStmt(const bite::SourceSpan& span, std::vector<std::unique_ptr<Item>> items, std::unique_ptr<Expr> module) :
+        Stmt(span),
         items(std::move(items)),
         module(std::move(module)) {}
 
@@ -745,6 +760,7 @@ public:
     [[nodiscard]] NodeKind kind() const override {
         return NodeKind::module_resolution_expr;
     }
+
     Binding binding = NoBinding();
     std::vector<Token> path;
 };

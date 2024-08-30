@@ -126,6 +126,10 @@ void Compiler::function_declaration(const FunctionDeclaration& stmt) {
     current_context().on_stack++;
     define_variable(stmt.info);
 }
+void Compiler::anonymous_function_expr(const AnonymousFunctionExpr& expr) {
+    function(*expr.function, FunctionType::FUNCTION);
+    current_context().on_stack++;
+}
 
 void Compiler::block_expr(const BlockExpr& expr) {
     int break_idx = current_function()->add_empty_jump_destination();
@@ -370,7 +374,7 @@ void Compiler::continue_expr(const ContinueExpr& expr) {
 
 void Compiler::function(const FunctionDeclaration& stmt, FunctionType type) {
     // TODO: integrate into new strings
-    auto function_name = *stmt.name.string;
+    auto function_name = stmt.name.string ? *stmt.name.string : "anonymous";
     auto* function = new Function(function_name, stmt.params.size());
     functions.push_back(function);
 
