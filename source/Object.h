@@ -379,15 +379,15 @@ public:
 
 class BoundMethod final : public Object {
 public:
-    BoundMethod(Value receiver, Closure* closure) : receiver(std::move(receiver)),
-                                                    closure(closure) {}
+    BoundMethod(Value receiver, Value closure) : receiver(std::move(receiver)),
+                                                    closure(std::move(closure)) {}
 
     std::size_t get_size() override {
         return sizeof(BoundMethod);
     }
 
     std::string to_string() override {
-        return std::format("<BoundMethod({}, {})>", receiver.to_string(), closure->to_string());
+        return std::format("<BoundMethod({}, {})>", receiver.to_string(), closure.to_string());
     }
 
     void mark_references(GarbageCollector& gc) override {
@@ -396,7 +396,7 @@ public:
     }
 
     Value receiver;
-    Closure* closure;
+    Value closure;
 };
 
 #endif //FUNCTION_H

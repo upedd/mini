@@ -10,7 +10,8 @@ Value FunctionContext::get_arg(int64_t pos) {
 }
 
 Value FunctionContext::get_instance() {
-    return vm->stack[frame_pointer];
+    // TODO: unsafe?
+    return reinterpret_cast<Receiver*>(vm->stack[frame_pointer].get<Object*>())->instance;
 }
 
 Value FunctionContext::allocate(Object* object) {
