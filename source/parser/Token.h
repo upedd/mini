@@ -94,6 +94,7 @@ struct Token {
         QUESTION_QUESTION,
         QUESTION_QUESTION_EQUAL,
         QUESTION_LEFT_PAREN,
+        OPERATOR,
         END // NOTE: Type END must always be last element in this enum.
     };
 
@@ -200,6 +201,11 @@ inline std::string Token::type_to_string(const Type type) {
         case Type::FROM: return "FROM";
         case Type::MODULE: return "MODULE";
         case Type::COLON_COLON: return "COLON_COLON";
+        case Type::QUESTION_DOT: return "QUESTION_DOT";
+        case Type::QUESTION_QUESTION: return "QUESTION_QUESTION";
+        case Type::QUESTION_QUESTION_EQUAL: return "QUESTION_QUESTION_EQAUL";
+        case Type::QUESTION_LEFT_PAREN: return "LEFT_PAREN";
+        case Type::OPERATOR: return "OPERATOR";
     }
     return "INVALID_TOKEN";
 }
@@ -291,7 +297,11 @@ inline std::string Token::type_to_display(const Type type) {
         case Type::FROM: return "from";
         case Type::MODULE: return "module";
         case Type::COLON_COLON: return "::";
-        default: std::unreachable();
+        case Type::QUESTION_DOT: return "?.";
+        case Type::QUESTION_QUESTION: return "??";
+        case Type::QUESTION_QUESTION_EQUAL: return "??=";
+        case Type::QUESTION_LEFT_PAREN: return "?(";
+        case Type::OPERATOR: return "operator";
     }
 }
 

@@ -442,7 +442,11 @@ void Compiler::constructor(const Constructor& stmt, const std::vector<Field>& fi
     }
 
 
-    auto* function = new Function("constructor", stmt.function ? min_arity : 0, stmt.function ? stmt.function->params.size() : 0);
+    auto* function = new Function(
+        "constructor",
+        stmt.function ? min_arity : 0,
+        stmt.function ? stmt.function->params.size() : 0
+    );
     functions.push_back(function);
     with_context(
         function,

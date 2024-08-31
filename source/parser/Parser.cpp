@@ -309,7 +309,7 @@ std::unique_ptr<FunctionDeclaration> Parser::function_declaration() {
 
 // The part after name
 std::unique_ptr<FunctionDeclaration> Parser::function_declaration_body(const Token& name, const bool skip_params) {
-    std::vector<FunctionParameter>  parameters = skip_params ? std::vector<FunctionParameter>() : functions_parameters();
+    std::vector<FunctionParameter> parameters = skip_params ? std::vector<FunctionParameter>() : functions_parameters();
     consume(Token::Type::LEFT_BRACE, "Expected '{' before function body");
     auto body = block();
     return std::make_unique<FunctionDeclaration>(make_span(), name, std::move(parameters), std::move(body));
@@ -513,6 +513,8 @@ bitflags<ClassAttributes> Parser::member_attributes() {
                 break;
             case Token::Type::SET: process_attribute(ClassAttributes::SETTER);
                 break;
+            case Token::Type::OPERATOR: process_attribute(ClassAttributes::OPERATOR);
+                break;
             default: consume_arguments = false;
         }
     }
@@ -671,14 +673,14 @@ std::unique_ptr<Expr> Parser::module_resolution() {
     do {
         consume(Token::Type::IDENTIFIER, "missing module resolution path element");
         path.emplace_back(current);
-    } while(match(Token::Type::COLON_COLON));
+    } while (match(Token::Type::COLON_COLON));
     return std::make_unique<ModuleResolutionExpr>(make_span(), std::move(path));
 }
 
 std::unique_ptr<AnonymousFunctionExpr> Parser::anonymous_function() {
     // TODO: refactor!
     Token name = current;
-    std::vector<FunctionParameter>  params;
+    std::vector<FunctionParameter> params;
     if (!check(Token::Type::BAR)) {
         do {
             consume(Token::Type::IDENTIFIER, "invalid parameter");
@@ -693,7 +695,10 @@ std::unique_ptr<AnonymousFunctionExpr> Parser::anonymous_function() {
     consume(Token::Type::BAR, "missing '|' after function parameters");
     consume(Token::Type::LEFT_BRACE, "missing function body");
     auto body = block();
-    return std::make_unique<AnonymousFunctionExpr>(make_span(), std::make_unique<FunctionDeclaration>(make_span(),name, std::move(params), std::move(body)));
+    return std::make_unique<AnonymousFunctionExpr>(
+        make_span(),
+        std::make_unique<FunctionDeclaration>(make_span(), name, std::move(params), std::move(body))
+    );
 }
 
 std::optional<std::unique_ptr<Expr>> Parser::prefix() {
@@ -996,6 +1001,7 @@ std::unique_ptr<CallExpr> Parser::call(std::unique_ptr<Expr> left) {
     std::vector<std::unique_ptr<Expr>> arguments = call_arguments();
     return std::make_unique<CallExpr>(make_span(), std::move(left), std::move(arguments));
 }
+
 std::unique_ptr<SafeCallExpr> Parser::safe_call(std::unique_ptr<Expr> left) {
     std::vector<std::unique_ptr<Expr>> arguments = call_arguments();
     return std::make_unique<SafeCallExpr>(make_span(), std::move(left), std::move(arguments));
