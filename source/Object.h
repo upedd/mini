@@ -200,7 +200,7 @@ public:
 
 class Instance;
 
-class Class final : public Object {
+class Class : public Object {
 public:
     explicit Class(std::string name) : name(std::move(name)) {}
 

@@ -452,7 +452,8 @@ void Compiler::constructor(const Constructor& stmt, const std::vector<Field>& fi
         function,
         FunctionType::CONSTRUCTOR,
         [&fields, this, &stmt, has_superclass] {
-            for (const auto& param : stmt.function->params) {
+            if (stmt.function) {
+                for (const auto& param : stmt.function->params) {
                 // TODO: optimize!
                 if (param.default_value) {
                     auto jump_idx = current_function()->add_empty_jump_destination();
@@ -469,6 +470,8 @@ void Compiler::constructor(const Constructor& stmt, const std::vector<Field>& fi
                     current_function()->patch_jump_destination(jump_to_end, current_program().size());
                 }
             }
+            }
+
 
             if (stmt.super_arguments_call) {
                 for (auto& expr : stmt.super_arguments_call->arguments) {

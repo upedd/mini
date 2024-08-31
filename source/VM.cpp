@@ -101,9 +101,7 @@ std::optional<VM::RuntimeError> VM::call_value(const Value& value, const int arg
         auto max_arity = closure->get_function()->get_max_arity();
         if (arguments_count < min_arity || arguments_count > max_arity) {
             if (min_arity == max_arity) {
-                return RuntimeError(
-                std::format("Expected {} but got {} arguments", min_arity, arguments_count)
-                );
+                return RuntimeError(std::format("Expected {} but got {} arguments", min_arity, arguments_count));
             }
             return RuntimeError(
                 std::format("Expected between {} and {} but got {} arguments", min_arity, max_arity, arguments_count)
@@ -394,12 +392,40 @@ std::variant<std::monostate, VM::RuntimeError, Value> VM::set_super_property(
 }
 
 std::expected<Value, VM::RuntimeError> VM::run() {
+    // TODO: better errors for function!
     #define BINARY_OPERATION(op) { \
-    auto b = pop(); \
-    auto a = pop(); \
-    push(a.op(b)); \
-    break; \
-}
+        auto b = pop(); \
+        auto a = pop(); \
+        if (a.is<Object*>()) { \
+            bool is_computed_property = false; \
+            if (auto* instance = dynamic_cast<Instance*>(a.get<Object*>())) { \
+                std::expected<Value, RuntimeError> property = get_instance_property( \
+                instance, \
+                #op, \
+                is_computed_property \
+            ); \
+            if (!property) { \
+                return std::unexpected(property.error()); \
+            }\
+            push(*property); \
+            if (property->is<Object*>()) { \
+                if (auto* bound = dynamic_cast<BoundMethod*>(property->get<Object*>())) { \
+                    allocate({ bound, bound->receiver.get<Object*>() }); \
+                    if (is_computed_property) { \
+                        return std::unexpected(RuntimeError("expected function got property")); \
+                    } \
+                    push(b); \
+                    if (auto error = call_value(peek(1), 1)) { \
+                        return std::unexpected(*error); \
+                    } \
+                } \
+            } \
+        } \
+        } else { \
+            push(a.op(b)); \
+        } \
+        break; \
+    }
     while (true) {
         switch (fetch_opcode()) {
             case OpCode::CONSTANT: {
@@ -417,8 +443,8 @@ std::expected<Value, VM::RuntimeError> VM::run() {
             case OpCode::LESS_EQUAL: BINARY_OPERATION(less_equal)
             case OpCode::GREATER: BINARY_OPERATION(greater)
             case OpCode::GREATER_EQUAL: BINARY_OPERATION(greater_equal)
-            case OpCode::RIGHT_SHIFT: BINARY_OPERATION(shift_left)
-            case OpCode::LEFT_SHIFT: BINARY_OPERATION(shift_right)
+            case OpCode::RIGHT_SHIFT: BINARY_OPERATION(shift_right)
+            case OpCode::LEFT_SHIFT: BINARY_OPERATION(shift_left)
             case OpCode::BITWISE_AND: BINARY_OPERATION(binary_and)
             case OpCode::BITWISE_OR: BINARY_OPERATION(binary_or)
             case OpCode::BITWISE_XOR: BINARY_OPERATION(binary_xor)
