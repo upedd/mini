@@ -97,12 +97,22 @@ std::optional<VM::RuntimeError> VM::call_value(const Value& value, const int arg
         return res;
     }
     if (auto* closure = dynamic_cast<Closure*>(*object)) {
-        if (arguments_count != closure->get_function()->get_arity()) {
+        auto min_arity = closure->get_function()->get_min_arity();
+        auto max_arity = closure->get_function()->get_max_arity();
+        if (arguments_count < min_arity || arguments_count > max_arity) {
+            if (min_arity == max_arity) {
+                return RuntimeError(
+                std::format("Expected {} but got {} arguments", min_arity, arguments_count)
+                );
+            }
             return RuntimeError(
-                std::format("Expected {} but got {} arguments", closure->get_function()->get_arity(), arguments_count)
+                std::format("Expected between {} and {} but got {} arguments", min_arity, max_arity, arguments_count)
             );
         }
-        frames.emplace_back(closure, 0, stack_index - arguments_count - 1);
+        for (int i = 0; i < max_arity - arguments_count; ++i) {
+            push(undefined);
+        }
+        frames.emplace_back(closure, 0, stack_index - max_arity - 1);
         return {}; // success
     }
     if (auto* bound = dynamic_cast<BoundMethod*>(*object)) {
@@ -470,6 +480,13 @@ std::expected<Value, VM::RuntimeError> VM::run() {
             case OpCode::JUMP_IF_TRUE: {
                 int idx = fetch();
                 if (!peek().is_falsey()) {
+                    jump_to(get_jump_destination(idx));
+                }
+                break;
+            }
+            case OpCode::JUMP_IF_NOT_UNDEFINED: {
+                int idx = fetch();
+                if (!peek().is<Undefined>()) {
                     jump_to(get_jump_destination(idx));
                 }
                 break;
@@ -1005,10 +1022,10 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 break;
             }
         }
-        // for (int i = 0; i < stack_index; ++i) {
-        //     std::cout << '[' << stack[i].to_string() << "] ";
-        // }
-        // std::cout << '\n';
+        for (int i = 0; i < stack_index; ++i) {
+            std::cout << '[' << stack[i].to_string() << "] ";
+        }
+        std::cout << '\n';
     }
     #undef BINARY_OPERATION
 }

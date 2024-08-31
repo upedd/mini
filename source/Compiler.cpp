@@ -8,7 +8,7 @@
 #include "base/overloaded.h"
 #include "shared/SharedContext.h"
 
-//#define COMPILER_PRINT_BYTECODE
+#define COMPILER_PRINT_BYTECODE
 
 bool Compiler::compile(Ast* ast) {
     this->ast = ast;
@@ -16,6 +16,8 @@ bool Compiler::compile(Ast* ast) {
         visit(*stmt);
     }
     // default return at main
+    // TODO: remove?
+    emit(OpCode::NIL);
     emit_default_return();
     #ifdef COMPILER_PRINT_BYTECODE
     Disassembler disassembler(*current_function());
@@ -82,10 +84,8 @@ void Compiler::emit(OpCode op_code, bite_byte value) {
 void Compiler::emit_default_return() {
     if (current_context().function_type == FunctionType::CONSTRUCTOR) {
         emit(OpCode::THIS);
-    } else {
-        emit(OpCode::NIL);
+        current_context().on_stack++; // shouldn't matter?
     }
-    current_context().on_stack++; // shouldn't matter?
     emit(OpCode::RETURN);
 }
 
@@ -393,7 +393,7 @@ void Compiler::function(const FunctionDeclaration& stmt, FunctionType type) {
         [&stmt, this] {
             for (const auto& param : stmt.params) {
                 // TODO: optimize!
-                if (!param.default_value) {
+                if (param.default_value) {
                     auto jump_idx = current_function()->add_empty_jump_destination();
                     emit_get_variable(param.binding);
                     emit(OpCode::JUMP_IF_NOT_UNDEFINED, jump_idx);
@@ -450,7 +450,7 @@ void Compiler::constructor(const Constructor& stmt, const std::vector<Field>& fi
         [&fields, this, &stmt, has_superclass] {
             for (const auto& param : stmt.function->params) {
                 // TODO: optimize!
-                if (!param.default_value) {
+                if (param.default_value) {
                     auto jump_idx = current_function()->add_empty_jump_destination();
                     emit_get_variable(param.binding);
                     emit(OpCode::JUMP_IF_NOT_UNDEFINED, jump_idx);

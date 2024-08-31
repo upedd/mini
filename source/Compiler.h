@@ -142,7 +142,7 @@ public:
 
 
     explicit Compiler(SharedContext* context) :
-        main(new Function("main", 0)),
+        main(new Function("main", 0, 0)),
         shared_context(context) {
         context_stack.emplace_back(main, FunctionType::FUNCTION);
         functions.push_back(main);
