@@ -4,6 +4,7 @@
 
 #include "../base/chars.h"
 #include "../base/perfect_map.h"
+#include "../base/unicode.h"
 #include "../shared/SharedContext.h"
 
 std::expected<Token, bite::Diagnostic> Lexer::next_token() {
@@ -229,30 +230,93 @@ Token Lexer::keyword_or_identifier() {
     return make_token(Token::Type::IDENTIFIER);
 }
 
+std::optional<std::unexpected<bite::Diagnostic>> Lexer::consume_unicode_scalar() {
+    // TODO: improve errors
+    // TODO: optimize?
+    if (!stream.match('{')) {
+        return make_error("invalid unicode scalar", "expected { after \\u");
+    }
+    char32_t scalar = 0;
+    while (!stream.match('}') && !stream.ended()) {
+        char c = to_upper(stream.advance());
+        if (!is_hex_digit(c)) {
+            return make_error("invalid unicode scalar", "only hexadecimal digits are allowed inside of scalar value");
+        }
+        scalar <<= static_cast<char32_t>(4);
+        scalar |= static_cast<char32_t>(hex_digit_to_int(c));
+    }
+    // error if not ended on '}'. only if at end of file
+    if (!bite::unicode::codepoint_to_utf8(buffer, scalar)) {
+        return make_error("invalid unicode scalar", "invalid codepoin");
+    }
+    return {};
+}
+
 std::expected<Token, bite::Diagnostic> Lexer::string() {
+    // TODO: better error recovery. should not abort immediately
     bool escape_next = false;
     while (!stream.ended() && (escape_next || stream.next() != '"')) {
-        if (!escape_next && stream.next() == '\\') {
+        if (escape_next) {
             stream.advance();
-            escape_next = true;
-            continue;
-        }
-
-        // String interpolation, see header file for comments about this construct
-        if (!escape_next && stream.next() == '$') {
-            stream.advance();
-            if (stream.next() == '{') {
-                stream.advance();
-                state.emplace();
-                return make_token(Token::Type::STRING_PART);
-            } else {
-                consume_identifer_on_next = true;
-                return make_token(Token::Type::STRING_PART);
+            switch (stream.current()) {
+                case 'n': {
+                    buffer.push_back('\n');
+                    break;
+                }
+                case '0': {
+                    buffer.push_back('\0');
+                    break;
+                }
+                case '\\': {
+                    buffer.push_back('\\');
+                    break;
+                }
+                case 't': {
+                    buffer.push_back('\t');
+                    break;
+                }
+                case 'r': {
+                    buffer.push_back('\r');
+                    break;
+                }
+                case '"': {
+                    buffer.push_back('"');
+                    break;
+                }
+                case '$': {
+                    buffer.push_back('$');
+                    break;
+                }
+                case 'u': {
+                    consume_unicode_scalar();
+                    break;
+                }
+                default: {
+                    return make_error("Invalid escape sequence", "here");
+                }
             }
-        }
+            escape_next = false;
+        } else {
+            if (stream.next() == '\\') {
+                stream.advance();
+                escape_next = true;
+                continue;
+            }
+            // String interpolation, see header file for more info
+            if (stream.next() == '$') {
+                stream.advance();
+                if (stream.next() == '{') {
+                    stream.advance();
+                    state.emplace();
+                    return make_token(Token::Type::STRING_PART);
+                } else {
+                    consume_identifer_on_next = true;
+                    return make_token(Token::Type::STRING_PART);
+                }
+            }
 
-        escape_next = false;
-        buffer.push_back(stream.advance());
+            buffer.push_back(stream.advance());
+        }
     }
 
     if (!stream.match('"')) {

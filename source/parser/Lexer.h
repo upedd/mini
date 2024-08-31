@@ -40,6 +40,7 @@ private:
     );
 
     Token keyword_or_identifier();
+    std::optional<std::unexpected<bite::Diagnostic>> consume_unicode_scalar();
     std::expected<Token, bite::Diagnostic> string();
     Token integer_or_number();
     Token label();
