@@ -31,5 +31,5 @@ void apply_core(VM* vm, SharedContext* context) {
     auto* int_add_object = new ForeginFunctionObject(int_add);
     int_class->methods["add"] = ClassValue {.value = int_add_object, .attributes = {}, .is_computed = false};
     vm->int_class = int_class;
-    vm->allocate({int_add_object, int_constructor, int_add_object, int_constructor});
+    vm->allocate({int_add_object, int_constructor, int_class});
 }

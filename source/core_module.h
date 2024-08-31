@@ -27,7 +27,7 @@ inline constexpr Undefined undefined {};
 
 class Object;
 
-using value_variant_t = std::variant<Nil, bite_int, bite_float, bool, Object*, std::string>;
+using value_variant_t = std::variant<Nil, bite_int, bite_float, bool, Object*, std::string, Undefined>;
 
 class Value : public value_variant_t {
 public:
@@ -56,5 +56,5 @@ public:
 class VM;
 class SharedContext;
 
-inline void apply_core(VM* vm, SharedContext* context);
+void apply_core(VM* vm, SharedContext* context);
 #endif //CORE_MODULE_H

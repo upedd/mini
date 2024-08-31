@@ -5,6 +5,7 @@
 #include <vector>
 #include <utility>
 
+#include "core_module.h"
 #include "Diagnostics.h"
 #include "Value.h"
 #include "base/bitflags.h"

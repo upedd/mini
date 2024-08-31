@@ -9,6 +9,14 @@ Value FunctionContext::get_arg(int64_t pos) {
     return vm->stack[frame_pointer + pos + 1];
 }
 
+Value FunctionContext::get_instance() {
+    return vm->stack[frame_pointer];
+}
+
+Value FunctionContext::allocate(Object* object) {
+    return vm->allocate(object);
+}
+
 // TODO: circular?
 Module* SharedContext::get_module(StringTable::Handle name) {
     if (modules.contains(name)) {
@@ -55,6 +63,7 @@ void SharedContext::add_module(const StringTable::Handle name, std::unique_ptr<F
 void SharedContext::execute(FileModule& module) {
     module.m_was_executed = true;
     running_vms.emplace_back(&gc, module.function, this);
+    apply_core(&running_vms.back(), this);
     auto result = running_vms.back().run();
     if (!result) {
         logger.log(bite::Logger::Level::error, "uncaught error: {}", result.error().what());

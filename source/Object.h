@@ -357,15 +357,15 @@ public:
  */
 class Receiver final : public Object {
 public:
-    Receiver(Class* klass, Instance* instance) : klass(klass),
-                                                 instance(instance) {}
+    Receiver(Class* klass, Value instance) : klass(klass),
+                                                 instance(std::move(instance)) {}
 
     std::size_t get_size() override {
         return sizeof(Receiver);
     }
 
     std::string to_string() override {
-        return std::format("<Receiver({}, {})>", klass->to_string(), instance->to_string());
+        return std::format("<Receiver({}, {})>", klass->to_string(), instance.to_string());
     }
 
     void mark_references(GarbageCollector& gc) override {
@@ -374,7 +374,7 @@ public:
     }
 
     Class* klass;
-    Instance* instance;
+    Value instance;
 };
 
 class BoundMethod final : public Object {

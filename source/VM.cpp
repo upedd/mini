@@ -221,7 +221,7 @@ std::optional<Receiver*> VM::get_current_receiver() const {
 
 std::optional<VM::RuntimeError> VM::validate_instance_access(Instance* accessor, const ClassValue& class_value) const {
     std::optional<Receiver*> receiver = get_current_receiver();
-    if (class_value.attributes[ClassAttributes::PRIVATE] && (!receiver || (*receiver)->instance != accessor)) {
+    if (class_value.attributes[ClassAttributes::PRIVATE] && (!receiver || reinterpret_cast<Instance*>((*receiver)->instance.get<Object*>()) != accessor)) {
         return RuntimeError("Private propererties can be access only inside their class definitions.");
     }
     return {};
@@ -290,7 +290,7 @@ std::expected<Value, VM::RuntimeError> VM::get_instance_property(
         if (auto class_method = receiver.value()->klass->resolve_private_method(name)) {
             return bind_method(class_method.value().value.value, class_method.value().owner, instance);
         }
-        if (auto super_instnace = receiver.value()->instance->get_super_instance_by_class(receiver.value()->klass)) {
+        if (auto super_instnace = reinterpret_cast<Instance*>(receiver.value()->instance.get<Object*>())->get_super_instance_by_class(receiver.value()->klass)) {
             // private property
             if (auto class_property = super_instnace.value()->resolve_private_property(name)) {
                 return get_value_or_bound_method(instance, class_property->get(), is_computed_property);
@@ -345,7 +345,7 @@ std::variant<std::monostate, VM::RuntimeError, Value> VM::set_instance_property(
 ) {
     std::optional<Receiver*> receiver = get_current_receiver();
     if (receiver) {
-        if (auto super_instnace = receiver.value()->instance->get_super_instance_by_class(receiver.value()->klass)) {
+        if (auto super_instnace = reinterpret_cast<Instance*>(receiver.value()->instance.get<Object*>())->get_super_instance_by_class(receiver.value()->klass)) {
             // private property
             if (auto class_property = super_instnace.value()->resolve_private_property(name)) {
                 auto bound = set_value_or_get_bound_method(instance, class_property.value(), value);
@@ -400,52 +400,37 @@ std::variant<std::monostate, VM::RuntimeError, Value> VM::set_super_property(
 }
 
 Class* VM::get_class(Value value) {
-    return std::visit(overloaded {
-        [this](Nil) {return nil_class; },
-            [this](Undefined) {return undefined_class; },
-                [this](bite_int) {return int_class;},
-                    [this](bite_float) {return number_class;},
-                        [this](bool) {return bool_class},
-                            [this](Object* object) {
-
-                            }
-    });
-
+    return std::visit(
+        overloaded {
+            [this](Nil) { return nil_class; },
+            [this](Undefined) { return undefined_class; },
+            [this](bite_int) { return int_class; },
+            [this](bite_float) { return number_class; },
+            [this](bool) { return bool_class; },
+            [this](std::string) {return string_class; },
+            [this](Object* object) {
+                if (auto* instance = dynamic_cast<Instance*>(object)) {
+                    return instance->klass;
+                }
+                BITE_PANIC("get_class TODO!");
+            }
+        },
+        value
+    );
 }
 
 std::expected<Value, VM::RuntimeError> VM::run() {
-    // TODO: better errors for function!
+    // TODO: error handling!
     #define BINARY_OPERATION(op) { \
         auto b = pop(); \
         auto a = pop(); \
-        if (a.is<Object*>()) { \
-            bool is_computed_property = false; \
-            if (auto* instance = dynamic_cast<Instance*>(a.get<Object*>())) { \
-                std::expected<Value, RuntimeError> property = get_instance_property( \
-                instance, \
-                #op, \
-                is_computed_property \
-            ); \
-            if (!property) { \
-                return std::unexpected(property.error()); \
-            }\
-            push(*property); \
-            if (property->is<Object*>()) { \
-                if (auto* bound = dynamic_cast<BoundMethod*>(property->get<Object*>())) { \
-                    allocate({ bound, bound->receiver.get<Object*>() }); \
-                    if (is_computed_property) { \
-                        return std::unexpected(RuntimeError("expected function got property")); \
-                    } \
-                    push(b); \
-                    if (auto error = call_value(peek(1), 1)) { \
-                        return std::unexpected(*error); \
-                    } \
-                } \
-            } \
-        } \
-        } else { \
-            push(a.op(b)); \
-        } \
+        Class* klass = get_class(a); \
+        ClassValue method = klass->methods[#op]; \
+        push(method.value); \
+        push(b); \
+    if (auto error = call_value(peek(1), 1)) { \
+        return std::unexpected(*error); \
+    } \
         break; \
     }
     while (true) {
@@ -474,8 +459,9 @@ std::expected<Value, VM::RuntimeError> VM::run() {
             case OpCode::FLOOR_DIVISON: BINARY_OPERATION(floor_divide)
             case OpCode::NEGATE: {
                 // optim just negate top?
-                auto top = pop();
-                push(top.multiply(-1));
+                // auto top = pop();
+                // push(top.multiply(-1));
+                // TODO: Implement!
                 break;
             }
             case OpCode::TRUE: {
@@ -506,7 +492,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
             }
             case OpCode::JUMP_IF_FALSE: {
                 int idx = fetch();
-                if (peek().is_falsey()) {
+                if (!peek().get<bool>()) {
                     jump_to(get_jump_destination(idx));
                 }
                 break;
@@ -527,7 +513,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
             }
             case OpCode::JUMP_IF_TRUE: {
                 int idx = fetch();
-                if (!peek().is_falsey()) {
+                if (peek().get<bool>()) {
                     jump_to(get_jump_destination(idx));
                 }
                 break;
@@ -552,8 +538,9 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 break;
             }
             case OpCode::BINARY_NOT: {
-                auto value = pop();
-                push(value.binary_not());
+                // auto value = pop();
+                // push(value.binary_not());
+                // TODO implement!
                 break;
             }
             case OpCode::CALL: {
@@ -589,7 +576,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 }
                 // TODO: temp
                 if (auto receiver = get_current_receiver()) {
-                    auto bound = bind_method(closure, receiver.value()->klass, receiver.value()->instance);
+                    auto bound = bind_method(closure, receiver.value()->klass, reinterpret_cast<Instance*>(receiver.value()->instance.get<Object*>()));
                     push(bound);
                     allocate(
                         {
@@ -869,7 +856,7 @@ std::expected<Value, VM::RuntimeError> VM::run() {
             }
             case OpCode::THIS: {
                 Receiver* receiver = *get_current_receiver();
-                if (receiver->instance != nullptr) {
+                if (reinterpret_cast<Instance*>(receiver->instance.get<Object*>()) != nullptr) {
                     push(receiver->instance);
                 } else {
                     push(receiver->klass);
@@ -900,9 +887,9 @@ std::expected<Value, VM::RuntimeError> VM::run() {
                 allocate(instance);
 
                 //receiver->instance->super_instances = instance->super_instances;
-                receiver->instance->super_instances.push_back(instance);
+                reinterpret_cast<Instance*>(receiver->instance.get<Object*>())->super_instances.push_back(instance);
 
-                auto bound = bind_method(superclass->constructor, superclass, receiver->instance);
+                auto bound = bind_method(superclass->constructor, superclass, reinterpret_cast<Instance*>(receiver->instance.get<Object*>()));
                 push(bound);
                 // TODO: temp fix
                 // work around gc and fix duplicate function returns

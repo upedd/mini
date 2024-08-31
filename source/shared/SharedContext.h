@@ -21,9 +21,7 @@ public:
                                                               frame_pointer(frame_pointer) {}
 
     Value get_arg(int64_t pos);
-
     Value get_instance();
-
     Value allocate(Object* object);
 
 private:
