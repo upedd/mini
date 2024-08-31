@@ -57,6 +57,9 @@ add_executable(bite source/main.cpp
         source/Diagnostics.cpp
         source/AstVisitor.h
         source/shared/SharedContext.cpp
+        source/core_module.h
+        source/core_module.cpp
+        source/base/unicode.h
 )
 
 # TODO: disable in release builds

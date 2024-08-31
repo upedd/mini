@@ -8,7 +8,7 @@
 #include "base/overloaded.h"
 #include "shared/SharedContext.h"
 
-#define COMPILER_PRINT_BYTECODE
+//#define COMPILER_PRINT_BYTECODE
 
 bool Compiler::compile(Ast* ast) {
     this->ast = ast;
