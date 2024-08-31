@@ -9,6 +9,7 @@
 #include "../Ast.h"
 #include "../GarbageCollector.h"
 #include "../VM.h"
+#include "../core_module.h"
 
 // TODO: find better place
 
@@ -20,6 +21,10 @@ public:
                                                               frame_pointer(frame_pointer) {}
 
     Value get_arg(int64_t pos);
+
+    Value get_instance();
+
+    Value allocate(Object* object);
 
 private:
     VM* vm;

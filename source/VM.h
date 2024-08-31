@@ -102,12 +102,20 @@ public:
         const std::string& name,
         const Value& value
     );
+    Class* get_class(Value value);
 
     std::expected<Value, RuntimeError> run();
 
     Object* allocate(Object* ptr);
     std::array<Value, 256> stack;
     bite::unordered_dense::map<std::string, Value> globals;
+
+    Class* number_class = nullptr;
+    Class* bool_class = nullptr;
+    Class* int_class = nullptr;
+    Class* nil_class = nullptr;
+    Class* string_class = nullptr;
+    Class* undefined_class = nullptr;
 private:
     GarbageCollector* gc;
     std::size_t next_gc = 1024 * 1024;

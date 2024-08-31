@@ -3,6 +3,7 @@
 #include <iostream>
 #include <algorithm>
 
+#include "base/overloaded.h"
 #include "shared/SharedContext.h"
 
 // TODO: maybe add asserts
@@ -182,6 +183,13 @@ void VM::mark_roots_for_gc() {
     for (auto* open_upvalue : open_upvalues) {
         gc->mark(open_upvalue);
     }
+
+    gc->mark(int_class);
+    gc->mark(bool_class);
+    gc->mark(nil_class);
+    gc->mark(number_class);
+    gc->mark(string_class);
+    gc->mark(undefined_class);
 }
 
 void VM::adopt_objects(std::vector<Object*> objects) {
@@ -389,6 +397,20 @@ std::variant<std::monostate, VM::RuntimeError, Value> VM::set_super_property(
         return {};
     }
     return RuntimeError("Property must be declared on class.");
+}
+
+Class* VM::get_class(Value value) {
+    return std::visit(overloaded {
+        [this](Nil) {return nil_class; },
+            [this](Undefined) {return undefined_class; },
+                [this](bite_int) {return int_class;},
+                    [this](bite_float) {return number_class;},
+                        [this](bool) {return bool_class},
+                            [this](Object* object) {
+
+                            }
+    });
+
 }
 
 std::expected<Value, VM::RuntimeError> VM::run() {

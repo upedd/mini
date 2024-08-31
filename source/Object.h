@@ -249,7 +249,7 @@ public:
 };
 
 
-class Instance final : public Object {
+class Instance : public Object {
 public:
     explicit Instance(Class* klass) : klass(klass) {
         // default intialize properties

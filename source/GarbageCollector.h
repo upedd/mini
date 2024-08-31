@@ -2,9 +2,9 @@
 #define GARBAGECOLLECTOR_H
 #include <list>
 #include <queue>
+#include "core_module.h"
 
 struct Object;
-struct Value;
 
 //#define DEBUG_LOG_GC
 
