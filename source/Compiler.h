@@ -166,6 +166,7 @@ public:
     void variable_declaration(const VariableDeclaration& expr);
     void function_declaration(const FunctionDeclaration& stmt);
     void anonymous_function_expr(const AnonymousFunctionExpr& expr);
+    void string_interpolation_expr(const StringInterpolationExpr& expr);
     void function(const FunctionDeclaration& stmt, FunctionType type);
 
     void constructor(const Constructor& stmt, const std::vector<Field>& fields, bool has_superclass);

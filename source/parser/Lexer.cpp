@@ -9,15 +9,33 @@
 std::expected<Token, bite::Diagnostic> Lexer::next_token() {
     skip_whitespace();
     start_pos = stream.position();
+
+    // state overrides
+    if (consume_identifer_on_next) {
+        consume_identifer_on_next = false;
+        continue_string_on_next = true;
+        return keyword_or_identifier();
+    }
+    if (continue_string_on_next) {
+        continue_string_on_next = false;
+        return string();
+    }
+
     switch (const char c = stream.advance(); c) {
         case '\0': return make_token(Token::Type::END);
         case '{': {
+            // state tracking for string interpolation
             state.top().bracket_depth++;
             return make_token(Token::Type::LEFT_BRACE);
         }
         case '}': {
+            // state tracking for string interpolation
             state.top().bracket_depth--;
+            // if bracket depth is negative we come back
+            // to the string after expression in interpolation
             if (state.top().bracket_depth < 0) {
+                // ignore '{'
+                start_pos++;
                 state.pop();
                 return string();
             }
@@ -128,7 +146,8 @@ void Lexer::consume_identifier() {
 }
 
 Token Lexer::make_token(const Token::Type type) {
-    const StringTable::Handle string = buffer.empty() ? nullptr : context->intern(buffer);
+    // TODO: empty buffer optimization?
+    const StringTable::Handle string = context->intern(buffer);
     buffer.clear();
     return {
             .type = type,
@@ -213,7 +232,7 @@ Token Lexer::keyword_or_identifier() {
 std::expected<Token, bite::Diagnostic> Lexer::string() {
     bool escape_next = false;
     while (!stream.ended() && (escape_next || stream.next() != '"')) {
-        if (!escape_next && stream.next() == '/') {
+        if (!escape_next && stream.next() == '\\') {
             stream.advance();
             escape_next = true;
             continue;
@@ -228,6 +247,7 @@ std::expected<Token, bite::Diagnostic> Lexer::string() {
                 return make_token(Token::Type::STRING_PART);
             } else {
                 consume_identifer_on_next = true;
+                return make_token(Token::Type::STRING_PART);
             }
         }
 

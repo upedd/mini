@@ -132,6 +132,7 @@ private:
 
     std::unique_ptr<Expr> module_resolution();
     std::unique_ptr<AnonymousFunctionExpr> anonymous_function();
+    std::unique_ptr<StringInterpolationExpr> string_interpolation();
     std::optional<std::unique_ptr<Expr>> prefix();
 
     std::unique_ptr<Expr> integer();

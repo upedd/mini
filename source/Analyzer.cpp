@@ -78,6 +78,12 @@ void bite::Analyzer::anonymous_function_expr(AnonymousFunctionExpr& stmt) {
     function(*stmt.function);
 }
 
+void bite::Analyzer::string_interpolation_expr(StringInterpolationExpr& expr) {
+    for (auto& value : expr.values) {
+        visit(*value);
+    }
+}
+
 void bite::Analyzer::function(FunctionDeclaration& stmt) {
     with_context(
         stmt,

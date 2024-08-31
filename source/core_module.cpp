@@ -249,7 +249,9 @@ void apply_core(VM* vm, SharedContext* context) {
             int_less_equal,
             int_greater,
             int_greater_equal,
-            int_not_equals
+            int_not_equals,
+            string_class,
+            string_add
         }
     );
 }

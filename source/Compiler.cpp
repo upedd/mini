@@ -8,7 +8,7 @@
 #include "base/overloaded.h"
 #include "shared/SharedContext.h"
 
-//#define COMPILER_PRINT_BYTECODE
+#define COMPILER_PRINT_BYTECODE
 
 bool Compiler::compile(Ast* ast) {
     this->ast = ast;
@@ -130,6 +130,20 @@ void Compiler::function_declaration(const FunctionDeclaration& stmt) {
 void Compiler::anonymous_function_expr(const AnonymousFunctionExpr& expr) {
     function(*expr.function, FunctionType::FUNCTION);
     current_context().on_stack++;
+}
+
+void Compiler::string_interpolation_expr(const StringInterpolationExpr& expr) {
+    auto str_idx = current_function()->add_constant(*expr.string_parts[0].string);
+    emit(OpCode::CONSTANT, str_idx);
+    current_context().on_stack++;
+    for (int i = 0; i < expr.values.size(); ++i) {
+        visit(*expr.values[i]);
+        emit(OpCode::ADD);
+        current_context().on_stack--;
+        auto final_idx = current_function()->add_constant(*expr.string_parts[i + 1].string);
+        emit(OpCode::CONSTANT, final_idx);
+        emit(OpCode::ADD);
+    }
 }
 
 void Compiler::block_expr(const BlockExpr& expr) {

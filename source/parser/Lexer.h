@@ -20,7 +20,9 @@ public:
     };
 
     explicit Lexer(bite::file_input_stream&& stream, SharedContext* context) : context(context),
-                                                                       stream(std::move(stream)) {};
+                                                                       stream(std::move(stream)) {
+        state.emplace();
+    };
 
     std::expected<Token, bite::Diagnostic> next_token();
 

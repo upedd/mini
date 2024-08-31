@@ -41,6 +41,7 @@
     V(SafeCallExpr, safe_call_expr) \
     V(LiteralExpr, literal_expr) \
     V(StringExpr, string_expr) \
+    V(StringInterpolationExpr, string_interpolation_expr) \
     V(VariableExpr, variable_expr) \
     V(GetPropertyExpr, get_property_expr) \
     V(SafeGetPropertyExpr, safe_get_property_expr) \
@@ -327,6 +328,25 @@ public:
 
     StringExpr(const bite::SourceSpan& span, std::string string) : Expr(span),
                                                                    string(std::move(string)) {}
+};
+
+class StringInterpolationExpr final : public Expr {
+public:
+    StringInterpolationExpr(
+        const bite::SourceSpan& span,
+        std::vector<Token> string_parts,
+        std::vector<std::unique_ptr<Expr>> values
+    ) : Expr(span),
+        string_parts(std::move(string_parts)),
+        values(std::move(values)) {}
+
+    [[nodiscard]] NodeKind kind() const override {
+        return NodeKind::string_interpolation_expr;
+    }
+
+    std::vector<Token> string_parts;
+    std::vector<std::unique_ptr<Expr>> values; // that go between the string parts
+
 };
 
 class VariableExpr final : public Expr {

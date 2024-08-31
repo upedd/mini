@@ -133,6 +133,7 @@ bool is_expression_start(const Token::Type type) {
         case Token::Type::WHILE:
         case Token::Type::FOR:
         case Token::Type::LABEL:
+        case Token::Type::STRING_PART:
         case Token::Type::RETURN: return true;
         default: return false;
     }
@@ -701,11 +702,24 @@ std::unique_ptr<AnonymousFunctionExpr> Parser::anonymous_function() {
     );
 }
 
+std::unique_ptr<StringInterpolationExpr> Parser::string_interpolation() {
+    std::vector<Token> string_parts;
+    std::vector<std::unique_ptr<Expr>> values;
+    do {
+        string_parts.push_back(current);
+        values.push_back(expression());
+    } while (match(Token::Type::STRING_PART));
+    consume(Token::Type::STRING, "missing string continuation after interpolation value");
+    string_parts.push_back(current);
+    return std::make_unique<StringInterpolationExpr>(make_span(), std::move(string_parts), std::move(values));
+}
+
 std::optional<std::unique_ptr<Expr>> Parser::prefix() {
     switch (current.type) {
         case Token::Type::INTEGER: return integer();
         case Token::Type::NUMBER: return number();
         case Token::Type::STRING: return string();
+        case Token::Type::STRING_PART: return string_interpolation();
         case Token::Type::TRUE:
         case Token::Type::FALSE:
         case Token::Type::THIS:
