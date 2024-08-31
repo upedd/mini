@@ -14,11 +14,17 @@ struct Nil {
     auto operator<=>(const Nil&) const = default;
 };
 
+struct Undefined {
+    auto operator<=>(const Undefined&) const = default;
+};
+
 inline constexpr Nil nil_t {};
+
+inline constexpr Undefined undefined {};
 
 class Object;
 
-using value_variant_t = std::variant<Nil, bite_int, bite_float, bool, Object*, std::string>;
+using value_variant_t = std::variant<Nil, bite_int, bite_float, bool, Object*, std::string, Undefined>;
 
 class Value : public value_variant_t {
 public:

@@ -547,20 +547,26 @@ public:
 };
 
 
+struct FunctionParameter {
+    Token name;
+    std::unique_ptr<Expr> default_value;
+    Binding binding = NoBinding();
+};
+
 class FunctionDeclaration final : public Declaration {
 public:
     [[nodiscard]] NodeKind kind() const override {
         return NodeKind::function_declaration;
     }
 
-    std::vector<std::pair<Token, std::unique_ptr<Expr>>>  params;
+    std::vector<FunctionParameter> params;
     std::unique_ptr<Expr> body;
     FunctionEnviroment enviroment {};
 
     FunctionDeclaration(
         const bite::SourceSpan& span,
         const Token& name,
-        std::vector<std::pair<Token, std::unique_ptr<Expr>>>  params,
+        std::vector<FunctionParameter>  params,
         std::unique_ptr<Expr> body = {}
     ) : Declaration(span, name),
         params(std::move(params)),

@@ -243,6 +243,10 @@ inline void Disassembler::disassemble(const std::string& name) {
                 jump_inst("JUMP_IF_NOT_NIL");
                 break;
             }
+            case OpCode::JUMP_IF_NOT_UNDEFINED: {
+                jump_inst("JUMP_IF_NOT_UNDEFINED");
+                break;
+            }
         }
     }
 }

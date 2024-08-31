@@ -62,7 +62,8 @@ enum class OpCode : bite_byte {
     CLASS_CLOSURE // TODO: temp
     ,
     JUMP_IF_NIL,
-    JUMP_IF_NOT_NIL
+    JUMP_IF_NOT_NIL,
+    JUMP_IF_NOT_UNDEFINED
 };
 
 #endif //OPCODE_H

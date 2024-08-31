@@ -309,24 +309,25 @@ std::unique_ptr<FunctionDeclaration> Parser::function_declaration() {
 
 // The part after name
 std::unique_ptr<FunctionDeclaration> Parser::function_declaration_body(const Token& name, const bool skip_params) {
-    std::vector<std::pair<Token, std::unique_ptr<Expr>>>  parameters = skip_params ? std::vector<std::pair<Token, std::unique_ptr<Expr>>>() : functions_parameters();
+    std::vector<FunctionParameter>  parameters = skip_params ? std::vector<FunctionParameter>() : functions_parameters();
     consume(Token::Type::LEFT_BRACE, "Expected '{' before function body");
     auto body = block();
     return std::make_unique<FunctionDeclaration>(make_span(), name, std::move(parameters), std::move(body));
 }
 
-std::vector<std::pair<Token, std::unique_ptr<Expr>>> Parser::functions_parameters() {
+std::vector<FunctionParameter> Parser::functions_parameters() {
     consume(Token::Type::LEFT_PAREN, "missing fuction parameters");
-    std::vector<std::pair<Token, std::unique_ptr<Expr>>> parameters;
+    std::vector<FunctionParameter> parameters;
     if (!check(Token::Type::RIGHT_PAREN)) {
         do {
             consume(Token::Type::IDENTIFIER, "invalid parameter."); // TODO: better error message?
+            Token name = current;
             std::unique_ptr<Expr> default_value;
             if (match(Token::Type::EQUAL)) {
                 default_value = expression();
             }
 
-            parameters.emplace_back(current, std::move(default_value));
+            parameters.emplace_back(name, std::move(default_value));
         } while (match(Token::Type::COMMA));
     }
     consume(Token::Type::RIGHT_PAREN, "unmatched ')'");
@@ -383,7 +384,7 @@ Constructor Parser::constructor() {
         [this] {
             Token init_token = advance();
 
-            std::vector<std::pair<Token, std::unique_ptr<Expr>>> parameters = functions_parameters();
+            std::vector<FunctionParameter> parameters = functions_parameters();
             std::optional<SuperConstructorCall> super_constructor_call;
             // init(parameters*) : super(arguments*) [block]
             if (match(Token::Type::COLON)) {
@@ -520,7 +521,7 @@ bitflags<ClassAttributes> Parser::member_attributes() {
 }
 
 std::unique_ptr<FunctionDeclaration> Parser::abstract_method(const Token& name, const bool skip_params) {
-    std::vector<std::pair<Token, std::unique_ptr<Expr>>> parameters = skip_params ? std::vector<std::pair<Token, std::unique_ptr<Expr>>>() : functions_parameters();
+    std::vector<FunctionParameter> parameters = skip_params ? std::vector<FunctionParameter>() : functions_parameters();
     consume(Token::Type::SEMICOLON, "missing semicolon after declaration");
     return std::make_unique<FunctionDeclaration>(make_span(), name, std::move(parameters)); // CHECK
 }
@@ -585,7 +586,7 @@ std::unique_ptr<FunctionDeclaration> Parser::in_trait_function(
     bitflags<ClassAttributes>& attributes,
     bool skip_params
 ) {
-    std::vector<std::pair<Token, std::unique_ptr<Expr>>>  parameters = skip_params ? std::vector<std::pair<Token, std::unique_ptr<Expr>>>() : functions_parameters();
+    std::vector<FunctionParameter> parameters = skip_params ? std::vector<FunctionParameter>() : functions_parameters();
     std::unique_ptr<Expr> body;
     if (match(Token::Type::LEFT_BRACE)) {
         body = block();
@@ -677,15 +678,16 @@ std::unique_ptr<Expr> Parser::module_resolution() {
 std::unique_ptr<AnonymousFunctionExpr> Parser::anonymous_function() {
     // TODO: refactor!
     Token name = current;
-    std::vector<std::pair<Token, std::unique_ptr<Expr>>>  params;
+    std::vector<FunctionParameter>  params;
     if (!check(Token::Type::BAR)) {
         do {
             consume(Token::Type::IDENTIFIER, "invalid parameter");
+            Token name = current;
             std::unique_ptr<Expr> default_value;
             if (match(Token::Type::EQUAL)) {
                 default_value = expression();
             }
-            params.emplace_back(current, std::move(default_value));
+            params.emplace_back(name, std::move(default_value));
         } while (match(Token::Type::COMMA));
     }
     consume(Token::Type::BAR, "missing '|' after function parameters");

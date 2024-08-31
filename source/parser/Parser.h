@@ -87,7 +87,7 @@ private:
 
     std::unique_ptr<FunctionDeclaration> function_declaration();
     std::unique_ptr<FunctionDeclaration> function_declaration_body(const Token& name, bool skip_params = false);
-    std::vector<std::pair<Token, std::unique_ptr<Expr>>> functions_parameters();
+    std::vector<FunctionParameter> functions_parameters();
     std::vector<std::unique_ptr<Expr>> call_arguments();
     TraitUsage trait_usage();
 

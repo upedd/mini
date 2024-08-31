@@ -82,22 +82,23 @@ void bite::Analyzer::function(FunctionDeclaration& stmt) {
     with_context(
         stmt,
         [this, &stmt] {
-            for (const auto& param : stmt.params) {
+            bool seen_param_with_defualt_value = false;
+            for (auto& param : stmt.params) {
                 // TODO: temp
                 if (std::ranges::contains(
                     stmt.enviroment.parameters,
-                    param.first.string,
+                    param.name.string,
                     &std::pair<StringTable::Handle, SourceSpan>::first
                 )) {
                     emit_error_diagnostic(
                         "duplicate parameter name",
-                        param.first.span,
+                        param.name.span,
                         "redeclared here",
                         {
                             InlineHint {
                                 .location = std::ranges::find(
                                     stmt.enviroment.parameters,
-                                    param.first.string,
+                                    param.name.string,
                                     &std::pair<StringTable::Handle, SourceSpan>::first
                                 )->second,
                                 .message = "originally declared here",
@@ -106,7 +107,21 @@ void bite::Analyzer::function(FunctionDeclaration& stmt) {
                         }
                     );
                 }
-                stmt.enviroment.parameters.emplace_back(param.first.string, param.first.span);
+
+                if (param.default_value) {
+                    seen_param_with_defualt_value = true;
+                    visit(*param.default_value); // TODO: check!
+                } else if (seen_param_with_defualt_value) {
+                    emit_error_diagnostic(
+                        std::format("default value missing for parameter {}", *param.name.string),
+                        param.name.span,
+                        "here"
+                    );
+                }
+
+                stmt.enviroment.parameters.emplace_back(param.name.string, param.name.span);
+
+                param.binding = ParameterBinding { static_cast<int64_t>(stmt.enviroment.parameters.size() - 1) };
             }
             if (stmt.body) {
                 visit(*stmt.body);
@@ -281,22 +296,24 @@ void bite::Analyzer::class_object(ClassObject& object, bool is_abstract, SourceS
         *object.constructor.function,
         [&] {
             if (object.constructor.function) {
-                for (const auto& param : object.constructor.function->params) {
+                bool seen_param_with_defualt_value = false;
+                for (auto& param : object.constructor.function->params) {
                     // TODO: temp
+
                     if (std::ranges::contains(
                         object.constructor.function->enviroment.parameters,
-                        param.first.string,
+                        param.name.string,
                         &std::pair<StringTable::Handle, SourceSpan>::first
                     )) {
                         emit_error_diagnostic(
                             "duplicate parameter name",
-                            param.first.span,
+                            param.name.span,
                             "redeclared here",
                             {
                                 InlineHint {
                                     .location = std::ranges::find(
                                         object.constructor.function->enviroment.parameters,
-                                        param.first.string,
+                                        param.name.string,
                                         &std::pair<StringTable::Handle, SourceSpan>::first
                                     )->second,
                                     .message = "originally declared here",
@@ -305,7 +322,21 @@ void bite::Analyzer::class_object(ClassObject& object, bool is_abstract, SourceS
                             }
                         );
                     }
-                    object.constructor.function->enviroment.parameters.emplace_back(param.first.string, param.first.span);
+
+                    if (param.default_value) {
+                        seen_param_with_defualt_value = true;
+                        visit(*param.default_value); // TODO: check!
+                    } else if (seen_param_with_defualt_value) {
+                        emit_error_diagnostic(
+                            std::format("default value missing for parameter {}", *param.name.string),
+                            param.name.span,
+                            "here"
+                        );
+                    }
+                    object.constructor.function->enviroment.parameters.emplace_back(param.name.string, param.name.span);
+                    param.binding = ParameterBinding {
+                            static_cast<int64_t>(object.constructor.function->enviroment.parameters.size() - 1)
+                        };
                 }
             }
             if (object.constructor.super_arguments_call) {
@@ -596,7 +627,10 @@ void bite::Analyzer::import_stmt(ImportStmt& stmt) {
                 for (auto& item : stmt.items) {
                     if (item->item->is_variable_expr()) {
                         if (module->declarations.contains(item->item->as_variable_expr()->identifier.string)) {
-                            item->binding = *resolve_in_module(*module, item->item->as_variable_expr()->identifier.string);
+                            item->binding = *resolve_in_module(
+                                *module,
+                                item->item->as_variable_expr()->identifier.string
+                            );
                         } else {
                             BITE_PANIC("item not in module!");
                         }
@@ -643,7 +677,11 @@ void bite::Analyzer::import_stmt(ImportStmt& stmt) {
 
         // TODO: refactor!
         if (!module) {
-            emit_error_diagnostic(std::format("module \"{}\" not found", stmt.module->as_string_expr()->string), stmt.span, "required here");
+            emit_error_diagnostic(
+                std::format("module \"{}\" not found", stmt.module->as_string_expr()->string),
+                stmt.span,
+                "required here"
+            );
             return;
         }
         for (auto& item : stmt.items) {
@@ -694,7 +732,11 @@ void bite::Analyzer::import_stmt(ImportStmt& stmt) {
             if (auto* foreign_module = dynamic_cast<ForeignModule*>(module)) {
                 if (!foreign_module->functions.contains(name)) {
                     emit_error_diagnostic(
-                        std::format("module \"{}\" does not declare \"{}\"", stmt.module->as_string_expr()->string, *name),
+                        std::format(
+                            "module \"{}\" does not declare \"{}\"",
+                            stmt.module->as_string_expr()->string,
+                            *name
+                        ),
                         item->span,
                         "required here"
                     );
@@ -703,7 +745,7 @@ void bite::Analyzer::import_stmt(ImportStmt& stmt) {
             }
             declare(item.get());
         }
-    } else{
+    } else {
         BITE_PANIC("module not variable expr");
     }
 }
@@ -736,7 +778,11 @@ void bite::Analyzer::module_stmt(ModuleStmt& stmt, bool do_visit) {
     );
 }
 
-Declaration* bite::Analyzer::resolve_path_in_module(const std::vector<Token>& path, ModuleStmt& module, bool skip_first) {
+Declaration* bite::Analyzer::resolve_path_in_module(
+    const std::vector<Token>& path,
+    ModuleStmt& module,
+    bool skip_first
+) {
     Declaration* declaration = nullptr;
     ModuleStmt* current_module = &module;
     Token previous_part = module.name;
@@ -753,13 +799,17 @@ Declaration* bite::Analyzer::resolve_path_in_module(const std::vector<Token>& pa
         }
 
         if (!module.declarations.contains(part.string)) {
-            emit_error_diagnostic(std::format("module {} does not contain {}", *previous_part.string, *part.string), part.span, "required here");
+            emit_error_diagnostic(
+                std::format("module {} does not contain {}", *previous_part.string, *part.string),
+                part.span,
+                "required here"
+            );
             return nullptr;
         }
         if (module.declarations[part.string]->is_module_stmt()) {
             current_module = module.declarations[part.string]->as_module_stmt();
         } else {
-            declaration =  module.declarations[part.string];
+            declaration = module.declarations[part.string];
         }
         previous_part = part;
     }
@@ -1211,7 +1261,11 @@ void bite::Analyzer::declare_in_global_enviroment(GlobalEnviroment& env, Declara
     }
 }
 
-void bite::Analyzer::declare_in_module(std::vector<StringTable::Handle> module_path, ModuleStmt& module, Declaration* declaration) {
+void bite::Analyzer::declare_in_module(
+    std::vector<StringTable::Handle> module_path,
+    ModuleStmt& module,
+    Declaration* declaration
+) {
     // TODO: check errors
     // TODO: refactor?
     std::string module_path_string;
@@ -1219,7 +1273,10 @@ void bite::Analyzer::declare_in_module(std::vector<StringTable::Handle> module_p
         module_path_string += *item + "::";
     }
     module_path_string += *declaration->name.string;
-    declaration->info = GlobalDeclarationInfo { .declaration = declaration, .name = context->intern(module_path_string)};
+    declaration->info = GlobalDeclarationInfo {
+            .declaration = declaration,
+            .name = context->intern(module_path_string)
+        };
     module.declarations[declaration->name.string] = declaration;
 }
 

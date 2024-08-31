@@ -27,11 +27,13 @@ public:
 
 class Function final : public Object {
 public:
-    Function(std::string name, const int arity) : name(std::move(name)),
-                                                  arity(arity) {}
+    Function(std::string name, const int min_arity, const int max_arity) : name(std::move(name)),
+                                                                           min_arity(min_arity),
+                                                                           max_arity(max_arity) {}
 
     Program& get_program() { return program; }
-    [[nodiscard]] int get_arity() const { return arity; }
+    [[nodiscard]] int get_min_arity() const { return min_arity; }
+    [[nodiscard]] int get_max_arity() const { return max_arity; }
 
     int add_constant(const Value& value);
 
@@ -89,11 +91,12 @@ private:
     // vm should adpot them
     std::vector<Object*> allocated_objects;
     std::string name;
-    int arity;
+    int min_arity;
+    int max_arity;
     Program program; // code of function
     std::vector<Value> constants;
     std::vector<uint32_t> jump_table;
-    int upvalue_count{0};
+    int upvalue_count { 0 };
 };
 
 struct ForeignFunction;

@@ -40,7 +40,7 @@ void Compiler::this_expr(const ThisExpr&) {
 
 void Compiler::start_context(Function* function, FunctionType type) {
     context_stack.emplace_back(function, type);
-    current_context().on_stack = function->get_arity() + 1; // plus one for reserved receiver slot!
+    current_context().on_stack = function->get_max_arity() + 1; // plus one for reserved receiver slot!
 }
 
 
@@ -126,6 +126,7 @@ void Compiler::function_declaration(const FunctionDeclaration& stmt) {
     current_context().on_stack++;
     define_variable(stmt.info);
 }
+
 void Compiler::anonymous_function_expr(const AnonymousFunctionExpr& expr) {
     function(*expr.function, FunctionType::FUNCTION);
     current_context().on_stack++;
@@ -375,13 +376,38 @@ void Compiler::continue_expr(const ContinueExpr& expr) {
 void Compiler::function(const FunctionDeclaration& stmt, FunctionType type) {
     // TODO: integrate into new strings
     auto function_name = stmt.name.string ? *stmt.name.string : "anonymous";
-    auto* function = new Function(function_name, stmt.params.size());
+
+    int min_arity = 0;
+    for (const auto& param : stmt.params) {
+        if (!param.default_value) {
+            min_arity++;
+        }
+    }
+
+    auto* function = new Function(function_name, min_arity, stmt.params.size());
     functions.push_back(function);
 
     with_context(
         function,
         type,
         [&stmt, this] {
+            for (const auto& param : stmt.params) {
+                // TODO: optimize!
+                if (!param.default_value) {
+                    auto jump_idx = current_function()->add_empty_jump_destination();
+                    emit_get_variable(param.binding);
+                    emit(OpCode::JUMP_IF_NOT_UNDEFINED, jump_idx);
+                    emit(OpCode::POP);
+                    visit(*param.default_value);
+                    emit_set_variable(param.binding);
+                    emit(OpCode::POP);
+                    auto jump_to_end = current_function()->add_empty_jump_destination();
+                    emit(OpCode::JUMP, jump_to_end);
+                    current_function()->patch_jump_destination(jump_idx, current_program().size());
+                    emit(OpCode::POP);
+                    current_function()->patch_jump_destination(jump_to_end, current_program().size());
+                }
+            }
             current_function()->set_upvalue_count(stmt.enviroment.upvalues.size());
             visit(*stmt.body); // TODO: assert has body?
             emit_default_return();
@@ -406,13 +432,40 @@ void Compiler::function(const FunctionDeclaration& stmt, FunctionType type) {
 
 void Compiler::constructor(const Constructor& stmt, const std::vector<Field>& fields, bool has_superclass) {
     // refactor: tons of overlap with function generator
-    auto* function = new Function("constructor",stmt.function ?  stmt.function->params.size() : 0);
-    functions.push_back(function);
+    int min_arity = 0;
+    if (stmt.function) {
+        for (const auto& param : stmt.function->params) {
+            if (!param.default_value) {
+                min_arity++;
+            }
+        }
+    }
 
+
+    auto* function = new Function("constructor", stmt.function ? min_arity : 0, stmt.function ? stmt.function->params.size() : 0);
+    functions.push_back(function);
     with_context(
         function,
         FunctionType::CONSTRUCTOR,
         [&fields, this, &stmt, has_superclass] {
+            for (const auto& param : stmt.function->params) {
+                // TODO: optimize!
+                if (!param.default_value) {
+                    auto jump_idx = current_function()->add_empty_jump_destination();
+                    emit_get_variable(param.binding);
+                    emit(OpCode::JUMP_IF_NOT_UNDEFINED, jump_idx);
+                    emit(OpCode::POP);
+                    visit(*param.default_value);
+                    emit_set_variable(param.binding);
+                    emit(OpCode::POP);
+                    auto jump_to_end = current_function()->add_empty_jump_destination();
+                    emit(OpCode::JUMP, jump_to_end);
+                    current_function()->patch_jump_destination(jump_idx, current_program().size());
+                    emit(OpCode::POP);
+                    current_function()->patch_jump_destination(jump_to_end, current_program().size());
+                }
+            }
+
             if (stmt.super_arguments_call) {
                 for (auto& expr : stmt.super_arguments_call->arguments) {
                     visit(*expr);
@@ -673,7 +726,8 @@ void Compiler::binary_expr(const BinaryExpr& expr) {
     }
     visit(*expr.left);
     // we need handle logical expressions before we execute right side as they can short circut
-    if (expr.op == Token::Type::AND_AND || expr.op == Token::Type::BAR_BAR || expr.op == Token::Type::QUESTION_QUESTION) {
+    if (expr.op == Token::Type::AND_AND || expr.op == Token::Type::BAR_BAR || expr.op ==
+        Token::Type::QUESTION_QUESTION) {
         logical_expr(expr);
         current_context().on_stack--;
         return;
@@ -697,9 +751,9 @@ void Compiler::binary_expr(const BinaryExpr& expr) {
     // TODO: refactor!!
     auto fix = [&, this] {
         if (expr.left->is_get_property_expr() && (expr.op == Token::Type::EQUAL || expr.op == Token::Type::PLUS_EQUAL ||
-        expr.op == Token::Type::MINUS_EQUAL || expr.op == Token::Type::STAR_EQUAL || expr.op == Token::Type::SLASH_EQUAL
-        || expr.op == Token::Type::SLASH_SLASH_EQUAL || expr.op == Token::Type::AND_EQUAL || expr.op ==
-        Token::Type::CARET_EQUAL || expr.op == Token::Type::BAR_EQUAL)) {
+            expr.op == Token::Type::MINUS_EQUAL || expr.op == Token::Type::STAR_EQUAL || expr.op ==
+            Token::Type::SLASH_EQUAL || expr.op == Token::Type::SLASH_SLASH_EQUAL || expr.op == Token::Type::AND_EQUAL
+            || expr.op == Token::Type::CARET_EQUAL || expr.op == Token::Type::BAR_EQUAL)) {
             visit(*expr.left->as_get_property_expr()->left);
         }
     };

@@ -10,7 +10,8 @@ std::string Value::to_string() const {
             [](bite_float value) { return std::to_string(value); },
             [](bool value) { return std::string(value ? "True" : "False"); },
             [](Object* object) { return object->to_string(); },
-            [](std::string s) { return s; }
+            [](std::string s) { return s; },
+            [](Undefined) { return std::string("Undefined"); }
         },
         *this
     );
