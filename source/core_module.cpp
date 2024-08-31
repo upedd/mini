@@ -215,6 +215,20 @@ void apply_core(VM* vm, SharedContext* context) {
 
     int_class->methods["add"] = ClassValue { .value = int_add, .attributes = {}, .is_computed = false };
 
+    auto* string_class = new Class("String");
+    vm->string_class = string_class;
+
+    auto* string_add = new ForeginFunctionObject(
+            new ForeignFunction {
+                .arity = 1,
+                .name = context->intern("add"),
+                .function = [](FunctionContext ctx) {
+                    return ctx.get_instance().get<std::string>() + ctx.get_arg(0).get<std::string>();
+                }
+            }
+        );
+    string_class->methods["add"] = ClassValue { .value = string_add, .attributes = {}, .is_computed = false };
+
     vm->allocate(
         {
             int_add,

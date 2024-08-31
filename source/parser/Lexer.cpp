@@ -11,8 +11,18 @@ std::expected<Token, bite::Diagnostic> Lexer::next_token() {
     start_pos = stream.position();
     switch (const char c = stream.advance(); c) {
         case '\0': return make_token(Token::Type::END);
-        case '{': return make_token(Token::Type::LEFT_BRACE);
-        case '}': return make_token(Token::Type::RIGHT_BRACE);
+        case '{': {
+            state.top().bracket_depth++;
+            return make_token(Token::Type::LEFT_BRACE);
+        }
+        case '}': {
+            state.top().bracket_depth--;
+            if (state.top().bracket_depth < 0) {
+                state.pop();
+                return string();
+            }
+            return make_token(Token::Type::RIGHT_BRACE);
+        }
         case '(': return make_token(Token::Type::LEFT_PAREN);
         case ')': return make_token(Token::Type::RIGHT_PAREN);
         case '[': return make_token(Token::Type::LEFT_BRACKET);
@@ -201,7 +211,27 @@ Token Lexer::keyword_or_identifier() {
 }
 
 std::expected<Token, bite::Diagnostic> Lexer::string() {
-    while (!stream.ended() && stream.next() != '"') {
+    bool escape_next = false;
+    while (!stream.ended() && (escape_next || stream.next() != '"')) {
+        if (!escape_next && stream.next() == '/') {
+            stream.advance();
+            escape_next = true;
+            continue;
+        }
+
+        // String interpolation, see header file for comments about this construct
+        if (!escape_next && stream.next() == '$') {
+            stream.advance();
+            if (stream.next() == '{') {
+                stream.advance();
+                state.emplace();
+                return make_token(Token::Type::STRING_PART);
+            } else {
+                consume_identifer_on_next = true;
+            }
+        }
+
+        escape_next = false;
         buffer.push_back(stream.advance());
     }
 
