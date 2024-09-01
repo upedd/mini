@@ -51,8 +51,9 @@ private:
 
     // TODO: remove unsafe
     bite::SourceSpan no_span() {
-        return bite::SourceSpan {.start_offset = 0, .end_offset = 0, .file_path = nullptr};
+        return bite::SourceSpan { .start_offset = 0, .end_offset = 0, .file_path = nullptr };
     }
+
     auto with_source_span(const auto& fn) {
         span_stack.emplace_back(next.span);
         auto res = fn();
@@ -102,7 +103,11 @@ private:
     std::unique_ptr<VariableDeclaration> abstract_field(const Token& name);
 
     std::unique_ptr<TraitDeclaration> trait_declaration();
-    std::unique_ptr<FunctionDeclaration> in_trait_function(const Token& name, bitflags<ClassAttributes>& attributes, bool skip_params);
+    std::unique_ptr<FunctionDeclaration> in_trait_function(
+        const Token& name,
+        bitflags<ClassAttributes>& attributes,
+        bool skip_params
+    );
 
     /* C like precedence
      * References:
@@ -126,6 +131,7 @@ private:
         CALL,
         PRIMARY // literal or variable
     };
+
     static Precedence get_precendece(Token::Type token);
 
     std::unique_ptr<Expr> expression(Precedence precedence = Precedence::NONE);

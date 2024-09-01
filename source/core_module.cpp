@@ -124,37 +124,45 @@ void apply_core(VM* vm, SharedContext* context) {
     int_class->methods["less"] = ClassValue { .value = int_less, .attributes = {}, .is_computed = false };
 
     auto* int_less_equal = new ForeginFunctionObject(
-            new ForeignFunction {
-                .arity = 1,
-                .name = context->intern("less_equal"),
-                .function = [](FunctionContext ctx) {
-                    return ctx.get_instance().get<bite_int>() <= ctx.get_arg(0).get<bite_int>();
-                }
+        new ForeignFunction {
+            .arity = 1,
+            .name = context->intern("less_equal"),
+            .function = [](FunctionContext ctx) {
+                return ctx.get_instance().get<bite_int>() <= ctx.get_arg(0).get<bite_int>();
             }
-        );
-    int_class->methods["int_less_equal"] = ClassValue { .value = int_less_equal, .attributes = {}, .is_computed = false };
+        }
+    );
+    int_class->methods["int_less_equal"] = ClassValue {
+            .value = int_less_equal,
+            .attributes = {},
+            .is_computed = false
+        };
 
     auto* int_greater = new ForeginFunctionObject(
-            new ForeignFunction {
-                .arity = 1,
-                .name = context->intern("greater"),
-                .function = [](FunctionContext ctx) {
-                    return ctx.get_instance().get<bite_int>() > ctx.get_arg(0).get<bite_int>();
-                }
+        new ForeignFunction {
+            .arity = 1,
+            .name = context->intern("greater"),
+            .function = [](FunctionContext ctx) {
+                return ctx.get_instance().get<bite_int>() > ctx.get_arg(0).get<bite_int>();
             }
-        );
+        }
+    );
     int_class->methods["greater"] = ClassValue { .value = int_greater, .attributes = {}, .is_computed = false };
 
     auto* int_greater_equal = new ForeginFunctionObject(
-            new ForeignFunction {
-                .arity = 1,
-                .name = context->intern("greater_equal"),
-                .function = [](FunctionContext ctx) {
-                    return ctx.get_instance().get<bite_int>() >= ctx.get_arg(0).get<bite_int>();
-                }
+        new ForeignFunction {
+            .arity = 1,
+            .name = context->intern("greater_equal"),
+            .function = [](FunctionContext ctx) {
+                return ctx.get_instance().get<bite_int>() >= ctx.get_arg(0).get<bite_int>();
             }
-        );
-    int_class->methods["greater_equal"] = ClassValue { .value = int_greater_equal, .attributes = {}, .is_computed = false };
+        }
+    );
+    int_class->methods["greater_equal"] = ClassValue {
+            .value = int_greater_equal,
+            .attributes = {},
+            .is_computed = false
+        };
 
     auto* int_binary_and = new ForeginFunctionObject(
         new ForeignFunction {
@@ -219,14 +227,14 @@ void apply_core(VM* vm, SharedContext* context) {
     vm->string_class = string_class;
 
     auto* string_add = new ForeginFunctionObject(
-            new ForeignFunction {
-                .arity = 1,
-                .name = context->intern("add"),
-                .function = [](FunctionContext ctx) {
-                    return ctx.get_instance().get<std::string>() + ctx.get_arg(0).get<std::string>();
-                }
+        new ForeignFunction {
+            .arity = 1,
+            .name = context->intern("add"),
+            .function = [](FunctionContext ctx) {
+                return ctx.get_instance().get<std::string>() + ctx.get_arg(0).get<std::string>();
             }
-        );
+        }
+    );
     string_class->methods["add"] = ClassValue { .value = string_add, .attributes = {}, .is_computed = false };
 
     vm->allocate(

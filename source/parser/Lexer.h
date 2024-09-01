@@ -20,7 +20,7 @@ public:
     };
 
     explicit Lexer(bite::file_input_stream&& stream, SharedContext* context) : context(context),
-                                                                       stream(std::move(stream)) {
+                                                                               stream(std::move(stream)) {
         state.emplace();
     };
 
@@ -29,6 +29,7 @@ public:
     [[nodiscard]] const std::string& get_filepath() const {
         return stream.get_filepath();
     }
+
 private:
     void skip_whitespace();
     void consume_identifier();
@@ -62,6 +63,7 @@ private:
     struct ParserState {
         int bracket_depth = 0;
     };
+
     std::stack<ParserState> state;
 
     /**

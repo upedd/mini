@@ -358,7 +358,7 @@ public:
 class Receiver final : public Object {
 public:
     Receiver(Class* klass, Value instance) : klass(klass),
-                                                 instance(std::move(instance)) {}
+                                             instance(std::move(instance)) {}
 
     std::size_t get_size() override {
         return sizeof(Receiver);
@@ -380,7 +380,7 @@ public:
 class BoundMethod final : public Object {
 public:
     BoundMethod(Value receiver, Value closure) : receiver(std::move(receiver)),
-                                                    closure(std::move(closure)) {}
+                                                 closure(std::move(closure)) {}
 
     std::size_t get_size() override {
         return sizeof(BoundMethod);

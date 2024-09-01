@@ -19,15 +19,15 @@ int main(int argc, char** argv) {
     auto print_symbol = context.intern("print");
     auto& cout = std::cout;
     os_module->functions[print_symbol] = {
-        .arity = 1,
-        .name = print_symbol,
-        .function = [&cout](FunctionContext ctx) {
-            // TODO: temp
-            std::vprint_unicode(cout, ctx.get_arg(0).to_string(), {});
-            std::cout << '\n';
-            return nil_t;
-        }
-    };
+            .arity = 1,
+            .name = print_symbol,
+            .function = [&cout](FunctionContext ctx) {
+                // TODO: temp
+                std::vprint_unicode(cout, ctx.get_arg(0).to_string(), {});
+                std::cout << '\n';
+                return nil_t;
+            }
+        };
 
     context.add_module(context.intern("os"), std::move(os_module));
     FileModule* main_module = context.compile(argv[1]);

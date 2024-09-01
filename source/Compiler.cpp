@@ -468,22 +468,22 @@ void Compiler::constructor(const Constructor& stmt, const std::vector<Field>& fi
         [&fields, this, &stmt, has_superclass] {
             if (stmt.function) {
                 for (const auto& param : stmt.function->params) {
-                // TODO: optimize!
-                if (param.default_value) {
-                    auto jump_idx = current_function()->add_empty_jump_destination();
-                    emit_get_variable(param.binding);
-                    emit(OpCode::JUMP_IF_NOT_UNDEFINED, jump_idx);
-                    emit(OpCode::POP);
-                    visit(*param.default_value);
-                    emit_set_variable(param.binding);
-                    emit(OpCode::POP);
-                    auto jump_to_end = current_function()->add_empty_jump_destination();
-                    emit(OpCode::JUMP, jump_to_end);
-                    current_function()->patch_jump_destination(jump_idx, current_program().size());
-                    emit(OpCode::POP);
-                    current_function()->patch_jump_destination(jump_to_end, current_program().size());
+                    // TODO: optimize!
+                    if (param.default_value) {
+                        auto jump_idx = current_function()->add_empty_jump_destination();
+                        emit_get_variable(param.binding);
+                        emit(OpCode::JUMP_IF_NOT_UNDEFINED, jump_idx);
+                        emit(OpCode::POP);
+                        visit(*param.default_value);
+                        emit_set_variable(param.binding);
+                        emit(OpCode::POP);
+                        auto jump_to_end = current_function()->add_empty_jump_destination();
+                        emit(OpCode::JUMP, jump_to_end);
+                        current_function()->patch_jump_destination(jump_idx, current_program().size());
+                        emit(OpCode::POP);
+                        current_function()->patch_jump_destination(jump_to_end, current_program().size());
+                    }
                 }
-            }
             }
 
 

@@ -47,17 +47,15 @@ namespace bite {
         bool is_in_class();
         bool is_in_class_with_superclass();
 
-        void declare_in_function_enviroment(
-            FunctionEnviroment& env,
-            Declaration* declaration
-        );
+        void declare_in_function_enviroment(FunctionEnviroment& env, Declaration* declaration);
         void declare_in_class_enviroment(ClassEnviroment& env, StringTable::Handle name, const MemberInfo& attributes);
         void declare_in_trait_enviroment(TraitEnviroment& env, StringTable::Handle name, const MemberInfo& attributes);
-        void declare_in_global_enviroment(
-            GlobalEnviroment& env,
+        void declare_in_global_enviroment(GlobalEnviroment& env, Declaration* declaration);
+        void declare_in_module(
+            std::vector<StringTable::Handle> module_path,
+            ModuleStmt& module,
             Declaration* declaration
         );
-        void declare_in_module(std::vector<StringTable::Handle> module_path, ModuleStmt& module, Declaration* declaration);
         void declare(Declaration* declaration);
 
         void analyze(Ast& ast);
@@ -95,12 +93,17 @@ namespace bite {
         void super_expr(SuperExpr& expr);
         void object_expr(ObjectExpr& expr);
         void trait_declaration(TraitDeclaration& stmt);
-        void check_trait_member(TraitDeclaration& stmt, SourceSpan& name_span, bitflags<ClassAttributes>& attributes, bool is_method);
+        void check_trait_member(
+            TraitDeclaration& stmt,
+            SourceSpan& name_span,
+            bitflags<ClassAttributes>& attributes,
+            bool is_method
+        );
         void declare_local(Locals& locals, Declaration* declaration);
         void literal_expr(LiteralExpr& /*unused*/) {}
         void string_expr(StringExpr& /*unused*/) {}
-        void invalid_stmt(InvalidStmt& /*unused*/) {BITE_PANIC("got invalid stmt"); }
-        void invalid_expr(InvalidExpr& /*unused*/) {BITE_PANIC("got invalid expr"); }
+        void invalid_stmt(InvalidStmt& /*unused*/) { BITE_PANIC("got invalid stmt"); }
+        void invalid_expr(InvalidExpr& /*unused*/) { BITE_PANIC("got invalid expr"); }
 
         static std::optional<Binding> resolve_in_function_enviroment(
             const FunctionEnviroment& env,
@@ -124,9 +127,8 @@ namespace bite {
         Binding resolve(StringTable::Handle name, const SourceSpan& span);
 
 
-
         void with_scope(const auto& fn) {
-            for (auto *node : context_nodes | std::views::reverse) {
+            for (auto* node : context_nodes | std::views::reverse) {
                 if (node->is_function_declaration()) {
                     auto* function = node->as_function_declaration();
                     function->enviroment.locals.scopes.emplace_back();
@@ -199,7 +201,6 @@ namespace bite {
                 trait_usage.declarations.emplace_back(field_name, aliased_name, field_attr.attributes);
             }
         }
-
 
 
         // TODO: refactor

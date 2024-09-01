@@ -79,7 +79,7 @@ void SharedContext::execute(FileModule& module) {
 
 // TODO: temp
 std::variant<std::vector<std::pair<StringTable::Handle, Value>>, std::vector<std::pair<StringTable::Handle,
-ForeignFunction*>>> SharedContext::get_value_from_module(
+                 ForeignFunction*>>> SharedContext::get_value_from_module(
     const StringTable::Handle& module,
     const StringTable::Handle& name
 ) {
